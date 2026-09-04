@@ -49,7 +49,7 @@ _py-lint:
 parity:
     #!/usr/bin/env bash
     set -euo pipefail
-    # TODO: compare research/grain_research/features and extension/src/score
+    # TODO: compare research/verdict_research/features and extension/src/score
     # against tests/parity/vectors.jsonl once signals exist, per SPEC.md section 7
     echo "parity: no scoring signals implemented yet, nothing to compare"
 

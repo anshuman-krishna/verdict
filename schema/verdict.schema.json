@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verdict.tools/schema/verdict.schema.json",
+  "$defs": {
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rating", "text", "date", "verified", "reviewerId"],
+      "properties": {
+        "rating": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 5,
+          "description": "star rating, null means the reviewer left text only"
+        },
+        "text": {
+          "type": ["string", "null"],
+          "description": "review body, null means a rating with no written text"
+        },
+        "date": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "ISO 8601 date the review was posted, null if extraction could not find one"
+        },
+        "verified": {
+          "type": ["boolean", "null"],
+          "description": "verified purchase flag, null if extraction could not determine it"
+        },
+        "reviewerId": {
+          "type": ["string", "null"],
+          "description": "opaque platform reviewer identifier, null if the page exposed none"
+        }
+      }
+    },
+    "productSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "category",
+        "claimedRating",
+        "reviewCount",
+        "site",
+        "locale",
+        "url",
+        "thumbnailUrl"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "product title as extracted, required to construct a snapshot at all"
+        },
+        "category": {
+          "type": ["string", "null"]
+        },
+        "claimedRating": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "reviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "site": {
+          "type": "string",
+          "description": "which storefront's rules matched, for example amazon"
+        },
+        "locale": {
+          "type": "string",
+          "description": "storefront locale, for example com, fr, de, co.uk"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "thumbnailUrl": {
+          "type": ["string", "null"],
+          "format": "uri"
+        }
+      }
+    }
+  }
+}
