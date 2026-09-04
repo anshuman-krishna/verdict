@@ -86,13 +86,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: extractions/setup-just@v3
       - uses: astral-sh/setup-uv@v5
-      # TODO: once research/verdict_research/features and extension/src/score both
-      # implement real signals, this job should assert their agreement on
-      # tests/parity/vectors.jsonl per SPEC.md section 7. It currently has
-      # nothing to compare.
-      - name: compare python and typescript scorers
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: compare python and typescript scorers against the shared vectors
         run: just parity
 
   fixtures:

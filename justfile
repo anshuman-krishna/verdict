@@ -49,8 +49,7 @@ _py-lint:
 parity:
     #!/usr/bin/env bash
     set -euo pipefail
-    # TODO: compare research/verdict_research/features and extension/src/score
-    # against tests/parity/vectors.jsonl once signals exist, per SPEC.md section 7
-    echo "parity: no scoring signals implemented yet, nothing to compare"
+    cd extension && npx vitest run tests/parity.test.ts
+    cd ../research && uv run pytest tests/test_parity.py
 
 check: (ext "build") (ext "test") (py "lint") (py "test") parity

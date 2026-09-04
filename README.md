@@ -6,9 +6,10 @@ the browser, on pages the user is already viewing.
 
 ## Status
 
-This repository currently holds the project skeleton only: four workspaces, a build and
-test pipeline, and CI. There is no extraction, no scoring, and no user interface yet.
-`just check` passes with zero tests, which is expected at this stage.
+Early. The rules interpreter, the local cache and history storage, and the review page
+fetcher exist and are tested, including a gate that fails the build if the default
+analysis path makes a network request. There is no site specific extraction, no scoring,
+and no user interface yet.
 
 ## Repository layout
 
@@ -42,7 +43,3 @@ just check       everything above, the gate before any commit
 just setup
 just check
 ```
-
-## Licence
-
-To be decided before the first public release.
