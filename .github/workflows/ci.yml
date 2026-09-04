@@ -1,0 +1,115 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  ASTRO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v3
+      - uses: astral-sh/setup-uv@v5
+      - name: check python formatting and lint rules
+        run: just py lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - uses: astral-sh/setup-uv@v5
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: run extension unit tests
+        run: just ext test
+      - name: run python test suites
+        run: just py test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: build extension for chrome and firefox
+        run: just ext build
+      - name: install site dependencies
+        working-directory: site
+        run: npm install
+      - name: build site
+        working-directory: site
+        run: npm run build
+
+  bundle-size-budget:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: build extension for chrome and firefox
+        run: just ext build
+      - name: enforce the 8 mb bundle cap
+        working-directory: extension
+        run: |
+          budget_bytes=$((8 * 1024 * 1024))
+          for target_dir in .output/*/; do
+            size_bytes=$(du -sk "$target_dir" | awk '{print $1 * 1024}')
+            echo "$target_dir: $size_bytes bytes"
+            if [ "$size_bytes" -gt "$budget_bytes" ]; then
+              echo "$target_dir exceeds the 8 MB bundle budget" >&2
+              exit 1
+            fi
+          done
+
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v3
+      - uses: astral-sh/setup-uv@v5
+      # TODO: once research/grain_research/features and extension/src/score both
+      # implement real signals, this job should assert their agreement on
+      # tests/parity/vectors.jsonl per SPEC.md section 7. It currently has
+      # nothing to compare.
+      - name: compare python and typescript scorers
+        run: just parity
+
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: once the fixture corpus and extraction harness exist
+      # (PLAN.md sessions 2, 5, 6, 7), run the harness here and fail on
+      # regression against the hand written expectations.
+      - name: run fixture corpus checks
+        run: echo "no fixture corpus yet, nothing to check"
+
+  no-network:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: once extension/tests/no-network.spec.ts exists (PLAN.md session
+      # 10, PRIVACY.md section 3), run it here as a required check.
+      - name: verify the default analysis path makes no network requests
+        run: echo "no-network test not implemented yet"
