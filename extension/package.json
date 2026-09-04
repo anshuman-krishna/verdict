@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "wxt prepare",
     "dev": "wxt",
     "build": "wxt prepare && tsc --noEmit && wxt build && wxt build -b firefox",
     "test": "vitest run --passWithNoTests"
