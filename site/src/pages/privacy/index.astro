@@ -1,0 +1,91 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const dataInventory = [
+  { data: "Page HTML", where: "Browser memory", leaves: "Never", retention: "Discarded after parse" },
+  { data: "Extracted reviews", where: "IndexedDB cache", leaves: "Never", retention: "7 days" },
+  { data: "Review text", where: "Browser memory", leaves: "Never", retention: "Not stored at all" },
+  { data: "Product identifier", where: "IndexedDB, hashed", leaves: "Never", retention: "With history entry" },
+  { data: "Report and feature vector", where: "IndexedDB history", leaves: "Never", retention: "Until deleted, 500 cap" },
+  { data: "Preferences", where: "chrome.storage.sync", leaves: "Only via the browser's own sync", retention: "Until removed" },
+  { data: "Hashed reviewer prefixes", where: "Request body, opt in", leaves: "Yes, 4 hex characters, padded", retention: "Not logged" },
+  { data: "Graph edges", where: "Request body, opt in", leaves: "Yes, hashed and delayed", retention: "Aggregated" },
+  { data: "Crash reports", where: "Nowhere by default", leaves: "Only if enabled, opt in", retention: "30 days" },
+];
+---
+
+<Layout title="Privacy" description="What leaves your browser when Verdict runs a check.">
+  <h1>Privacy</h1>
+
+  <h2>What leaves your browser</h2>
+  <p>On a normal check: nothing.</p>
+  <p>
+    Verdict reads the page you already opened, analyses it on your machine using a model
+    bundled with the extension, and stores the result locally. No request is made to us. This
+    is verified by a test that fails our build if the extension makes any network request on
+    the default path.
+  </p>
+  <p>
+    <strong>What we never receive, under any setting:</strong> the page you are on, the product
+    you looked at, the review text, your identity, or anything that could be linked back to
+    you.
+  </p>
+  <p>
+    <strong>The one optional exception.</strong> If you turn on community checks, Verdict can
+    ask whether any reviewer accounts on a page belong to networks flagged across many
+    products. It asks using the first four characters of a hashed account identifier, mixed
+    with random decoys, so we receive a set of buckets each containing thousands of accounts
+    and cannot tell which ones you asked about, what the product was, or who you are. Requests
+    carry no cookie and no identifier, and our servers do not log IP addresses. The deployment
+    configuration proving that is in the public repository.
+  </p>
+  <p>This setting is off until you turn it on.</p>
+  <p>
+    Timing correlation is still theoretically possible for an adversary who controls both the
+    network and the storefront. Verdict mitigates it with random request delay and decoy
+    padding, and does not claim to eliminate it.
+  </p>
+
+  <h2>What data exists, and for how long</h2>
+  <div class="table-scroll">
+    <table class="register">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Where it lives</th>
+          <th>Leaves the device</th>
+          <th>Retention</th>
+        </tr>
+      </thead>
+      <tbody>
+        {dataInventory.map((row) => (
+          <tr>
+            <td>{row.data}</td>
+            <td>{row.where}</td>
+            <td>{row.leaves}</td>
+            <td>{row.retention}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What we will not build, ever</h2>
+  <ul>
+    <li>No account system</li>
+    <li>No advertising, and no affiliate links inserted into pages you are browsing</li>
+    <li>No selling, sharing, or licensing of any behavioural data</li>
+    <li>No telemetry that records which products or pages you visit</li>
+    <li>No server side page fetching on your behalf</li>
+    <li>
+      No change to any of the above without a version bump, a changelog entry, and a notice
+      inside the extension before it takes effect
+    </li>
+  </ul>
+</Layout>
+
+<style>
+  .table-scroll {
+    overflow-x: auto;
+  }
+</style>

@@ -1,0 +1,264 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+
+const navItems = [
+  { href: "/install", label: "Install" },
+  { href: "/check", label: "Check a listing" },
+  { href: "/history", label: "Your history" },
+  { href: "/method", label: "Method" },
+  { href: "/privacy", label: "Privacy" },
+];
+
+const footerItems = [
+  { href: "/status", label: "Status" },
+  { href: "/changelog", label: "Changelog" },
+  { href: "/sellers", label: "For sellers" },
+  { href: "https://github.com/verdict-tools/verdict", label: "Source" },
+  { href: "mailto:hello@verdict.tools", label: "Contact" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="wordmark" href="/">verdict</a>
+      <nav aria-label="Primary">
+        <ul>
+          {navItems.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <ul>
+        {footerItems.map((item) => (
+          <li><a href={item.href}>{item.label}</a></li>
+        ))}
+      </ul>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --paper: #e7ece3;
+    --paper-raised: #f1f4ec;
+    --paper-sunk: #dae1d2;
+    --ink: #17251f;
+    --ink-soft: #4c5c52;
+    --rule: #c0cbb6;
+    --accent: #1d5c46;
+    --accent-quiet: #c8dacf;
+    --violet: #57487f;
+    --cancel: #9c382f;
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #111a16;
+      --paper-raised: #182420;
+      --paper-sunk: #0c1310;
+      --ink: #e2e9df;
+      --ink-soft: #93a398;
+      --rule: #2c3b34;
+      --accent: #58b48c;
+      --accent-quiet: #1e3830;
+      --violet: #9c8ed6;
+      --cancel: #d4756a;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--paper);
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, sans-serif;
+    font-size: 1.0625rem;
+    line-height: 1.62;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: 0;
+    background: var(--paper-raised);
+    color: var(--ink);
+    padding: 8px 12px;
+  }
+
+  .skip-link:focus {
+    left: 8px;
+    top: 8px;
+    z-index: 10;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  h1 {
+    font-size: 2rem;
+    letter-spacing: -0.015em;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+  }
+
+  h3 {
+    font-size: 1.0625rem;
+  }
+
+  p, li {
+    max-width: 66ch;
+  }
+
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .site-header .wordmark {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 1.125rem;
+  }
+
+  .site-header nav ul {
+    display: flex;
+    gap: 20px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+  }
+
+  .site-header nav a {
+    text-decoration: none;
+  }
+
+  .site-header nav a:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  main {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .site-footer {
+    border-top: 1px solid var(--rule);
+    margin-top: 64px;
+    padding: 20px 24px;
+  }
+
+  .site-footer ul {
+    display: flex;
+    gap: 20px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .site-footer a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    color: inherit;
+  }
+
+  .button-primary {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--paper);
+    border-radius: 2px;
+    padding: 10px 16px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .button-secondary {
+    display: inline-block;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    color: inherit;
+  }
+
+  .register {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+
+  .register th,
+  .register td {
+    text-align: left;
+    padding: 8px 12px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .register tbody tr:nth-child(even) {
+    background: var(--paper-sunk);
+  }
+
+  .data {
+    font-family: "Fragment Mono", ui-monospace, monospace;
+  }
+
+  .certificate {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 2px 2px 0 0;
+    padding: 20px;
+  }
+</style>

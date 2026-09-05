@@ -1,0 +1,144 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="How Verdict decides"
+  description="What Verdict measures, how the signals combine, and where it fails."
+>
+  <h1>How Verdict decides</h1>
+  <p>
+    Verdict estimates. It does not know. A high score means the pattern of reviews on this
+    listing resembles patterns we have seen on listings that were openly solicited for paid
+    reviews. It is evidence, not a report, and it is wrong sometimes. The numbers below tell
+    you how often, once they exist. Where they do not exist yet, this page says so rather than
+    guessing.
+  </p>
+
+  <h2>What we measure</h2>
+  <p>Six signals. Every one is deterministic: no language model runs at analysis time.</p>
+
+  <h3>1. Rating distribution deconvolution</h3>
+  <p>
+    Genuine ratings for a product category settle into a shape. Manipulated ratings pile up at
+    four and five stars on top of that shape. This signal fits how much of the observed
+    histogram looks like an injection on top of the organic shape, using constrained least
+    squares.
+  </p>
+  <p class="worked-example">
+    Worked example: an organic shape of <span class="data">10% / 10% / 20% / 30% / 30%</span>
+    across one to five stars, with an observed histogram of
+    <span class="data">5% / 8% / 12% / 35% / 40%</span>, fits an injected share of
+    <span class="data">28.6%</span> with a residual error of <span class="data">0.027</span>.
+  </p>
+
+  <h3>2. Temporal burst detection</h3>
+  <p>
+    Review arrivals are treated as a point process. A rolling 28 day median sets the baseline
+    rate, and any day exceeding the 99th percentile of a Poisson distribution at that rate is
+    flagged. Adjacent flagged days merge into one burst.
+  </p>
+  <p class="worked-example">
+    Worked example: 30 days steady at 2 reviews a day, then a 3 day spike to 50 reviews a day,
+    then back to 2. Verdict flags one burst spanning those 3 days, holding
+    <span class="data">150</span> reviews, about <span class="data">67%</span> of the whole
+    series.
+  </p>
+  <p>
+    Weak alone. Launches, discounts, and press coverage all produce legitimate bursts. It only
+    carries weight alongside the next signal.
+  </p>
+
+  <h3>3. Conditional verification concentration</h3>
+  <p>
+    Not the raw unverified share, which is noisy and varies by category. Instead, whether
+    unverified reviews concentrate exactly where manipulation would put them: five star reviews
+    arriving inside a burst.
+  </p>
+  <p class="worked-example">
+    Worked example: if reviews inside a five star burst are unverified twice as often as the
+    listing's reviews overall, the lift is <span class="data">2.0</span>. A lift near
+    <span class="data">1.0</span> is unremarkable.
+  </p>
+
+  <h3>4. Listing identity drift</h3>
+  <p>
+    Sellers sometimes reuse an existing listing for a different product, so its reviews
+    describe something else entirely. This signal compares review text against the current
+    product title and category using a small sentence embedding model, and looks for a change
+    point in that comparison over time.
+  </p>
+  <p>
+    This is the most persuasive line Verdict can produce, and also the one with the biggest
+    open cost: a bundled embedding model is 20 to 25 MB, against an 8 MB budget for the whole
+    extension. Whether version 0.1 ships it or defers it to 0.2 has not been decided yet, so it
+    does not run today.
+  </p>
+
+  <h3>5. Text near duplication</h3>
+  <p>
+    Reviews that repeat each other almost word for word are grouped using MinHash over
+    character five grams and locality sensitive hashing, then clustered above 0.7 Jaccard
+    similarity.
+  </p>
+  <p class="worked-example">
+    Worked example: five reviews, three of them byte identical and two genuinely different,
+    cluster into one group holding <span class="data">60%</span> of the reviews.
+  </p>
+  <p>
+    Review farms increasingly generate text with language models, so near duplication is a
+    decaying signal. It stays in the model with low weight because it still catches the cheap
+    end of the market. It is not the foundation.
+  </p>
+
+  <h3>6. Reviewer graph</h3>
+  <p>
+    A farm serves many sellers, so its accounts co-review unrelated products. This signal
+    projects a bipartite reviewer-product graph onto a reviewer-reviewer graph, extracts the
+    statistically significant edges, and scores the resulting communities. It needs
+    cross-product visibility, so it is opt in and ships in version 0.2, not 0.1.
+  </p>
+
+  <h2>How the signals combine</h2>
+  <p>
+    The plan is logistic regression on the six feature values, moving to gradient boosting only
+    if it improves held out performance and the model stays calibrated. Every logistic
+    regression coefficient is explainable and exports to a few kilobytes of JSON. Isotonic
+    regression calibrates the raw output into a probability on a held out slice.
+  </p>
+  <p>
+    Nothing is trained yet. This section will publish the actual coefficients once a labelled
+    corpus exists to train and calibrate against.
+  </p>
+
+  <h2>How well it works</h2>
+  <p>
+    Not published yet. This section will carry precision, recall, and a calibration curve
+    against a held out set that is never touched during development, as absolute numbers, not
+    adjectives, once that evaluation has been run.
+  </p>
+
+  <h2>Where it fails</h2>
+  <p>Written before anyone asks, because these are the honest edges of what this method can do.</p>
+  <ul>
+    <li>New listings with too few reviews to say anything. Verdict shows "not enough data" rather than a number below its minimum thresholds.</li>
+    <li>Categories with genuinely unusual rating shapes, like replacement parts, where the organic prior itself is hard to pin down.</li>
+    <li>Products that went viral and look bursty for entirely honest reasons.</li>
+    <li>Manipulation sophisticated enough to be indistinguishable from organic behaviour at the sample size a single listing provides.</li>
+  </ul>
+
+  <h2>How the labels were built</h2>
+  <p>
+    Not published yet. The corpus methodology, including how review solicitation groups were
+    read to find genuine positive labels, will be published here in full, because a claim about
+    accuracy is worth nothing without it.
+  </p>
+</Layout>
+
+<style>
+  .worked-example {
+    background: var(--paper-sunk);
+    padding: 12px 16px;
+    border-radius: 2px;
+  }
+</style>

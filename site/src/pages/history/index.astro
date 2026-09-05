@@ -1,0 +1,31 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Your history"
+  description="Every check you have run, stored in the extension on this machine."
+>
+  <h1>Your history</h1>
+  <p>
+    Every check you have run, stored in the extension on this machine. It has never been sent
+    anywhere and there is no account attached to it.
+  </p>
+
+  <p>
+    Your history lives inside the extension. Install Verdict and it will appear here.
+  </p>
+  <p>
+    <a class="button-primary" href="/install">Add Verdict to your browser</a>
+  </p>
+
+  <!--
+    with the extension installed, this page reads history over
+    externally_connectable (SPEC.md section 11) with a register table
+    (date, product, claimed rating, adjusted rating, band, rosette
+    thumbnail), sortable and filterable by band, plus export and delete
+    all. that bridge is not built yet, so this page only shows the
+    honest without-extension state above rather than an empty table that
+    would look broken.
+  -->
+</Layout>

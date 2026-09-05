@@ -1,0 +1,34 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Check a listing"
+  description="Paste an Amazon product link and Verdict will analyse it."
+>
+  <h1>Check a listing</h1>
+  <p>Paste an Amazon product link and Verdict will analyse it.</p>
+
+  <p>
+    Verdict needs the extension to do this.
+  </p>
+  <p>
+    We could fetch the page from our own servers instead, and some tools do. That would mean
+    telling us which product you are looking at, and it would mean requesting Amazon pages at
+    scale from our infrastructure. We are not willing to do the first and not able to sustain
+    the second. So the fetch happens in your browser, in your session, exactly as if you had
+    opened the page yourself.
+  </p>
+  <p>
+    <a class="button-primary" href="/install">Add Verdict to your browser</a>
+  </p>
+
+  <!--
+    with the extension installed, this page talks to it over
+    externally_connectable (SPEC.md section 11) and the extension performs
+    the fetch in the user's own session. that bridge is not built yet
+    (extension/src/entrypoints/background.ts is still a stub), so this page
+    only shows the honest without-extension explanation above for now
+    rather than a form that would silently do nothing.
+  -->
+</Layout>

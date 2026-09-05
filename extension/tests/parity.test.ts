@@ -1,8 +1,15 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { buildFeatureVector } from "../src/score/featureVector";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
+import {
+  estimateJaccard,
+  minhashSignature,
+  shingle,
+  textNearDuplication,
+} from "../src/score/textNearDuplication";
 import { verificationConcentration } from "../src/score/verificationConcentration";
 
 const VECTORS_PATH = fileURLToPath(
@@ -78,6 +85,47 @@ function run(vector: Vector): unknown {
         percentile: number;
       };
       return detectTemporalBursts(dailyCounts, windowDays, percentile);
+    }
+    case "textNearDuplication": {
+      const { reviews } = vector.input as { reviews: { text: string | null }[] };
+      return textNearDuplication(reviews);
+    }
+    case "textNearDuplicationEstimatedJaccard": {
+      const { textA, textB, numPermutations } = vector.input as {
+        textA: string;
+        textB: string;
+        numPermutations: number;
+      };
+      const signatureA = minhashSignature(shingle(textA, 5), numPermutations);
+      const signatureB = minhashSignature(shingle(textB, 5), numPermutations);
+      return { estimatedJaccard: estimateJaccard(signatureA, signatureB) };
+    }
+    case "featureVector": {
+      const { reviews, organicPrior, injectionKernel } = vector.input as {
+        reviews: {
+          rating: number | null;
+          text: string | null;
+          date: string | null;
+          verified: boolean | null;
+          reviewerId: string | null;
+        }[];
+        organicPrior: number[];
+        injectionKernel: number[];
+      };
+      const result = buildFeatureVector(reviews, { organicPrior, injectionKernel });
+      return {
+        meetsMinimumData: result.meetsMinimumData,
+        ratingDeconvolution: result.ratingDeconvolution,
+        temporalBurst: result.temporalBurst !== null
+          ? {
+            burstFraction: result.temporalBurst.burstFraction,
+            burstCount: result.temporalBurst.burstCount,
+            largestBurstShare: result.temporalBurst.largestBurstShare,
+          }
+          : null,
+        verificationConcentration: result.verificationConcentration,
+        textNearDuplication: result.textNearDuplication,
+      };
     }
     default:
       throw new Error(`unknown signal in parity vectors: ${vector.signal}`);

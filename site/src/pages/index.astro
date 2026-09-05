@@ -1,12 +1,134 @@
 ---
+import Layout from "../layouts/Layout.astro";
+import ReportBlock from "../components/ReportBlock.astro";
+
+// a single illustrative example, not a live analysis: there is no trained
+// combiner yet (SPEC.md section 6 waits on ground truth), so this hero
+// report is fixed sample data rather than a claim about any real listing.
+const sampleReport = {
+  bandLabel: "mixed",
+  claimedRating: 4.6,
+  adjustedRating: 3.9,
+  totalReviewCount: 8431,
+  excludedReviewCount: 1208,
+  serial: "7F2A-0091",
+  rosette: { harmonicA: 5, harmonicB: 8, amplitude: 0.45, strokeColor: "#B08128" },
+};
 ---
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Verdict</title>
-  </head>
-  <body>
-    <p>Verdict.</p>
-  </body>
-</html>
+
+<Layout
+  title="Verdict"
+  description="Verdict reads the reviews your browser already downloaded and shows you which ones do not hold up."
+>
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Not every review was written by a person.</h1>
+      <p>
+        Verdict reads the reviews your browser has already downloaded and shows you which ones
+        do not hold up. It runs on your machine. Nothing about what you shop for is sent
+        anywhere.
+      </p>
+      <p>
+        <a class="button-primary" href="/install">Add to Chrome</a>
+        <span class="also-on">Also on Firefox, Edge, Brave and Opera.</span>
+      </p>
+    </div>
+    <ReportBlock {...sampleReport} />
+  </section>
+
+  <section class="explain">
+    <div>
+      <h2>It recomputes the rating.</h2>
+      <p>
+        Suspect reviews come out and the average is recalculated. On a listing showing 4.6
+        stars, that number is often somewhere quite different.
+      </p>
+    </div>
+    <div>
+      <h2>It shows the reasoning.</h2>
+      <p>
+        Every report opens into the evidence. How the ratings are distributed, when they
+        arrived, whether the text repeats, whether they describe the product actually being
+        sold. You can disagree with it, which is the point.
+      </p>
+    </div>
+    <div>
+      <h2>It notices when a listing changed identity.</h2>
+      <p>
+        Sellers reuse old listings. Reviews praising a phone case end up attached to a hair
+        dryer. Verdict reads what the reviews are actually about and tells you how many of them
+        belong to something else.
+      </p>
+    </div>
+  </section>
+
+  <section class="why">
+    <h2>Why it exists</h2>
+    <p>
+      Fakespot did this for nearly ten years. Mozilla bought it in 2023 and shut it down on
+      1 July 2025, and disabled the Review Checker built into Firefox three weeks earlier.
+      Their explanation was that it did not fit a model they could sustain. ReviewMeta closed
+      before that. Millions of people lost the tool and nothing took its place.
+    </p>
+    <p>
+      Verdict is built differently. Fakespot ran the analysis on its own servers, which meant
+      paying to fetch pages at scale and, unavoidably, seeing what everyone was shopping for.
+      Verdict does the work in your browser, on pages you have already opened. That removes the
+      cost and it removes the surveillance at the same time.
+    </p>
+  </section>
+
+  <section class="close">
+    <p>
+      <a class="button-primary" href="/install">Add to Chrome</a>
+    </p>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    display: flex;
+    gap: 40px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 48px 0;
+  }
+
+  .hero-copy {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .hero-copy h1 {
+    font-size: 3.25rem;
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-weight: 700;
+  }
+
+  .also-on {
+    display: inline-block;
+    margin-left: 12px;
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .explain {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 32px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .why {
+    padding: 32px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .close {
+    padding: 32px 0 64px;
+    border-top: 1px solid var(--rule);
+  }
+</style>

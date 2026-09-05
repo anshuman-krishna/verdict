@@ -1,0 +1,44 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Status"
+  description="Extraction health per site and locale."
+>
+  <h1>Status</h1>
+  <p>
+    When Amazon changes their page layout, Verdict stops reading it correctly. This page tells
+    you whether that has happened, before you have to wonder why a report looks wrong.
+  </p>
+  <p>
+    Not live yet. The canary job that fills this table in runs from
+    <span class="data">research/verdict_research/canary</span>, and that job has not shipped.
+    Nothing below is real data.
+  </p>
+  <div class="table-scroll">
+    <table class="register">
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>Locale</th>
+          <th>Last verified</th>
+          <th>Extraction health</th>
+          <th>Rules version</th>
+          <th>Median reviews extracted</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="6">No canary runs yet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</Layout>
+
+<style>
+  .table-scroll {
+    overflow-x: auto;
+  }
+</style>

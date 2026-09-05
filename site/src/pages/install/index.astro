@@ -1,0 +1,95 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout
+  title="Add Verdict to your browser"
+  description="Install Verdict for Chrome, Edge, Brave, Opera, or Firefox."
+>
+  <h1>Add Verdict to your browser</h1>
+  <p>
+    It takes about thirty seconds. Verdict asks for access to shopping sites only, and for
+    local storage to keep your history on your machine. It does not ask for anything else.
+  </p>
+
+  <section id="chromium" data-browser-block="chromium">
+    <h2>Chrome, Edge, Brave, Opera, Arc and other Chromium browsers</h2>
+    <p>One store listing covers all of them.</p>
+    <ol>
+      <li>Open the Verdict listing on the Chrome Web Store.</li>
+      <li>Choose Add to Chrome, then Add extension.</li>
+      <li>
+        Pin Verdict to your toolbar so you can reach your history. Click the puzzle piece icon
+        in the toolbar, find Verdict, and click the pin.
+      </li>
+      <li>Open any Amazon product page. Verdict appears under the star rating within a second or two.</li>
+    </ol>
+    <p>
+      Edge, Brave, Opera and Arc all install Chrome Web Store extensions directly. Edge may ask
+      you to allow extensions from other stores the first time.
+    </p>
+  </section>
+
+  <section id="firefox" data-browser-block="firefox">
+    <h2>Firefox</h2>
+    <p>
+      Verdict is on addons.mozilla.org as a signed extension. Choose Add to Firefox, then Add.
+      If you used the Review Checker that Firefox removed in June 2025, this is the closest
+      replacement, and it does more.
+    </p>
+  </section>
+
+  <section id="safari">
+    <h2>Safari</h2>
+    <p>
+      Not yet. Safari requires a different packaging route and a paid developer account. It is
+      on the list, without a date.
+    </p>
+  </section>
+
+  <section id="development-build">
+    <h2>Installing the development build yourself</h2>
+    <p>For people who would rather read the code and build it.</p>
+    <ol>
+      <li>
+        Download the latest <code>verdict-chrome.zip</code> from the releases page, or build it
+        with <code>just ext build</code>.
+      </li>
+      <li>Unzip it somewhere you will not delete by accident.</li>
+      <li>Open <code>chrome://extensions</code> and turn on Developer mode, top right.</li>
+      <li>Choose Load unpacked and select the unzipped folder.</li>
+      <li>Chrome will warn you about developer mode extensions on every startup. That is normal.</li>
+    </ol>
+    <p>
+      The build is reproducible. Every release lists the commit it was built from and the
+      SHA256 of the zip, so you can check that what is in the store matches what is in the
+      repository.
+    </p>
+  </section>
+
+  <section id="checking">
+    <h2>Checking it works, and removing it</h2>
+    <p>
+      Open any Amazon product page with a few hundred reviews. Verdict appears under the
+      rating. If nothing happens, the <a href="/status">status page</a> shows whether extraction
+      is currently working for your country.
+    </p>
+    <p>
+      To remove it: right click the Verdict icon and choose Remove from Chrome. Your history is
+      stored inside the extension, so removing it deletes the history too. Export first if you
+      want to keep it.
+    </p>
+  </section>
+
+  <script>
+    // progressive enhancement only: every section above is already in the
+    // page and readable without javascript, this just reorders the matching
+    // block to the top so it is the first thing a visitor sees
+    const isFirefox = navigator.userAgent.includes("Firefox");
+    const matchId = isFirefox ? "firefox" : "chromium";
+    const match = document.getElementById(matchId);
+    if (match !== null && match.parentElement !== null) {
+      match.parentElement.prepend(match);
+    }
+  </script>
+</Layout>
