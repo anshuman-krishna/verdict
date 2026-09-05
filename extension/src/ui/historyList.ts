@@ -1,25 +1,10 @@
-import { BAND_COLORS, BAND_LABELS, type Band } from "../score/report";
+import { BAND_COLORS, BAND_LABELS, summarizeReport } from "../score/report";
 import type { HistoryEntry } from "../storage/history";
 
 export interface PopupCallbacks {
   onExportJson: () => void;
   onExportCsv: () => void;
   onDeleteAll: () => void;
-}
-
-// the history store predates the Report type and keeps its field as
-// unknown, so this is a system boundary: a legacy or malformed entry is
-// rendered without a band rather than thrown away or crashing the popup.
-function summarizeReport(report: unknown): { band: Band | null; adjustedRating: number | null } {
-  if (typeof report !== "object" || report === null) {
-    return { band: null, adjustedRating: null };
-  }
-  const value = report as Record<string, unknown>;
-  const band = typeof value.band === "string" && value.band in BAND_LABELS
-    ? (value.band as Band)
-    : null;
-  const adjustedRating = typeof value.adjustedRating === "number" ? value.adjustedRating : null;
-  return { band, adjustedRating };
 }
 
 function formatDate(timestamp: number): string {

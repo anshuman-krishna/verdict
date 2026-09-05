@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { applyModel, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
+import type { FeatureVector } from "../src/score/featureVector";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
 import {
@@ -126,6 +128,13 @@ function run(vector: Vector): unknown {
         verificationConcentration: result.verificationConcentration,
         textNearDuplication: result.textNearDuplication,
       };
+    }
+    case "combine": {
+      const { featureVector, model } = vector.input as {
+        featureVector: FeatureVector;
+        model: CombinerModel;
+      };
+      return applyModel(featureVector, model);
     }
     default:
       throw new Error(`unknown signal in parity vectors: ${vector.signal}`);

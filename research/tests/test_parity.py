@@ -1,11 +1,23 @@
 import json
 from pathlib import Path
 
-from verdict_research.features.feature_vector import FeatureVectorInputs, build_feature_vector
-from verdict_research.features.rating_deconvolution import rating_deconvolution
-from verdict_research.features.temporal_burst import detect_temporal_bursts
+from verdict_research.features.feature_vector import (
+    FeatureVector,
+    FeatureVectorInputs,
+    build_feature_vector,
+)
+from verdict_research.features.rating_deconvolution import (
+    RatingDeconvolutionResult,
+    rating_deconvolution,
+)
+from verdict_research.features.temporal_burst import (
+    Burst,
+    TemporalBurstResult,
+    detect_temporal_bursts,
+)
 from verdict_research.features.text_near_duplication import (
     ReviewForNearDuplication,
+    TextNearDuplicationResult,
     estimate_jaccard,
     minhash_signature,
     shingle,
@@ -13,8 +25,10 @@ from verdict_research.features.text_near_duplication import (
 )
 from verdict_research.features.verification_concentration import (
     ReviewForVerification,
+    VerificationConcentrationResult,
     verification_concentration,
 )
+from verdict_research.model.combine import CalibrationPoint, CombinerModel, apply_model
 from verdict_research.schema import Review
 
 VECTORS_PATH = Path(__file__).parent.parent.parent / "tests" / "parity" / "vectors.jsonl"
@@ -135,6 +149,56 @@ def run(vector: dict):
                 "largestClusterShare": result.text_near_duplication.largest_cluster_share,
             },
         }
+
+    if signal == "combine":
+        fv = data["featureVector"]
+        rating = fv["ratingDeconvolution"]
+        burst = fv["temporalBurst"]
+        verification = fv["verificationConcentration"]
+        duplication = fv["textNearDuplication"]
+        feature_vector = FeatureVector(
+            meets_minimum_data=fv["meetsMinimumData"],
+            rating_deconvolution=RatingDeconvolutionResult(
+                injected_share=rating["injectedShare"], residual_error=rating["residualError"]
+            )
+            if rating is not None
+            else None,
+            temporal_burst=TemporalBurstResult(
+                bursts=[
+                    Burst(b["startDay"], b["endDay"], b["reviewCount"]) for b in burst["bursts"]
+                ],
+                burst_fraction=burst["burstFraction"],
+                burst_count=burst["burstCount"],
+                largest_burst_share=burst["largestBurstShare"],
+            )
+            if burst is not None
+            else None,
+            verification_concentration=VerificationConcentrationResult(
+                lift=verification["lift"], base_count=verification["baseCount"]
+            )
+            if verification is not None
+            else None,
+            text_near_duplication=TextNearDuplicationResult(
+                duplicate_review_share=duplication["duplicateReviewShare"],
+                cluster_count=duplication["clusterCount"],
+                largest_cluster_share=duplication["largestClusterShare"],
+            ),
+        )
+        model = CombinerModel(
+            intercept=data["model"]["intercept"],
+            coefficients=data["model"]["coefficients"],
+            calibration=[CalibrationPoint(p["x"], p["y"]) for p in data["model"]["calibration"]],
+        )
+        result = apply_model(feature_vector, model)
+        if result.status == "ok":
+            return {
+                "status": result.status,
+                "rawProbability": result.raw_probability,
+                "probability": result.probability,
+            }
+        if result.status == "missing-features":
+            return {"status": result.status, "missing": result.missing}
+        return {"status": result.status}
 
     raise ValueError(f"unknown signal in parity vectors: {signal}")
 

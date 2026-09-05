@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Verdict settings</title>
+    <style>
+      :root {
+        --paper: #e7ece3;
+        --paper-raised: #f1f4ec;
+        --paper-sunk: #dae1d2;
+        --ink: #17251f;
+        --ink-soft: #4c5c52;
+        --rule: #c0cbb6;
+        --accent: #1d5c46;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #111a16;
+          --paper-raised: #182420;
+          --paper-sunk: #0c1310;
+          --ink: #e2e9df;
+          --ink-soft: #93a398;
+          --rule: #2c3b34;
+          --accent: #58b48c;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 24px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: "Public Sans", system-ui, sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+      }
+      header {
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .wordmark {
+        font-family: "Bricolage Grotesque", system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 1.125rem;
+      }
+      .setting {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .setting h2 {
+        font-family: "Bricolage Grotesque", system-ui, sans-serif;
+        font-size: 1rem;
+        margin: 0 0 8px;
+      }
+      .hint {
+        color: var(--ink-soft);
+        font-size: 0.875rem;
+        margin: 8px 0 0;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--paper-raised);
+        border: 1px solid var(--rule);
+        border-radius: 2px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

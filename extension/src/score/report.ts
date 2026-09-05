@@ -51,6 +51,30 @@ export interface Report {
   generatedAt: number;
 }
 
+export interface ReportSummary {
+  band: Band | null;
+  claimedRating: number | null;
+  adjustedRating: number | null;
+}
+
+// history entries predate this type and store their report as unknown, so
+// this is a system boundary: a legacy or malformed report is summarized as
+// all nulls rather than thrown away or left to crash a caller. shared by
+// the popup and the website bridge, so the two surfaces never disagree on
+// what counts as a valid report.
+export function summarizeReport(report: unknown): ReportSummary {
+  if (typeof report !== "object" || report === null) {
+    return { band: null, claimedRating: null, adjustedRating: null };
+  }
+  const value = report as Record<string, unknown>;
+  const band = typeof value.band === "string" && value.band in BAND_LABELS
+    ? (value.band as Band)
+    : null;
+  const claimedRating = typeof value.claimedRating === "number" ? value.claimedRating : null;
+  const adjustedRating = typeof value.adjustedRating === "number" ? value.adjustedRating : null;
+  return { band, claimedRating, adjustedRating };
+}
+
 const SERIAL_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 // a stable, citable serial per DESIGN.md section 3: "a serial on each

@@ -12,20 +12,143 @@ import Layout from "../../layouts/Layout.astro";
     anywhere and there is no account attached to it.
   </p>
 
-  <p>
-    Your history lives inside the extension. Install Verdict and it will appear here.
-  </p>
-  <p>
-    <a class="button-primary" href="/install">Add Verdict to your browser</a>
-  </p>
+  <div id="fallback">
+    <p>
+      Your history lives inside the extension. Install Verdict and it will appear here.
+    </p>
+    <p>
+      <a class="button-primary" href="/install">Add Verdict to your browser</a>
+    </p>
+  </div>
 
-  <!--
-    with the extension installed, this page reads history over
-    externally_connectable (SPEC.md section 11) with a register table
-    (date, product, claimed rating, adjusted rating, band, rosette
-    thumbnail), sortable and filterable by band, plus export and delete
-    all. that bridge is not built yet, so this page only shows the
-    honest without-extension state above rather than an empty table that
-    would look broken.
-  -->
+  <div id="app" hidden></div>
+
+  <script>
+    // SPEC.md section 11, the website bridge. this island is one of the
+    // two SITE.md's build notes name as an exception to the no client
+    // javascript rule. extension/src/entrypoints/presence.content.ts sets
+    // data-verdict-installed and data-verdict-extension-id on <html> at
+    // document_start, before this script runs, so there is no polling
+    // and no hardcoded extension id.
+
+    // DESIGN.md section 4, provisional band scale, mirrored from
+    // extension/src/score/report.ts so the two never quietly disagree.
+    const BAND_LABELS: Record<string, string> = {
+      clean: "clean",
+      "mostly-clean": "mostly clean",
+      mixed: "mixed",
+      doubtful: "doubtful",
+      "heavily-manipulated": "heavily manipulated",
+    };
+    const BAND_COLORS: Record<string, string> = {
+      clean: "#2E6B4E",
+      "mostly-clean": "#6E8A3C",
+      mixed: "#B08128",
+      doubtful: "#A75A2B",
+      "heavily-manipulated": "#9C382F",
+    };
+
+    interface HistorySummaryEntry {
+      id: number;
+      timestamp: number;
+      title: string;
+      thumbnailUrl: string | null;
+      band: string | null;
+      claimedRating: number | null;
+      adjustedRating: number | null;
+    }
+
+    const root = document.documentElement;
+
+    function sendToExtension(type: string): Promise<any> {
+      return new Promise((resolve, reject) => {
+        const extensionId = root.dataset.verdictExtensionId;
+        const runtime = (window as any).chrome?.runtime;
+        if (!extensionId || !runtime?.sendMessage) {
+          reject(new Error("no cross extension messaging available in this browser"));
+          return;
+        }
+        runtime.sendMessage(extensionId, { type }, (response: unknown) => {
+          if (runtime.lastError) {
+            reject(new Error(runtime.lastError.message));
+            return;
+          }
+          resolve(response);
+        });
+      });
+    }
+
+    function formatDate(timestamp: number): string {
+      return new Date(timestamp).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    }
+
+    function escapeHtml(value: string): string {
+      const div = document.createElement("div");
+      div.textContent = value;
+      return div.innerHTML;
+    }
+
+    function renderEntries(app: HTMLElement, entries: HistorySummaryEntry[]): void {
+      if (entries.length === 0) {
+        app.innerHTML = "<p>No checks yet.</p>";
+        return;
+      }
+      const rows = entries
+        .map((entry) => {
+          const band = entry.band !== null && entry.band in BAND_LABELS
+            ? `<span style="color:${BAND_COLORS[entry.band]}">${BAND_LABELS[entry.band]}</span>`
+            : "";
+          const claimed = entry.claimedRating !== null ? entry.claimedRating.toFixed(1) : "";
+          const adjusted = entry.adjustedRating !== null ? entry.adjustedRating.toFixed(1) : "";
+          return `<tr><td>${formatDate(entry.timestamp)}</td><td>${escapeHtml(entry.title)}</td><td>${claimed}</td><td>${adjusted}</td><td>${band}</td></tr>`;
+        })
+        .join("");
+      app.innerHTML = `
+        <div class="table-scroll">
+          <table class="register">
+            <thead>
+              <tr><th>Date</th><th>Product</th><th>Claimed</th><th>Adjusted</th><th>Band</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <p><button type="button" id="clear-history" class="button-secondary">Delete everything</button></p>
+      `;
+      document.getElementById("clear-history")?.addEventListener("click", async () => {
+        await sendToExtension("verdict:history:clear");
+        renderEntries(app, []);
+      });
+    }
+
+    async function init(): Promise<void> {
+      if (root.dataset.verdictInstalled !== "true") {
+        return;
+      }
+      document.getElementById("fallback")?.setAttribute("hidden", "");
+      const app = document.getElementById("app");
+      if (app === null) {
+        return;
+      }
+      app.hidden = false;
+      app.innerHTML = "<p>Loading your history…</p>";
+      try {
+        const response = await sendToExtension("verdict:history:list");
+        renderEntries(app, response.entries);
+      } catch {
+        app.innerHTML = "<p>Could not reach the extension. Try reloading the page.</p>";
+      }
+    }
+
+    void init();
+  </script>
 </Layout>
+
+<style>
+  .table-scroll {
+    overflow-x: auto;
+  }
+</style>
