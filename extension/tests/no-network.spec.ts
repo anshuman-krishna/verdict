@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { analyzePage } from "../src/contentScript/orchestrator";
 import { fetchReviewPages } from "../src/extract/fetchReviewPages";
 import { resolveField } from "../src/extract/interpreter";
 import type { FieldRule } from "../src/extract/rules";
+import type { RulesDocument } from "../src/extract/rules";
 import type { ProductSnapshot, Review } from "../src/extract/types";
+import type { CombinerModel } from "../src/score/combine";
 import { getPref, setPref } from "../src/storage/prefs";
 import {
   cacheKey,
@@ -90,6 +93,48 @@ describe("the default analysis path makes no network requests", () => {
       delay: async () => {},
     });
     expect(reviews).toEqual([review]);
+  });
+
+  it("analyzePage, the content script's default entry point, never touches the network", async () => {
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        claimedRating: { strategy: "selector", value: ".rating" },
+        reviews: { strategy: "embedded-json", path: "$.reviewsData.reviews[*]" },
+      },
+    };
+    const model: CombinerModel = {
+      intercept: 0,
+      coefficients: { "ratingDeconvolution.injectedShare": 1 },
+      calibration: [],
+    };
+    const container = document.createElement("div");
+    container.innerHTML = `
+      <span class="title">a product</span>
+      <span class="rating">4.6</span>
+      <script type="application/ld+json">${JSON.stringify({
+        reviewsData: {
+          reviews: Array.from({ length: 30 }, (_, i) => ({
+            ...review,
+            date: `2026-01-${String((i % 25) + 1).padStart(2, "0")}`,
+            reviewerId: `r-${i}`,
+          })),
+        },
+      })}</script>
+    `;
+
+    const result = await analyzePage(container, "https://www.amazon.com/dp/B0EXAMPLE1", {
+      rules,
+      model,
+      priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
+      isHistoryEnabled: async () => true,
+      saveHistory: async () => undefined,
+    });
+
+    expect(result?.outcome.status).toBe("ok");
   });
 
   it("fails if something does call out, proving the stubs actually trap a request", () => {
