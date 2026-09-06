@@ -132,6 +132,10 @@ describe("the default analysis path makes no network requests", () => {
       priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
+      // this test checks the outcome is ok and nothing touched the
+      // network, not the confidence interval, so a small resample count
+      // keeps it fast without weakening what it actually verifies.
+      bootstrapResamples: 5,
     });
 
     expect(result?.outcome.status).toBe("ok");

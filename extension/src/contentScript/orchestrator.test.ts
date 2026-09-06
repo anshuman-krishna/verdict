@@ -57,6 +57,12 @@ function deps(overrides: Partial<Parameters<typeof analyzePage>[2]> = {}) {
     priors: PRIORS,
     isHistoryEnabled: vi.fn().mockResolvedValue(true),
     saveHistory: vi.fn().mockResolvedValue(undefined),
+    // these tests check outcome status and history wiring, not the
+    // confidence interval, so a small resample count keeps them fast.
+    // bootstrap.ts's default of 200 (SPEC.md section 6's number) is worth
+    // keeping only where the interval itself is under test, as in
+    // buildReport.test.ts.
+    bootstrapResamples: 5,
     ...overrides,
   };
 }

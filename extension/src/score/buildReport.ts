@@ -83,6 +83,15 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "missing-features", missing: result.missing };
   }
 
+  // measured: 200 resamples (SPEC.md section 6's number, the default when
+  // options.bootstrapResamples is not overridden) over 30 reviews takes
+  // roughly 2 seconds on a dev laptop, dominated by textNearDuplication's
+  // 128 permutation minhash rerunning inside every resample. SPEC.md
+  // section 14 budgets the whole analysis at 1.5 seconds. Worth a look
+  // before this ships; not fixed here, since shrinking the resample count
+  // changes what SPEC.md section 6 actually asked for, and speeding up
+  // minhash risks changing signal 5.5's output, both outside this task's
+  // scope.
   const model = options.model;
   const samples = bootstrap(
     options.reviews,
