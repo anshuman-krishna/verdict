@@ -109,6 +109,22 @@ describe("VerdictPanelElement", () => {
     document.body.removeChild(panel);
   });
 
+  it("dispatches verdict:full-report when the full report button is clicked", () => {
+    const panel = new VerdictPanelElement();
+    document.body.appendChild(panel);
+    panel.render(sampleReport(), rosetteInput);
+    const root = getPanelShadowRootForTesting(panel);
+
+    let dispatched = false;
+    panel.addEventListener("verdict:full-report", () => {
+      dispatched = true;
+    });
+    root.querySelector<HTMLButtonElement>(".full-report")?.click();
+
+    expect(dispatched).toBe(true);
+    document.body.removeChild(panel);
+  });
+
   it("dispatches verdict:close on escape", () => {
     const panel = new VerdictPanelElement();
     document.body.appendChild(panel);

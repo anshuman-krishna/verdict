@@ -16,3 +16,20 @@ export async function getHistoryEnabled(): Promise<boolean> {
 export function setHistoryEnabled(enabled: boolean) {
   return setPref(HISTORY_ENABLED_KEY, enabled);
 }
+
+const REPUTATION_LOOKUP_ENABLED_KEY = "reputationLookupEnabled";
+
+// SPEC.md section 4: the reviewer graph service is "opt in, off by
+// default". Unlike DEFAULT_HISTORY_ENABLED above, this default is not a
+// placeholder standing in for an undecided value, it is what the spec
+// already says.
+const DEFAULT_REPUTATION_LOOKUP_ENABLED = false;
+
+export async function getReputationLookupEnabled(): Promise<boolean> {
+  const value = await getPref<boolean>(REPUTATION_LOOKUP_ENABLED_KEY);
+  return value ?? DEFAULT_REPUTATION_LOOKUP_ENABLED;
+}
+
+export function setReputationLookupEnabled(enabled: boolean) {
+  return setPref(REPUTATION_LOOKUP_ENABLED_KEY, enabled);
+}

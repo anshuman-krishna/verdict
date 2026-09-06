@@ -66,7 +66,18 @@ function adjustedRating(reviews: readonly Review[], claimedRating: number, exclu
 
 export function buildReport(options: BuildReportOptions): ReportOutcome {
   const now = options.now ?? Date.now;
-  const vector = buildFeatureVector(options.reviews, options.priors);
+  // scoped to this single buildReport() call, never the caller's own
+  // options.priors object: options.priors can be a shared constant across
+  // many unrelated analyses (score/priors.ts's PLACEHOLDER_PRIORS, for
+  // one), and caching into it directly would leak signatures from one
+  // product's reviews into another's. Spans the main computation below
+  // and every bootstrap resample, since a review's text, and so its
+  // signature, is the same reviews[i] object throughout.
+  const priors: FeatureVectorInputs = {
+    ...options.priors,
+    textNearDuplicationSignatureCache: new WeakMap(),
+  };
+  const vector = buildFeatureVector(options.reviews, priors);
 
   if (!vector.meetsMinimumData) {
     return { status: "not-enough-data" };
@@ -84,19 +95,19 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
   }
 
   // measured: 200 resamples (SPEC.md section 6's number, the default when
-  // options.bootstrapResamples is not overridden) over 30 reviews takes
-  // roughly 2 seconds on a dev laptop, dominated by textNearDuplication's
-  // 128 permutation minhash rerunning inside every resample. SPEC.md
-  // section 14 budgets the whole analysis at 1.5 seconds. Worth a look
-  // before this ships; not fixed here, since shrinking the resample count
-  // changes what SPEC.md section 6 actually asked for, and speeding up
-  // minhash risks changing signal 5.5's output, both outside this task's
-  // scope.
+  // options.bootstrapResamples is not overridden) over 30 reviews took
+  // roughly 2 seconds on a dev laptop before priors.textNearDuplicationSignatureCache
+  // above, entirely spent redoing textNearDuplication's 128 permutation
+  // minhash from scratch on every resample even though bootstrap.ts's
+  // resample() draws with replacement from the same source array, so the
+  // same review object, and so the same signature, recurs constantly.
+  // With the cache this is down to milliseconds, comfortably inside
+  // SPEC.md section 14's 1.5 second budget.
   const model = options.model;
   const samples = bootstrap(
     options.reviews,
     (sample) => {
-      const sampleVector = buildFeatureVector(sample, options.priors);
+      const sampleVector = buildFeatureVector(sample, priors);
       const sampleResult = applyModel(sampleVector, model);
       return sampleResult.status === "ok" ? sampleResult.probability : null;
     },

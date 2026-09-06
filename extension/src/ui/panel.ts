@@ -162,6 +162,7 @@ export class VerdictPanelElement extends HTMLElement {
 
     this.wireEvidenceToggles(root);
     this.wireClose(root);
+    this.wireFullReport(root);
 
     if (!reducedMotion) {
       this.animateDraw(root);
@@ -186,6 +187,16 @@ export class VerdictPanelElement extends HTMLElement {
     const closeButton = root.querySelector(".close");
     closeButton?.addEventListener("click", () => {
       this.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+    });
+  }
+
+  // the panel itself never knows how to open a tab or reach an extension
+  // url, that is content script territory (contentScript/mount.ts), same
+  // separation as verdict:close.
+  private wireFullReport(root: ShadowRoot): void {
+    const fullReportButton = root.querySelector(".full-report");
+    fullReportButton?.addEventListener("click", () => {
+      this.dispatchEvent(new CustomEvent("verdict:full-report", { bubbles: true, composed: true }));
     });
   }
 

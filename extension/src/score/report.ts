@@ -55,6 +55,13 @@ export interface ReportSummary {
   band: Band | null;
   claimedRating: number | null;
   adjustedRating: number | null;
+  // SITE.md's /history spec: a rosette thumbnail per register row.
+  // estimatedInorganicShare is the one Report field that alone still
+  // says something about a report's shape (rosette.ts's amplitude), so
+  // site/src/pages/history/index.astro can draw a simplified thumbnail
+  // (band colour plus this) without the site needing to parse evidence
+  // rows out of an arbitrary, unknown report object.
+  estimatedInorganicShare: number | null;
 }
 
 // history entries predate this type and store their report as unknown, so
@@ -64,7 +71,7 @@ export interface ReportSummary {
 // what counts as a valid report.
 export function summarizeReport(report: unknown): ReportSummary {
   if (typeof report !== "object" || report === null) {
-    return { band: null, claimedRating: null, adjustedRating: null };
+    return { band: null, claimedRating: null, adjustedRating: null, estimatedInorganicShare: null };
   }
   const value = report as Record<string, unknown>;
   const band = typeof value.band === "string" && value.band in BAND_LABELS
@@ -72,7 +79,9 @@ export function summarizeReport(report: unknown): ReportSummary {
     : null;
   const claimedRating = typeof value.claimedRating === "number" ? value.claimedRating : null;
   const adjustedRating = typeof value.adjustedRating === "number" ? value.adjustedRating : null;
-  return { band, claimedRating, adjustedRating };
+  const estimatedInorganicShare =
+    typeof value.estimatedInorganicShare === "number" ? value.estimatedInorganicShare : null;
+  return { band, claimedRating, adjustedRating, estimatedInorganicShare };
 }
 
 const SERIAL_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

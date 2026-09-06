@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import type { Report } from "../score/report";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
 import type { VerdictNoticeElement } from "../ui/notice";
@@ -23,12 +24,25 @@ function pinToCorner(element: HTMLElement): void {
   element.style.zIndex = "2147483647";
 }
 
-function mountPanel(document: Document, report: Report): void {
+function defaultOpenTab(url: string): void {
+  window.open(url, "_blank");
+}
+
+// popup.html already renders the full history register (ui/historyList.ts),
+// and the report this button was clicked from was just saved into that
+// same history (contentScript/orchestrator.ts's scoreAndMaybeSave), so it
+// is the most recent entry there. There is no separate per-report page:
+// PRIVACY.md's design keeps every report local to this browser, with
+// nothing for a server to key a report page on.
+function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
   const panel = document.createElement("verdict-panel") as VerdictPanelElement;
   pinToCorner(panel);
   document.body.appendChild(panel);
   panel.render(report, rosetteInputFromReport(report));
   panel.addEventListener("verdict:close", () => panel.remove());
+  panel.addEventListener("verdict:full-report", () => {
+    openTab(browser.runtime.getURL("/popup.html"));
+  });
 }
 
 // SPEC.md section 13: "extraction yields under 30 reviews: 'not enough
@@ -40,6 +54,7 @@ function mountNotEnoughDataNotice(
   result: AnalysisResult,
   deps: OrchestratorDeps,
   checkOptions: CheckMoreDeeplyOptions,
+  openTab: (url: string) => void,
 ): void {
   const notice = document.createElement("verdict-notice") as VerdictNoticeElement;
   pinToCorner(notice);
@@ -66,7 +81,7 @@ function mountNotEnoughDataNotice(
     try {
       const next = await checkMoreDeeply(result.page, result.product, result.reviews, deps, checkOptions);
       notice.remove();
-      mountResult(document, next, deps, checkOptions);
+      mountResult(document, next, deps, checkOptions, openTab);
     } catch {
       // SPEC.md section 13's pattern throughout: a failure degrades
       // silently rather than surfacing an error state, so the user is
@@ -89,12 +104,13 @@ export function mountResult(
   result: AnalysisResult,
   deps: OrchestratorDeps,
   checkOptions: CheckMoreDeeplyOptions = {},
+  openTab: (url: string) => void = defaultOpenTab,
 ): void {
   if (result.outcome.status === "ok") {
-    mountPanel(document, result.outcome.report);
+    mountPanel(document, result.outcome.report, openTab);
     return;
   }
   if (result.outcome.status === "not-enough-data") {
-    mountNotEnoughDataNotice(document, result, deps, checkOptions);
+    mountNotEnoughDataNotice(document, result, deps, checkOptions, openTab);
   }
 }

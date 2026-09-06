@@ -1,5 +1,6 @@
+import { setReputationLookupWithPermission } from "../../reputation/permission";
 import { deleteAllHistory, exportHistoryAsCsv, exportHistoryAsJson } from "../../storage/history";
-import { getHistoryEnabled, setHistoryEnabled } from "../../storage/settings";
+import { getHistoryEnabled, getReputationLookupEnabled, setHistoryEnabled } from "../../storage/settings";
 import { renderOptions } from "../../ui/optionsPage";
 
 function download(filename: string, content: string, mimeType: string): void {
@@ -17,12 +18,22 @@ async function refresh(): Promise<void> {
     return;
   }
   const historyEnabled = await getHistoryEnabled();
+  const reputationLookupEnabled = await getReputationLookupEnabled();
   renderOptions(
     app,
-    { historyEnabled },
+    { historyEnabled, reputationLookupEnabled },
     {
       onToggleHistory: async (enabled) => {
         await setHistoryEnabled(enabled);
+      },
+      onToggleReputationLookup: async (enabled) => {
+        // turning it on can be denied by the browser's permission prompt,
+        // turning it off releases the permission; either way the actually
+        // persisted state may differ from what the checkbox now shows, so
+        // this re-renders from the real stored value rather than trusting
+        // the click.
+        await setReputationLookupWithPermission(enabled);
+        await refresh();
       },
       onExportJson: async () =>
         download("verdict-history.json", await exportHistoryAsJson(), "application/json"),

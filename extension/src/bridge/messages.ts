@@ -1,3 +1,4 @@
+import type { ReportOutcome } from "../score/buildReport";
 import type { ReportSummary } from "../score/report";
 
 // SPEC.md section 11. every message the website can send the extension,
@@ -33,15 +34,20 @@ export interface AnalyzeRequest {
   url: string;
 }
 
-// the extraction pipeline this would drive (fetching the url in the
-// user's session, running it through the rules interpreter) waits on the
-// same fixture corpus BUNDLED_AMAZON_RULES does, so this never fabricates
-// a report. "unsupported-domain" is real: the bridge checked and rejected
-// it. "not-implemented" is also real, not a placeholder pretending to be
-// a result: the pipeline behind an allowed domain is not wired up yet.
+// bridge/analyzeViaTab.ts runs the same analysis amazon.content.ts always
+// runs, in a background tab opened for this url, and relays its result
+// back. "unsupported-domain" is decided before any tab opens, by the
+// bridge's own domain check. "not-a-product-page" and "timed-out" are the
+// two ways that relay itself can come back with nothing. Every other
+// status is ReportOutcome, unchanged: whether this went through a real
+// visit or this relay, SPEC.md non negotiable 5 (never confident on thin
+// data) applies identically, since BUNDLED_AMAZON_RULES and
+// score/model.ts's BUNDLED_MODEL are the same ones either path uses.
 export type AnalyzeResponse =
   | { status: "unsupported-domain" }
-  | { status: "not-implemented" };
+  | { status: "not-a-product-page" }
+  | { status: "timed-out" }
+  | ReportOutcome;
 
 export type BridgeRequest = HistoryListRequest | HistoryClearRequest | AnalyzeRequest;
 export type BridgeResponse = HistoryListResponse | HistoryClearResponse | AnalyzeResponse;

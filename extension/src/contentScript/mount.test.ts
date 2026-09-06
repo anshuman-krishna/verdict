@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RulesDocument } from "../extract/rules";
 import type { CombinerModel } from "../score/combine";
-import "../ui/panel";
+import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
 import { mountResult } from "./mount";
 import type { AnalysisResult, OrchestratorDeps } from "./orchestrator";
@@ -76,6 +76,40 @@ describe("mountResult", () => {
     mountResult(document, result, deps());
     expect(document.body.querySelector("verdict-panel")).not.toBeNull();
     expect(document.body.querySelector("verdict-notice")).toBeNull();
+  });
+
+  it("opens the extension's popup page when the full report button is clicked", () => {
+    const result: AnalysisResult = {
+      page: PAGE,
+      product: PRODUCT,
+      reviews: [],
+      outcome: {
+        status: "ok",
+        report: {
+          serial: "AAAA-BBBB",
+          band: "mixed",
+          claimedRating: 4.6,
+          adjustedRating: 3.9,
+          totalReviewCount: 100,
+          excludedReviewCount: 10,
+          estimatedInorganicShare: 0.1,
+          confidence: { low: 0.05, high: 0.15 },
+          evidence: [],
+          generatedAt: 0,
+        },
+      },
+    };
+    const openTab = vi.fn();
+    mountResult(document, result, deps(), {}, openTab);
+
+    const panel = document.body.querySelector("verdict-panel") as InstanceType<
+      typeof VerdictPanelElement
+    >;
+    const root = getPanelShadowRootForTesting(panel);
+    root.querySelector<HTMLButtonElement>(".full-report")?.click();
+
+    expect(openTab).toHaveBeenCalledOnce();
+    expect(openTab.mock.calls[0]?.[0]).toContain("popup.html");
   });
 
   it("mounts a verdict-notice with a check more deeply action for not-enough-data", () => {

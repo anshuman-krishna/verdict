@@ -20,7 +20,13 @@ function isAllowedHostname(hostname: string, allowed: readonly string[]): boolea
   return allowed.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
 }
 
-async function handleAnalyze(url: string, allowedHostnames: readonly string[]): Promise<AnalyzeResponse> {
+type AnalyzeUrl = (url: string) => Promise<Exclude<AnalyzeResponse, { status: "unsupported-domain" }>>;
+
+async function handleAnalyze(
+  url: string,
+  allowedHostnames: readonly string[],
+  analyzeUrl: AnalyzeUrl,
+): Promise<AnalyzeResponse> {
   let hostname: string;
   try {
     hostname = new URL(url).hostname;
@@ -32,14 +38,13 @@ async function handleAnalyze(url: string, allowedHostnames: readonly string[]): 
   }
   // CLAUDE.md non negotiable 1: no page url or product identifier the
   // server can read. this domain check runs before anything else so an
-  // unsupported url is rejected before an interpreter, a fetch, or a
-  // model ever sees it. the pipeline behind an allowed domain (extract,
-  // score, combine) is not wired up yet, see AnalyzeResponse.
-  return { status: "not-implemented" };
+  // unsupported url is rejected before a tab ever opens for it.
+  return analyzeUrl(url);
 }
 
 export interface BridgeHandlerOptions {
   bundledRules: RulesDocument;
+  analyzeUrl: AnalyzeUrl;
 }
 
 // never accepts a message that is not one of the shapes messages.ts
@@ -77,7 +82,11 @@ async function handleRequest(
       return { ok: true };
     }
     case "verdict:analyze": {
-      return handleAnalyze(request.url, deriveAllowedHostnames(options.bundledRules));
+      return handleAnalyze(
+        request.url,
+        deriveAllowedHostnames(options.bundledRules),
+        options.analyzeUrl,
+      );
     }
   }
 }

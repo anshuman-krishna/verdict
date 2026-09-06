@@ -117,6 +117,71 @@ describe("analyzePage", () => {
   });
 });
 
+describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
+  it("never calls fetch when no reputation deps are supplied at all", async () => {
+    const fetchImpl = vi.fn();
+    vi.stubGlobal("fetch", fetchImpl);
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", deps());
+    expect(result?.outcome.status).toBe("ok");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not call fetch when isEnabled resolves false", async () => {
+    const fetchImpl = vi.fn();
+    const testDeps = deps({
+      reputation: { isEnabled: vi.fn().mockResolvedValue(false), endpoint: "https://x", salt: "s", fetchImpl },
+    });
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("looks up reviewer ids and appends a reviewer network evidence row when enabled", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ matches: {} }),
+    });
+    const testDeps = deps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://api.verdict.tools/v1/reputation/lookup",
+        salt: "test-salt",
+        fetchImpl,
+      },
+    });
+
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://api.verdict.tools/v1/reputation/lookup",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result?.outcome.status).toBe("ok");
+    if (result?.outcome.status !== "ok") {
+      throw new Error("expected ok");
+    }
+    const row = result.outcome.report.evidence.find((r) => r.signal === "reviewer network");
+    expect(row).toMatchObject({ strength: "weak", value: 0 });
+  });
+
+  it("saves the reviewer network row into the history entry too", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+    const testDeps = deps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://x",
+        salt: "s",
+        fetchImpl,
+      },
+    });
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    const savedReport = vi.mocked(testDeps.saveHistory).mock.calls[0]?.[0]?.report as {
+      evidence: { signal: string }[];
+    };
+    expect(savedReport.evidence.some((r) => r.signal === "reviewer network")).toBe(true);
+  });
+});
+
 describe("mergeReviews", () => {
   it("drops a fetched review sharing a reviewer id and date with an existing one", () => {
     const existing = [{ rating: 5, text: "a", date: "2024-01-01", verified: true, reviewerId: "r1" }];

@@ -3,9 +3,24 @@ import { extractProductSnapshot, extractReviews } from "../extract/reviewExtract
 import { parseAmazonProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/productPage";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
+import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { CombinerModel } from "../score/combine";
 import type { FeatureVectorInputs } from "../score/featureVector";
+import type { Report } from "../score/report";
+import { reviewerGraphEvidenceRow } from "../score/reviewerGraphEvidence";
+
+// SPEC.md section 4: the reviewer graph service is opt in and off by
+// default. isEnabled is checked fresh on every analysis (rather than baked
+// in at wiring time) so flipping the options page toggle takes effect on
+// the very next check, not after a reload.
+export interface ReputationLookupDeps {
+  isEnabled: () => Promise<boolean>;
+  endpoint: string;
+  salt: string;
+  fetchImpl?: typeof fetch;
+  random?: () => number;
+}
 
 export interface OrchestratorDeps {
   rules: RulesDocument;
@@ -16,6 +31,9 @@ export interface OrchestratorDeps {
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
+  // omitted entirely (not just disabled) is also valid: analyzePage never
+  // attempts a reputation lookup unless a caller supplies this.
+  reputation?: ReputationLookupDeps;
 }
 
 export interface AnalysisResult {
@@ -59,7 +77,7 @@ async function scoreAndMaybeSave(
     return { status: "not-enough-data" };
   }
 
-  const outcome = buildReport({
+  let outcome: ReportOutcome = buildReport({
     reviews,
     seed: product.url,
     claimedRating: product.claimedRating,
@@ -70,6 +88,13 @@ async function scoreAndMaybeSave(
     bootstrapResamples: deps.bootstrapResamples,
   });
 
+  if (outcome.status === "ok" && deps.reputation && (await deps.reputation.isEnabled())) {
+    outcome = {
+      status: "ok",
+      report: await withReviewerGraphEvidence(outcome.report, reviews, deps.reputation),
+    };
+  }
+
   if (outcome.status === "ok" && (await deps.isHistoryEnabled())) {
     await deps.saveHistory({
       title: product.title,
@@ -79,6 +104,32 @@ async function scoreAndMaybeSave(
   }
 
   return outcome;
+}
+
+// SPEC.md 5.6 and section 8: looks up whether any of this review set's
+// reviewer ids fall in a flagged bucket, entirely through the k anonymous
+// protocol in reputation/lookup.ts and reputation/client.ts, and appends
+// one evidence row with the result. Community scoring itself, what makes
+// a bucket flagged in the first place, happens server side and is not
+// this function's concern; if the lookup fails or the service is
+// unreachable, lookupFlaggedReviewers already resolves to an empty set,
+// so this degrades to the same "none flagged" row rather than an error.
+async function withReviewerGraphEvidence(
+  report: Report,
+  reviews: readonly Review[],
+  reputation: ReputationLookupDeps,
+): Promise<Report> {
+  const reviewerIds = reviews
+    .map((review) => review.reviewerId)
+    .filter((id): id is string => id !== null);
+  const flagged = await lookupFlaggedReviewers(reviewerIds, {
+    endpoint: reputation.endpoint,
+    salt: reputation.salt,
+    fetchImpl: reputation.fetchImpl,
+    random: reputation.random,
+  });
+  const row = reviewerGraphEvidenceRow(flagged.size, reviewerIds.length);
+  return { ...report, evidence: [...report.evidence, row] };
 }
 
 // merges reviews already visible on the product page with a freshly

@@ -138,4 +138,52 @@ describe("textNearDuplication", () => {
     expect(result.duplicateReviewShare).toBeCloseTo(4 / 5, 10);
     expect(result.largestClusterShare).toBeCloseTo(2 / 5, 10);
   });
+
+  describe("signatureCache", () => {
+    it("produces the exact same result whether or not a cache is supplied", () => {
+      const reviews = [
+        review("group one duplicate text appears here word for word"),
+        review("group one duplicate text appears here word for word"),
+        review("a lone unique review that matches nothing else at all"),
+      ];
+      const cache = new WeakMap<ReviewForNearDuplication, bigint[]>();
+      expect(textNearDuplication(reviews, { signatureCache: cache })).toEqual(
+        textNearDuplication(reviews),
+      );
+    });
+
+    it("reuses a cached signature instead of recomputing it for the same review object", () => {
+      const shared = review("this exact review object gets reused across two calls");
+      const cache = new WeakMap<ReviewForNearDuplication, bigint[]>();
+
+      textNearDuplication([shared, review("something else entirely, no overlap")], {
+        signatureCache: cache,
+      });
+      const signatureAfterFirstCall = cache.get(shared);
+      expect(signatureAfterFirstCall).toBeDefined();
+
+      // mutating the cached entry proves the second call reads it back
+      // rather than recomputing: a freshly computed signature would
+      // never match this corrupted value.
+      cache.set(shared, [999999n]);
+      const result = textNearDuplication([shared, review("a third, different review text")], {
+        signatureCache: cache,
+      });
+      expect(cache.get(shared)).toEqual([999999n]);
+      // with a corrupted 1 element signature, minhash similarity against
+      // anything else drops to near zero, so this must not cluster
+      expect(result.clusterCount).toBe(0);
+    });
+
+    it("populates the cache for every eligible review it computes a signature for", () => {
+      const a = review("first review with plenty of unique words to shingle");
+      const b = review("second review with a totally different set of words");
+      const cache = new WeakMap<ReviewForNearDuplication, bigint[]>();
+
+      textNearDuplication([a, b], { signatureCache: cache });
+
+      expect(cache.get(a)).toBeInstanceOf(Array);
+      expect(cache.get(b)).toBeInstanceOf(Array);
+    });
+  });
 });

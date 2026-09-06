@@ -47,6 +47,8 @@ import Layout from "../../layouts/Layout.astro";
       doubtful: "#A75A2B",
       "heavily-manipulated": "#9C382F",
     };
+    // SITE.md's own definition of "doubtful or worse".
+    const DOUBTFUL_OR_WORSE = new Set(["doubtful", "heavily-manipulated"]);
 
     interface HistorySummaryEntry {
       id: number;
@@ -56,9 +58,11 @@ import Layout from "../../layouts/Layout.astro";
       band: string | null;
       claimedRating: number | null;
       adjustedRating: number | null;
+      estimatedInorganicShare: number | null;
     }
 
     const root = document.documentElement;
+    let allEntries: HistorySummaryEntry[] = [];
 
     function sendToExtension(type: string): Promise<any> {
       return new Promise((resolve, reject) => {
@@ -92,32 +96,173 @@ import Layout from "../../layouts/Layout.astro";
       return div.innerHTML;
     }
 
-    function renderEntries(app: HTMLElement, entries: HistorySummaryEntry[]): void {
+    // a simplified stand in for extension/src/ui/rosette.ts's rosetteParams:
+    // that function's harmonics also depend on a report's burst and
+    // duplicate shares, which HistorySummaryEntry does not carry (SITE.md
+    // only asks for a thumbnail here, not a full report), so this fixes
+    // the harmonics and varies only the amplitude, from
+    // estimatedInorganicShare, and the stroke colour, from the band. Same
+    // MIN/MAX_AMPLITUDE constants as the extension's version.
+    const MIN_AMPLITUDE = 0.15;
+    const MAX_AMPLITUDE = 0.8;
+
+    function rosetteThumbnail(band: string | null, share: number | null): string {
+      const color = band !== null ? (BAND_COLORS[band] ?? "#4C5C52") : "#4C5C52";
+      const clampedShare = Math.min(1, Math.max(0, share ?? 0));
+      const amplitude = MIN_AMPLITUDE + (MAX_AMPLITUDE - MIN_AMPLITUDE) * clampedShare;
+      const harmonicA = 3;
+      const harmonicB = 4;
+      const radius = 14;
+      const samples = 60;
+      const points: string[] = [];
+      for (let i = 0; i <= samples; i++) {
+        const t = (i / samples) * Math.PI * 2;
+        const r = radius * (1 + (amplitude * (Math.cos(harmonicA * t) - Math.cos(harmonicB * t))) / 2);
+        points.push(`${(r * Math.cos(t)).toFixed(2)},${(r * Math.sin(t)).toFixed(2)}`);
+      }
+      return `<svg class="rosette-thumb" viewBox="-16 -16 32 32" role="presentation">
+        <polygon points="${points.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5" />
+      </svg>`;
+    }
+
+    function renderFigures(container: HTMLElement, entries: HistorySummaryEntry[]): void {
+      const checksRun = entries.length;
+      const gaps = entries
+        .filter((e) => e.claimedRating !== null && e.adjustedRating !== null)
+        .map((e) => Math.abs((e.claimedRating as number) - (e.adjustedRating as number)));
+      const averageGap = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+      const banded = entries.filter((e) => e.band !== null);
+      const shareDoubtful =
+        banded.length > 0
+          ? banded.filter((e) => DOUBTFUL_OR_WORSE.has(e.band as string)).length / banded.length
+          : null;
+
+      container.innerHTML = `
+        <dl class="figures">
+          <div><dd>${checksRun.toLocaleString()}</dd><dt>checks run</dt></div>
+          <div><dd>${averageGap !== null ? averageGap.toFixed(1) : "n/a"}</dd><dt>average gap, claimed to adjusted</dt></div>
+          <div><dd>${shareDoubtful !== null ? Math.round(shareDoubtful * 100) + "%" : "n/a"}</dd><dt>doubtful or worse</dt></div>
+        </dl>
+      `;
+    }
+
+    function applyFilters(
+      entries: HistorySummaryEntry[],
+      search: string,
+      band: string,
+      sort: string,
+    ): HistorySummaryEntry[] {
+      const needle = search.trim().toLowerCase();
+      let filtered = entries.filter((e) => {
+        if (needle !== "" && !e.title.toLowerCase().includes(needle)) {
+          return false;
+        }
+        if (band !== "" && e.band !== band) {
+          return false;
+        }
+        return true;
+      });
+      filtered = [...filtered].sort((a, b) => {
+        switch (sort) {
+          case "date-asc":
+            return a.timestamp - b.timestamp;
+          case "gap-desc": {
+            const gapA =
+              a.claimedRating !== null && a.adjustedRating !== null
+                ? Math.abs(a.claimedRating - a.adjustedRating)
+                : -1;
+            const gapB =
+              b.claimedRating !== null && b.adjustedRating !== null
+                ? Math.abs(b.claimedRating - b.adjustedRating)
+                : -1;
+            return gapB - gapA;
+          }
+          case "title-asc":
+            return a.title.localeCompare(b.title);
+          case "date-desc":
+          default:
+            return b.timestamp - a.timestamp;
+        }
+      });
+      return filtered;
+    }
+
+    function renderTable(tableContainer: HTMLElement, entries: HistorySummaryEntry[]): void {
       if (entries.length === 0) {
-        app.innerHTML = "<p>No checks yet.</p>";
+        tableContainer.innerHTML = "<p>No checks match.</p>";
         return;
       }
       const rows = entries
         .map((entry) => {
-          const band = entry.band !== null && entry.band in BAND_LABELS
-            ? `<span style="color:${BAND_COLORS[entry.band]}">${BAND_LABELS[entry.band]}</span>`
-            : "";
+          const band =
+            entry.band !== null && entry.band in BAND_LABELS
+              ? `<span style="color:${BAND_COLORS[entry.band]}">${BAND_LABELS[entry.band]}</span>`
+              : "";
           const claimed = entry.claimedRating !== null ? entry.claimedRating.toFixed(1) : "";
           const adjusted = entry.adjustedRating !== null ? entry.adjustedRating.toFixed(1) : "";
-          return `<tr><td>${formatDate(entry.timestamp)}</td><td>${escapeHtml(entry.title)}</td><td>${claimed}</td><td>${adjusted}</td><td>${band}</td></tr>`;
+          const thumb = rosetteThumbnail(entry.band, entry.estimatedInorganicShare);
+          return `<tr><td>${thumb}</td><td>${formatDate(entry.timestamp)}</td><td>${escapeHtml(entry.title)}</td><td>${claimed}</td><td>${adjusted}</td><td>${band}</td></tr>`;
         })
         .join("");
-      app.innerHTML = `
+      tableContainer.innerHTML = `
         <div class="table-scroll">
           <table class="register">
             <thead>
-              <tr><th>Date</th><th>Product</th><th>Claimed</th><th>Adjusted</th><th>Band</th></tr>
+              <tr><th></th><th>Date</th><th>Product</th><th>Claimed</th><th>Adjusted</th><th>Band</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
+      `;
+    }
+
+    function renderControlsAndTable(app: HTMLElement): void {
+      const searchInput = app.querySelector<HTMLInputElement>("#history-search");
+      const bandSelect = app.querySelector<HTMLSelectElement>("#history-band");
+      const sortSelect = app.querySelector<HTMLSelectElement>("#history-sort");
+      const tableContainer = app.querySelector<HTMLElement>("#history-table");
+      if (searchInput === null || bandSelect === null || sortSelect === null || tableContainer === null) {
+        return;
+      }
+      const rerender = () => {
+        const filtered = applyFilters(allEntries, searchInput.value, bandSelect.value, sortSelect.value);
+        renderTable(tableContainer, filtered);
+      };
+      searchInput.addEventListener("input", rerender);
+      bandSelect.addEventListener("change", rerender);
+      sortSelect.addEventListener("change", rerender);
+      rerender();
+    }
+
+    function renderEntries(app: HTMLElement, entries: HistorySummaryEntry[]): void {
+      allEntries = entries;
+      if (entries.length === 0) {
+        app.innerHTML = "<p>No checks yet.</p>";
+        return;
+      }
+      const bandOptions = Object.entries(BAND_LABELS)
+        .map(([value, label]) => `<option value="${value}">${label}</option>`)
+        .join("");
+      app.innerHTML = `
+        <div id="history-figures"></div>
+        <div class="controls">
+          <input type="search" id="history-search" placeholder="Search by title" aria-label="Search by title" />
+          <select id="history-band" aria-label="Filter by band">
+            <option value="">Every band</option>
+            ${bandOptions}
+          </select>
+          <select id="history-sort" aria-label="Sort">
+            <option value="date-desc">Newest first</option>
+            <option value="date-asc">Oldest first</option>
+            <option value="gap-desc">Largest gap first</option>
+            <option value="title-asc">Title, A to Z</option>
+          </select>
+        </div>
+        <div id="history-table"></div>
         <p><button type="button" id="clear-history" class="button-secondary">Delete everything</button></p>
       `;
+      renderFigures(app.querySelector("#history-figures") as HTMLElement, entries);
+      renderControlsAndTable(app);
       document.getElementById("clear-history")?.addEventListener("click", async () => {
         await sendToExtension("verdict:history:clear");
         renderEntries(app, []);
@@ -150,5 +295,43 @@ import Layout from "../../layouts/Layout.astro";
 <style>
   .table-scroll {
     overflow-x: auto;
+  }
+
+  .figures {
+    display: flex;
+    gap: 32px;
+    margin: 16px 0;
+    font-family: "Fragment Mono", ui-monospace, monospace;
+  }
+
+  .figures div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .figures dd {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+
+  .figures dt {
+    margin: 0;
+    font-family: "Public Sans", system-ui, sans-serif;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .rosette-thumb {
+    width: 24px;
+    height: 24px;
+    display: block;
   }
 </style>

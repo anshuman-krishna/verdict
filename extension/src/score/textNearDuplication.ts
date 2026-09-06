@@ -31,6 +31,20 @@ export interface TextNearDuplicationOptions {
   bands?: number;
   rows?: number;
   jaccardThreshold?: number;
+  // performance only, never changes the result: a review's minhash
+  // signature depends only on its own text, not on which other reviews
+  // are in this call, so it is safe to compute once per review object
+  // and reuse across repeated calls that share it by reference.
+  // buildReport.ts's bootstrap resamples with replacement from the same
+  // source array (bootstrap.ts's resample()), so the same review object
+  // commonly reappears across many of its 200 resamples; measured,
+  // recomputing every signature from scratch on every resample is what
+  // makes buildReport.ts take seconds instead of milliseconds. Omitted,
+  // behaviour is identical to before this option existed. Caller's
+  // responsibility: a single cache instance must only ever be shared
+  // across calls that use the same shingleSize and numPermutations, since
+  // a cached signature does not know which parameters produced it.
+  signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
 }
 
 // fnv-1a, 64 bit, over the utf-8 bytes of the string
@@ -163,9 +177,15 @@ export function textNearDuplication(
     return { duplicateReviewShare: eligible.length === 0 ? null : 0, clusterCount: 0, largestClusterShare: 0 };
   }
 
-  const signatures = eligible.map((review) =>
-    minhashSignature(shingle(review.text, shingleSize), numPermutations),
-  );
+  const signatures = eligible.map((review) => {
+    const cached = options.signatureCache?.get(review);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const signature = minhashSignature(shingle(review.text, shingleSize), numPermutations);
+    options.signatureCache?.set(review, signature);
+    return signature;
+  });
 
   const buckets = new Map<string, number[]>();
   for (let band = 0; band < bands; band++) {

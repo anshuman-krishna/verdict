@@ -1,8 +1,8 @@
 import "fake-indexeddb/auto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RulesDocument } from "../extract/rules";
 import { addHistoryEntry, deleteAllHistory } from "../storage/history";
-import { deriveAllowedHostnames, handleBridgeMessage } from "./handler";
+import { deriveAllowedHostnames, handleBridgeMessage, type BridgeHandlerOptions } from "./handler";
 import { isBridgeRequest } from "./messages";
 
 const RULES: RulesDocument = {
@@ -11,6 +11,17 @@ const RULES: RulesDocument = {
   locales: ["com", "co.uk"],
   fields: {},
 };
+
+// most tests here never exercise the analyze path; this fails loudly if
+// one of them unexpectedly does, rather than silently reporting an
+// unrelated status.
+function options(overrides: Partial<BridgeHandlerOptions> = {}): BridgeHandlerOptions {
+  return {
+    bundledRules: RULES,
+    analyzeUrl: vi.fn().mockRejectedValue(new Error("analyzeUrl should not have been called")),
+    ...overrides,
+  };
+}
 
 describe("isBridgeRequest", () => {
   it("accepts every declared message shape", () => {
@@ -40,7 +51,7 @@ describe("deriveAllowedHostnames", () => {
 
 describe("handleBridgeMessage", () => {
   it("rejects a message that is not a recognised bridge request", async () => {
-    const response = await handleBridgeMessage({ type: "not:a:thing" }, { bundledRules: RULES });
+    const response = await handleBridgeMessage({ type: "not:a:thing" }, options());
     expect(response).toEqual({ error: "unrecognised message" });
   });
 
@@ -49,12 +60,12 @@ describe("handleBridgeMessage", () => {
     await addHistoryEntry({
       title: "wireless mouse",
       thumbnailUrl: "https://x/y.jpg",
-      report: { band: "mixed", claimedRating: 4.5, adjustedRating: 3.9 },
+      report: { band: "mixed", claimedRating: 4.5, adjustedRating: 3.9, estimatedInorganicShare: 0.2 },
     });
 
     const response = await handleBridgeMessage(
       { type: "verdict:history:list" },
-      { bundledRules: RULES },
+      options(),
     );
 
     expect(response).toEqual({
@@ -67,6 +78,7 @@ describe("handleBridgeMessage", () => {
           band: "mixed",
           claimedRating: 4.5,
           adjustedRating: 3.9,
+          estimatedInorganicShare: 0.2,
         },
       ],
     });
@@ -76,13 +88,13 @@ describe("handleBridgeMessage", () => {
     await addHistoryEntry({ title: "will be cleared", thumbnailUrl: null, report: {} });
     const response = await handleBridgeMessage(
       { type: "verdict:history:clear" },
-      { bundledRules: RULES },
+      options(),
     );
     expect(response).toEqual({ ok: true });
 
     const after = await handleBridgeMessage(
       { type: "verdict:history:list" },
-      { bundledRules: RULES },
+      options(),
     );
     expect(after).toEqual({ entries: [] });
   });
@@ -90,7 +102,7 @@ describe("handleBridgeMessage", () => {
   it("rejects an analyze request for a domain outside the bundled rules", async () => {
     const response = await handleBridgeMessage(
       { type: "verdict:analyze", url: "https://not-a-supported-store.example/product/1" },
-      { bundledRules: RULES },
+      options(),
     );
     expect(response).toEqual({ status: "unsupported-domain" });
   });
@@ -98,29 +110,42 @@ describe("handleBridgeMessage", () => {
   it("rejects an analyze request that is not even a valid url", async () => {
     const response = await handleBridgeMessage(
       { type: "verdict:analyze", url: "not a url" },
-      { bundledRules: RULES },
+      options(),
     );
     expect(response).toEqual({ status: "unsupported-domain" });
   });
 
-  it("accepts a supported domain, including a www subdomain, but has no pipeline wired up yet", async () => {
+  it("accepts a supported domain, including a www subdomain, and hands it to analyzeUrl", async () => {
+    const analyzeUrl = vi.fn().mockResolvedValue({ status: "no-model" });
+
     const bare = await handleBridgeMessage(
       { type: "verdict:analyze", url: "https://amazon.com/dp/B000000000" },
-      { bundledRules: RULES },
+      options({ analyzeUrl }),
     );
-    expect(bare).toEqual({ status: "not-implemented" });
+    expect(bare).toEqual({ status: "no-model" });
+    expect(analyzeUrl).toHaveBeenCalledWith("https://amazon.com/dp/B000000000");
 
     const withSubdomain = await handleBridgeMessage(
       { type: "verdict:analyze", url: "https://www.amazon.co.uk/dp/B000000000" },
-      { bundledRules: RULES },
+      options({ analyzeUrl }),
     );
-    expect(withSubdomain).toEqual({ status: "not-implemented" });
+    expect(withSubdomain).toEqual({ status: "no-model" });
+    expect(analyzeUrl).toHaveBeenCalledWith("https://www.amazon.co.uk/dp/B000000000");
+  });
+
+  it("never calls analyzeUrl for a domain the bridge already rejected", async () => {
+    const analyzeUrl = vi.fn().mockRejectedValue(new Error("must not be called"));
+    await handleBridgeMessage(
+      { type: "verdict:analyze", url: "https://not-a-supported-store.example/product/1" },
+      options({ analyzeUrl }),
+    );
+    expect(analyzeUrl).not.toHaveBeenCalled();
   });
 
   it("does not let a lookalike hostname past the dot boundary check", async () => {
     const response = await handleBridgeMessage(
       { type: "verdict:analyze", url: "https://evil-amazon.com/dp/x" },
-      { bundledRules: RULES },
+      options(),
     );
     expect(response).toEqual({ status: "unsupported-domain" });
   });

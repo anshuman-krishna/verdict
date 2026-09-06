@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BAND_COLORS, BAND_LABELS, generateSerial } from "./report";
+import { BAND_COLORS, BAND_LABELS, generateSerial, summarizeReport } from "./report";
 
 describe("generateSerial", () => {
   it("is deterministic for the same seed and timestamp", () => {
@@ -22,6 +22,35 @@ describe("generateSerial", () => {
     expect(generateSerial("https://amazon.com/dp/B000X", 1_700_000_000_000)).toMatch(
       /^[0-9A-Z]{4}-[0-9A-Z]{4}$/,
     );
+  });
+});
+
+describe("summarizeReport", () => {
+  it("extracts every known field from a well formed report", () => {
+    expect(
+      summarizeReport({
+        band: "mixed",
+        claimedRating: 4.6,
+        adjustedRating: 3.9,
+        estimatedInorganicShare: 0.14,
+      }),
+    ).toEqual({ band: "mixed", claimedRating: 4.6, adjustedRating: 3.9, estimatedInorganicShare: 0.14 });
+  });
+
+  it("summarizes a non object, or a report with none of the known fields, as all nulls", () => {
+    const allNull = {
+      band: null,
+      claimedRating: null,
+      adjustedRating: null,
+      estimatedInorganicShare: null,
+    };
+    expect(summarizeReport(null)).toEqual(allNull);
+    expect(summarizeReport("not a report")).toEqual(allNull);
+    expect(summarizeReport({})).toEqual(allNull);
+  });
+
+  it("rejects a band string outside the known set rather than passing it through", () => {
+    expect(summarizeReport({ band: "not-a-real-band" }).band).toBeNull();
   });
 });
 

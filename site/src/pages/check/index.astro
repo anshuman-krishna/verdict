@@ -28,20 +28,42 @@ import Layout from "../../layouts/Layout.astro";
     <label for="url">Product link</label><br />
     <input id="url" name="url" type="url" required placeholder="https://www.amazon.com/dp/..." />
     <button type="submit" class="button-primary">Check</button>
-    <p id="result" role="status"></p>
+    <p id="status-line" role="status"></p>
+    <div id="result"></div>
   </form>
 
   <script>
+    import { rosettePath, type RosetteParams } from "../../lib/rosette";
+
     // SPEC.md section 11, the other of the two islands SITE.md names.
     // extension/src/entrypoints/presence.content.ts sets
     // data-verdict-installed and data-verdict-extension-id at
-    // document_start. the analyze pipeline behind an allowed domain is
-    // not built yet (extension/src/bridge/handler.ts returns
-    // "not-implemented" honestly, see AnalyzeResponse), so a working
-    // extension still cannot produce a report here today. this form
-    // exists so the moment that pipeline exists, this page needs no
-    // further wiring, and until then it says exactly what state it is
-    // in rather than pretending to work or staying inert.
+    // document_start. verdict:analyze opens the pasted url in a
+    // background tab (extension/src/bridge/analyzeViaTab.ts), lets
+    // amazon.content.ts analyse it exactly as it would on a real visit,
+    // and relays the result back. BUNDLED_AMAZON_RULES and
+    // score/model.ts's BUNDLED_MODEL are both still placeholders (PLAN.md
+    // weeks 1 and 5), so today this most often resolves to "no-model" or
+    // "not-enough-data", which is the honest outcome, not a broken one.
+    // SITE.md: "the report renders here at full size... with every
+    // evidence row expanded", once one exists to render.
+
+    // DESIGN.md section 4, provisional band scale, mirrored from
+    // extension/src/score/report.ts so the two never quietly disagree.
+    const BAND_LABELS: Record<string, string> = {
+      clean: "clean",
+      "mostly-clean": "mostly clean",
+      mixed: "mixed",
+      doubtful: "doubtful",
+      "heavily-manipulated": "heavily manipulated",
+    };
+    const BAND_COLORS: Record<string, string> = {
+      clean: "#2E6B4E",
+      "mostly-clean": "#6E8A3C",
+      mixed: "#B08128",
+      doubtful: "#A75A2B",
+      "heavily-manipulated": "#9C382F",
+    };
 
     const root = document.documentElement;
 
@@ -63,14 +85,143 @@ import Layout from "../../layouts/Layout.astro";
       });
     }
 
+    interface EvidenceRow {
+      signal: string;
+      strength: string;
+      detail: string;
+      value: number | null;
+    }
+
+    interface Report {
+      serial: string;
+      band: string;
+      claimedRating: number;
+      adjustedRating: number;
+      totalReviewCount: number;
+      excludedReviewCount: number;
+      estimatedInorganicShare: number;
+      confidence: { low: number; high: number };
+      evidence: EvidenceRow[];
+    }
+
+    interface AnalyzeResponse {
+      status?: string;
+      missing?: string[];
+      report?: Report;
+    }
+
+    function escapeHtml(value: string): string {
+      const div = document.createElement("div");
+      div.textContent = value;
+      return div.innerHTML;
+    }
+
+    // extension/src/ui/rosette.ts's rosetteParams, reimplemented here so
+    // this island does not depend on the extension package (the same
+    // choice site/src/lib/rosette.ts's own comment already makes for
+    // rosettePath). Burst and duplicate shares come off the matching
+    // evidence rows by signal name, same as
+    // extension/src/ui/rosetteInputFromReport.ts does.
+    const BASE_HARMONIC = 3;
+    const MAX_HARMONIC_SPREAD = 4;
+    const MIN_AMPLITUDE = 0.15;
+    const MAX_AMPLITUDE = 0.8;
+
+    function rosetteParamsFromReport(report: Report): RosetteParams {
+      const burstShare = report.evidence.find((r) => r.signal === "arrival timing")?.value ?? 0;
+      const duplicateShare = report.evidence.find((r) => r.signal === "duplicate text")?.value ?? 0;
+      const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+      const harmonicA = BASE_HARMONIC + Math.round(clamp01(burstShare) * MAX_HARMONIC_SPREAD);
+      const harmonicB = harmonicA + 1 + Math.round(clamp01(duplicateShare) * MAX_HARMONIC_SPREAD);
+      const amplitude =
+        MIN_AMPLITUDE + (MAX_AMPLITUDE - MIN_AMPLITUDE) * clamp01(report.estimatedInorganicShare);
+      return {
+        harmonicA,
+        harmonicB,
+        amplitude,
+        strokeColor: BAND_COLORS[report.band] ?? "#4C5C52",
+      };
+    }
+
+    function renderReport(container: HTMLElement, report: Report): void {
+      const bandLabel = BAND_LABELS[report.band] ?? report.band;
+      const kept = report.totalReviewCount - report.excludedReviewCount;
+      const params = rosetteParamsFromReport(report);
+      const path = rosettePath(params, 60);
+
+      const evidenceRows = report.evidence
+        .map(
+          (row) => `
+            <div class="row">
+              <div class="row-head">
+                <span class="signal">${escapeHtml(row.signal)}</span>
+                <span class="strength">${escapeHtml(row.strength)}</span>
+              </div>
+              <p class="detail">${escapeHtml(row.detail)}</p>
+            </div>
+          `,
+        )
+        .join("");
+
+      container.innerHTML = `
+        <div class="certificate">
+          <svg class="rosette" viewBox="-70 -70 140 140" role="img"
+            aria-label="${bandLabel}, estimated ${Math.round(report.estimatedInorganicShare * 100)} percent of reviews are inorganic">
+            <path d="${path}" fill="none" stroke="${params.strokeColor}" stroke-width="2" />
+          </svg>
+          <dl class="figures">
+            <div><dd>${report.adjustedRating.toFixed(1)}</dd><dt>adjusted</dt></div>
+            <div><dd>${report.claimedRating.toFixed(1)}</dd><dt>claimed</dt></div>
+          </dl>
+          <p class="summary">
+            ${bandLabel}. ${report.excludedReviewCount.toLocaleString()} of
+            ${report.totalReviewCount.toLocaleString()} reviews look inorganic.
+          </p>
+          <div class="specimen-strip" role="img"
+            aria-label="${kept.toLocaleString()} reviews kept, ${report.excludedReviewCount.toLocaleString()} reviews excluded">
+            <div class="kept" style="flex-grow:${kept}"></div>
+            <div class="excluded" style="flex-grow:${report.excludedReviewCount}"></div>
+          </div>
+          <div class="evidence">
+            <h2>Evidence</h2>
+            <div class="register">${evidenceRows}</div>
+          </div>
+          <p class="serial">Serial ${escapeHtml(report.serial)}</p>
+        </div>
+      `;
+    }
+
+    function renderStatus(container: HTMLElement, response: AnalyzeResponse): void {
+      const message = (() => {
+        switch (response.status) {
+          case "unsupported-domain":
+            return "That is not one of the storefronts Verdict currently supports.";
+          case "not-a-product-page":
+            return "Verdict opened that link but could not find a product on it.";
+          case "timed-out":
+            return "That took too long to check. Try again in a moment.";
+          case "not-enough-data":
+            return "Not enough data to judge yet.";
+          case "missing-features":
+            return "Not enough data to judge yet, in a way not enough reviews explains on its own.";
+          case "no-model":
+            return "Verdict cannot score this yet: no trained model is bundled in this build.";
+          default:
+            return "Something went wrong reaching the extension.";
+        }
+      })();
+      container.textContent = message;
+    }
+
     function init(): void {
       if (root.dataset.verdictInstalled !== "true") {
         return;
       }
       document.getElementById("fallback")?.setAttribute("hidden", "");
       const form = document.getElementById("app") as HTMLFormElement | null;
+      const statusLine = document.getElementById("status-line");
       const result = document.getElementById("result");
-      if (form === null || result === null) {
+      if (form === null || statusLine === null || result === null) {
         return;
       }
       form.hidden = false;
@@ -78,27 +229,127 @@ import Layout from "../../layouts/Layout.astro";
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const url = (document.getElementById("url") as HTMLInputElement).value;
-        result.textContent = "Checking…";
+        result.innerHTML = "";
+        statusLine.textContent = "Checking…";
         try {
-          const response = await sendToExtension("verdict:analyze", { url });
-          result.textContent = describe(response);
+          const response = (await sendToExtension("verdict:analyze", { url })) as AnalyzeResponse;
+          if (response.status === "ok" && response.report !== undefined) {
+            statusLine.textContent = "";
+            renderReport(result, response.report);
+          } else {
+            renderStatus(statusLine, response);
+          }
         } catch {
-          result.textContent = "Could not reach the extension. Try reloading the page.";
+          statusLine.textContent = "Could not reach the extension. Try reloading the page.";
         }
       });
-    }
-
-    function describe(response: { status?: string }): string {
-      switch (response.status) {
-        case "unsupported-domain":
-          return "That is not one of the storefronts Verdict currently supports.";
-        case "not-implemented":
-          return "Verdict recognised that link, but the analysis pipeline for it is not built yet.";
-        default:
-          return "Something went wrong reaching the extension.";
-      }
     }
 
     init();
   </script>
 </Layout>
+
+<style>
+  .certificate {
+    max-width: 480px;
+    margin-top: 24px;
+    padding: 24px;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+  }
+
+  .rosette {
+    width: 120px;
+    height: 120px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .figures {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    margin: 16px 0 0;
+    font-family: "Fragment Mono", ui-monospace, monospace;
+    text-align: center;
+  }
+
+  .figures dd {
+    margin: 0;
+    font-size: 1.75rem;
+  }
+
+  .figures dt {
+    margin: 0;
+    font-family: "Public Sans", system-ui, sans-serif;
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+  }
+
+  .summary {
+    text-align: center;
+    margin: 16px 0 0;
+  }
+
+  .specimen-strip {
+    display: flex;
+    height: 10px;
+    margin-top: 12px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .specimen-strip .kept {
+    background: var(--accent);
+  }
+
+  .specimen-strip .excluded {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--cancel),
+      var(--cancel) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+    background-color: var(--paper-sunk);
+  }
+
+  .evidence {
+    margin-top: 20px;
+  }
+
+  .evidence h2 {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin: 0 0 4px;
+  }
+
+  .evidence .row {
+    border-top: 1px solid var(--rule);
+    padding: 8px 0;
+  }
+
+  .row-head {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .row-head .strength {
+    color: var(--ink-soft);
+  }
+
+  .evidence .detail {
+    margin: 4px 0 0;
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .serial {
+    margin: 16px 0 0;
+    font-family: "Fragment Mono", ui-monospace, monospace;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+</style>

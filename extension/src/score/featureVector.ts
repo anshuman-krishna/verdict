@@ -1,7 +1,11 @@
 import type { Review } from "../extract/types";
 import { ratingDeconvolution, type RatingDeconvolutionResult } from "./ratingDeconvolution";
 import { detectTemporalBursts, type Burst, type TemporalBurstResult } from "./temporalBurst";
-import { textNearDuplication, type TextNearDuplicationResult } from "./textNearDuplication";
+import {
+  textNearDuplication,
+  type TextNearDuplicationOptions,
+  type TextNearDuplicationResult,
+} from "./textNearDuplication";
 import {
   verificationConcentration,
   type VerificationConcentrationResult,
@@ -109,6 +113,11 @@ export interface FeatureVectorInputs {
   injectionKernel: readonly number[];
   windowDays?: number;
   percentile?: number;
+  // performance only, see textNearDuplication.ts's signatureCache: a
+  // caller that builds many feature vectors from overlapping review sets
+  // (buildReport.ts's bootstrap, specifically) can share one cache across
+  // all of them. Omitted, behaviour is unchanged.
+  textNearDuplicationSignatureCache?: TextNearDuplicationOptions["signatureCache"];
 }
 
 export interface FeatureVector {
@@ -150,7 +159,13 @@ export function buildFeatureVector(
     );
   }
 
-  const duplicationResult = textNearDuplication(reviews.map((review) => ({ text: review.text })));
+  // passed directly, not wrapped in a fresh { text } object per call: a
+  // stable object reference is what lets textNearDuplicationSignatureCache
+  // recognise the same review across repeated calls. Review already
+  // structurally satisfies ReviewForNearDuplication.
+  const duplicationResult = textNearDuplication(reviews, {
+    signatureCache: inputs.textNearDuplicationSignatureCache,
+  });
 
   return {
     meetsMinimumData,

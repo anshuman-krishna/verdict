@@ -2,6 +2,9 @@ from fastapi import FastAPI
 
 from verdict_service.api.reputation import create_reputation_router
 from verdict_service.api.store import InMemoryFlaggedHashStore
+from verdict_service.logging_config import configure_logging
+
+configure_logging()
 
 app = FastAPI(title="verdict-service")
 
