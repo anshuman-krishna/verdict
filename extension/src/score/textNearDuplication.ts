@@ -158,8 +158,8 @@ class UnionFind {
 
 // SPEC.md 5.4: minhash with 128 permutations over character 5 grams, banded
 // lsh, cluster reviews above 0.7 jaccard similarity. bands and rows and the
-// output shape are not specified there; this is claude's proposal, not a
-// ratified spec line, see the session notes.
+// output shape are not specified there; this is a proposal, not a ratified
+// spec line.
 export function textNearDuplication(
   reviews: readonly ReviewForNearDuplication[],
   options: TextNearDuplicationOptions = {},

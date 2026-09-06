@@ -58,6 +58,22 @@ describe("setReputationLookupWithPermission", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it("does not release the shared origin permission when graph contribution still needs it", async () => {
+    const request = vi.fn();
+    const remove = vi.fn().mockResolvedValue(true);
+    const setEnabled = vi.fn().mockResolvedValue(undefined);
+
+    const result = await setReputationLookupWithPermission(false, {
+      permissionApi: { request, remove },
+      setEnabled,
+      isGraphContributionStillEnabled: async () => true,
+    });
+
+    expect(result).toBe(false);
+    expect(setEnabled).toHaveBeenCalledWith(false);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it("defaults to the real settings.ts store when no setEnabled is injected", async () => {
     const request = vi.fn().mockResolvedValue(true);
     const remove = vi.fn().mockResolvedValue(true);

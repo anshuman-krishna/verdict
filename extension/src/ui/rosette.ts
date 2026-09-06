@@ -5,7 +5,7 @@ import { BAND_COLORS, type Band } from "../score/report";
 // from the burst and duplication scores, an amplitude from the estimated
 // inorganic share, and a stroke colour from the band." the exact mapping
 // from those three inputs to harmonic numbers and amplitude is not spelled
-// out there, so the constants below are claude's proposal, not a ratified
+// out there, so the constants below are a proposal, not a ratified
 // spec line.
 
 export interface RosetteInput {

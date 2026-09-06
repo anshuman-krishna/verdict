@@ -36,7 +36,7 @@ async function handleAnalyze(
   if (!isAllowedHostname(hostname, allowedHostnames)) {
     return { status: "unsupported-domain" };
   }
-  // CLAUDE.md non negotiable 1: no page url or product identifier the
+  // PRIVACY.md section 1: no page url or product identifier the
   // server can read. this domain check runs before anything else so an
   // unsupported url is rejected before a tab ever opens for it.
   return analyzeUrl(url);

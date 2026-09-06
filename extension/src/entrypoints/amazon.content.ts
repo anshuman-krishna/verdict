@@ -3,12 +3,23 @@ import { analyzePage, type OrchestratorDeps } from "../contentScript/orchestrato
 import { mountResult } from "../contentScript/mount";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
 import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
+import {
+  REMOTE_RULES_CACHE_KEY,
+  REMOTE_RULES_PUBLIC_KEY_JWK,
+  REMOTE_RULES_URL,
+} from "../extract/remoteRules";
+import { loadRules } from "../extract/rulesLoader";
+import { enqueueContributionEdges } from "../graph/queue";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL } from "../score/model";
 import { PLACEHOLDER_PRIORS } from "../score/priors";
 import { addHistoryEntry } from "../storage/history";
-import { getHistoryEnabled, getReputationLookupEnabled } from "../storage/settings";
+import {
+  getGraphContributionEnabled,
+  getHistoryEnabled,
+  getReputationLookupEnabled,
+} from "../storage/settings";
 import "../ui/panel";
 import "../ui/notice";
 
@@ -22,8 +33,21 @@ export default defineContentScript({
   ],
   runAt: "document_idle",
   async main() {
+    // SPEC.md section 9: fetched at most once a day, cached, signed, and
+    // version pinned, with a bundled copy as the floor. loadRules never
+    // throws and never blocks on a hung network: any failure, including
+    // nothing being deployed at REMOTE_RULES_URL yet, resolves to
+    // BUNDLED_AMAZON_RULES, the same rules this page would have used
+    // before this call existed.
+    const rules = await loadRules({
+      url: REMOTE_RULES_URL,
+      publicKeyJwk: REMOTE_RULES_PUBLIC_KEY_JWK,
+      bundledDefault: BUNDLED_AMAZON_RULES,
+      cacheKey: REMOTE_RULES_CACHE_KEY,
+    });
+
     const deps: OrchestratorDeps = {
-      rules: BUNDLED_AMAZON_RULES,
+      rules,
       // both null until PLAN.md weeks 4 and 5 land the ground truth corpus
       // and a trained model.json. Until then every product page here
       // resolves to "no-model" and mountResult below renders nothing,
@@ -41,6 +65,18 @@ export default defineContentScript({
         isEnabled: getReputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,
         salt: REPUTATION_SALT,
+      },
+      // PRIVACY.md section 5: opt in, off by default, and a separate
+      // switch from reputation lookup above. enqueue only ever queues
+      // locally; entrypoints/background.ts's alarm is what actually
+      // submits a batch once its randomised hold elapses. Same
+      // REPUTATION_SALT as the lookup above, deliberately: see that
+      // constant's own comment for why the two protocols have to share
+      // it rather than each getting their own.
+      graphContribution: {
+        isEnabled: getGraphContributionEnabled,
+        salt: REPUTATION_SALT,
+        enqueue: (edges) => enqueueContributionEdges(edges),
       },
     };
 

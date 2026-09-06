@@ -147,6 +147,10 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
         endpoint: "https://api.verdict.tools/v1/reputation/lookup",
         salt: "test-salt",
         fetchImpl,
+        // real production behaviour waits out PRIVACY.md's random request
+        // delay (up to a few seconds) before firing; this test only cares
+        // that the lookup happens, not how long it waits first.
+        delay: () => Promise.resolve(),
       },
     });
 
@@ -172,6 +176,7 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
         endpoint: "https://x",
         salt: "s",
         fetchImpl,
+        delay: () => Promise.resolve(),
       },
     });
     await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
@@ -179,6 +184,50 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
       evidence: { signal: string }[];
     };
     expect(savedReport.evidence.some((r) => r.signal === "reviewer network")).toBe(true);
+  });
+});
+
+describe("analyzePage, graph contribution (PRIVACY.md section 5, opt in)", () => {
+  it("never enqueues anything when no graph contribution deps are supplied at all", async () => {
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", deps());
+    expect(result?.outcome.status).toBe("ok");
+  });
+
+  it("does not enqueue when isEnabled resolves false", async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const testDeps = deps({
+      graphContribution: { isEnabled: vi.fn().mockResolvedValue(false), salt: "s", enqueue },
+    });
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("builds and enqueues one edge per review with enough fields, when enabled", async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const testDeps = deps({
+      graphContribution: { isEnabled: vi.fn().mockResolvedValue(true), salt: "test-salt", enqueue },
+    });
+
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+
+    expect(result?.outcome.status).toBe("ok");
+    expect(enqueue).toHaveBeenCalledOnce();
+    const [edges] = enqueue.mock.calls[0] as [{ reviewerHash: string; starRating: number }[]];
+    expect(edges).toHaveLength(30);
+    expect(edges[0]?.reviewerHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("never enqueues the review text itself, only fields PRIVACY.md section 5 names", async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const testDeps = deps({
+      graphContribution: { isEnabled: vi.fn().mockResolvedValue(true), salt: "test-salt", enqueue },
+    });
+
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+
+    const serialized = JSON.stringify(enqueue.mock.calls[0]?.[0]);
+    expect(serialized).not.toContain("distinguishing words");
+    expect(serialized).not.toContain("A very good widget");
   });
 });
 

@@ -7,8 +7,8 @@ from verdict_service.graph.backbone import BackboneEdge
 # SPEC.md section 5.6 step 4: "score each community on internal density,
 # rating homogeneity, temporal clustering, and category incoherence."
 # Unlike steps 1 through 3 (bipartite.py, backbone.py, community.py), none
-# of which had a free parameter to choose, this step is CLAUDE.md reserved
-# territory: what makes a community "high scoring" is exactly the kind of
+# of which had a free parameter to choose, this step is anshuman's to
+# define: what makes a community "high scoring" is exactly the kind of
 # signal threshold division of work reserves for anshuman. The four
 # component functions below compute well defined statistics with no
 # judgement call in them; combining them into one score and the flagging

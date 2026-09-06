@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import type { ProductSnapshot, Review } from "./types";
-import { fetchReviewPages } from "./fetchReviewPages";
+import { fetchReviewPages, type FetchProgress } from "./fetchReviewPages";
 
 const product: ProductSnapshot = {
   title: "a product",
@@ -31,6 +31,44 @@ describe("fetchReviewPages", () => {
       maxPages: 1,
       delay: async () => {},
     });
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  // SPEC.md section 13: a caller showing a busy state needs partial
+  // results to put underneath it, and this run is spaced at least 800ms
+  // per page, so it is always over the 400ms line.
+  it("reports progress after every page, with a cumulative review count", async () => {
+    const progress: FetchProgress[] = [];
+    await fetchReviewPages({
+      productId: "p-progress",
+      site: "amazon",
+      product,
+      fetchPage: async (page) => [review(`page ${page} a`), review(`page ${page} b`)],
+      maxPages: 3,
+      delay: async () => {},
+      onProgress: (update) => progress.push(update),
+    });
+    expect(progress).toEqual([
+      { pagesFetched: 1, maxPages: 3, reviewCount: 2 },
+      { pagesFetched: 2, maxPages: 3, reviewCount: 4 },
+      { pagesFetched: 3, maxPages: 3, reviewCount: 6 },
+    ]);
+  });
+
+  it("reports no progress on a cache hit, since nothing slow happened", async () => {
+    const fetchPage = vi.fn(async (page: number) => [review(`page ${page}`)]);
+    const options = {
+      productId: "p-cached-progress",
+      site: "amazon",
+      product,
+      fetchPage,
+      maxPages: 1,
+      delay: async () => {},
+    };
+    await fetchReviewPages(options);
+    const progress: FetchProgress[] = [];
+    await fetchReviewPages({ ...options, onProgress: (update) => progress.push(update) });
+    expect(progress).toEqual([]);
     expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 

@@ -31,6 +31,13 @@ export interface NoticeState {
   message: string;
   action?: NoticeAction;
   busy?: boolean;
+  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms
+  // without showing partial results underneath". a review fetch is spaced
+  // at least 800ms per page (extract/fetchReviewPages.ts), so it is always
+  // over that line. This row is what sits underneath, present from the
+  // moment busy starts rather than after a timer, so there is no window
+  // where the notice is working and saying nothing about it.
+  progress?: string;
 }
 
 export class VerdictNoticeElement extends HTMLElement {
@@ -57,6 +64,7 @@ export class VerdictNoticeElement extends HTMLElement {
       <div class="notice" role="status">
         <span class="wordmark">verdict</span>
         <p class="message">${escapeHtml(state.message)}</p>
+        ${state.progress === undefined ? "" : `<p class="progress">${escapeHtml(state.progress)}</p>`}
         <div class="actions">
           ${action ? `<button type="button" class="action" ${busy ? "disabled" : ""}>${escapeHtml(actionLabel as string)}</button>` : ""}
           <button type="button" class="close" aria-label="Close">&times;</button>
@@ -70,6 +78,17 @@ export class VerdictNoticeElement extends HTMLElement {
     root.querySelector(".close")?.addEventListener("click", () => {
       this.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
     });
+  }
+
+  // patches the progress row's text without touching the rest of the
+  // shadow tree, so a page arriving every 800ms does not rebuild the close
+  // button under the pointer or move focus off it. No-op when the last
+  // render carried no progress row.
+  updateProgress(progress: string): void {
+    const node = shadowRoots.get(this)?.querySelector(".progress");
+    if (node !== null && node !== undefined) {
+      node.textContent = progress;
+    }
   }
 }
 
@@ -108,6 +127,16 @@ const NOTICE_CSS = `
 .message {
   margin: 8px 0 0;
   color: var(--ink-soft);
+}
+
+/* DESIGN.md section 5 keeps Fragment Mono for numerals and serials only,
+   never a sentence, so this stays Public Sans and takes only the tabular
+   figures, which DESIGN.md asks for everywhere. */
+.progress {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .actions {

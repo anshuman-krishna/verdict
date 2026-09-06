@@ -14,6 +14,7 @@ ext target:
         dev) npm run dev ;;
         build) npm run build ;;
         test) npm run test ;;
+        zip) npm run zip ;;
         *) echo "unknown ext target: {{target}}" >&2; exit 1 ;;
     esac
 
@@ -51,5 +52,14 @@ parity:
     set -euo pipefail
     cd extension && npx vitest run tests/parity.test.ts
     cd ../research && uv run pytest tests/test_parity.py
+
+# SPEC.md section 14: writes the commit and the sha256 of every zip that
+# SITE.md's /install page and the README both promise a release lists, and
+# refuses a build over the 8 mb bundle cap. The document lands in
+# extension/.output beside the zips it describes, to be published with them.
+release: (ext "zip")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && node scripts/release-manifest.mjs
 
 check: (ext "build") (ext "test") (py "lint") (py "test") parity

@@ -5,6 +5,7 @@ export interface PopupCallbacks {
   onExportJson: () => void;
   onExportCsv: () => void;
   onDeleteAll: () => void;
+  onOpenSettings: () => void;
 }
 
 function formatDate(timestamp: number): string {
@@ -23,6 +24,7 @@ export function renderPopup(
   container.innerHTML = `
     <header>
       <span class="wordmark">verdict</span>
+      <button type="button" class="open-settings" aria-label="Settings">&#9881;</button>
     </header>
     <div class="register" role="list">
       ${
@@ -38,6 +40,7 @@ export function renderPopup(
     </footer>
   `;
 
+  container.querySelector(".open-settings")?.addEventListener("click", callbacks.onOpenSettings);
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);
 
@@ -52,16 +55,27 @@ export function renderPopup(
   });
 }
 
+// entry.title and entry.thumbnailUrl are read straight off the Amazon
+// page (orchestrator.ts's product.title/thumbnailUrl), so they are a
+// seller's content, not this extension's, by the time they reach here.
+// escaped the same way site/src/pages/history/index.astro already
+// escapes the same fields on the website side of this same register.
+function escapeHtml(value: string): string {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
+}
+
 function renderRow(entry: HistoryEntry): string {
   const { band, adjustedRating } = summarizeReport(entry.report);
   return `
     <div class="row" role="listitem">
       ${
         entry.thumbnailUrl !== null
-          ? `<img src="${entry.thumbnailUrl}" alt="" width="32" height="32" />`
+          ? `<img src="${escapeHtml(entry.thumbnailUrl)}" alt="" width="32" height="32" />`
           : ""
       }
-      <span class="title">${entry.title}</span>
+      <span class="title">${escapeHtml(entry.title)}</span>
       ${
         band !== null
           ? `<span class="band" style="color: ${BAND_COLORS[band]}">${BAND_LABELS[band]}</span>`

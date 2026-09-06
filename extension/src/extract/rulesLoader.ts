@@ -5,8 +5,8 @@ import type { RulesDocument } from "./rules";
 // signed, and version pinned. a signature failure falls back to the
 // bundled copy and never blocks analysis." the signing scheme (ecdsa,
 // p-256, over a canonical json encoding of the rules document) is not
-// specified there, it is claude's choice of build infrastructure, made for
-// broad, long standing support in both chrome's and firefox's webcrypto.
+// specified there, it is a build infrastructure choice, made for broad,
+// long standing support in both chrome's and firefox's webcrypto.
 
 export interface SignedRulesEnvelope {
   rules: RulesDocument;
@@ -27,9 +27,18 @@ export interface RulesLoaderOptions {
   cacheTtlMs?: number;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  // amazon.content.ts awaits loadRules before it renders anything: a
+  // fetch with no cap at all would mean a slow or hung endpoint could
+  // stall every single product page open, not just today's, since the
+  // ttl means this rarely runs again once it succeeds. a build
+  // infrastructure choice, not a ratified number; short because
+  // the payload is a small json file, not because anything downstream
+  // needs it to be.
+  fetchTimeoutMs?: number;
 }
 
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 
 // a stable encoding independent of key insertion order, so a signature
 // verifies the same way regardless of how the document happened to be
@@ -87,6 +96,7 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
+  const fetchTimeoutMs = options.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
 
   const cached = await getPref<RulesCacheRecord>(options.cacheKey);
   if (cached !== null && now() - cached.fetchedAt < cacheTtlMs) {
@@ -94,7 +104,7 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
   }
 
   try {
-    const response = await fetchImpl(options.url);
+    const response = await fetchImpl(options.url, { signal: AbortSignal.timeout(fetchTimeoutMs) });
     if (!response.ok) {
       return options.bundledDefault;
     }

@@ -4,7 +4,7 @@ import type { EvidenceRow } from "./report";
 // default, version 0.2. Community scoring, step 4 of SPEC.md 5.6 ("scores
 // each community on internal density, rating homogeneity, temporal
 // clustering, and category incoherence"), decides what makes a community
-// "flagged" in the first place and is CLAUDE.md reserved territory,
+// "flagged" in the first place and is anshuman's to define,
 // untouched here and still unbuilt server side
 // (service/verdict_service/graph/community.py stops at detecting
 // communities, not scoring them). This file only turns an already

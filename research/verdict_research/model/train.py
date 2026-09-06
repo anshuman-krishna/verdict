@@ -7,7 +7,7 @@ from verdict_research.model.combine import CalibrationPoint, CombinerModel
 # vector... calibrate with isotonic regression on a held out slice." This
 # module fits both, given rows the caller already flattened and labelled.
 # It never decides what a positive label means, how the corpus was split,
-# or which features belong in the model: those are exactly CLAUDE.md's
+# or which features belong in the model: those are exactly the reserved
 # "label corpus and its methodology" and "the calibration target",
 # reserved for anshuman. What is left, gradient descent on a logistic loss
 # and the pool adjacent violators algorithm for isotonic regression, is

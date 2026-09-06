@@ -13,8 +13,8 @@ from verdict_service.graph.backbone import BackboneEdge
 #
 # ModularityVertexPartition, not a resolution-parameterised quality
 # function (CPM), so this does not have to pick a resolution value:
-# choosing one is the kind of threshold CLAUDE.md's division of work
-# reserves for anshuman, and modularity optimisation needs none.
+# choosing one is the kind of threshold reserved for anshuman, and
+# modularity optimisation needs none.
 
 
 def detect_communities(edges: list[BackboneEdge]) -> list[list[str]]:

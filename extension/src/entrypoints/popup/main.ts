@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import {
   deleteAllHistory,
   exportHistoryAsCsv,
@@ -28,6 +29,12 @@ async function refresh(): Promise<void> {
       await deleteAllHistory();
       await refresh();
     },
+    // wxt.config.ts declares options_ui with open_in_tab: false, so this
+    // opens the browser's own small options dialog rather than a full
+    // tab; openOptionsPage is the one API that works correctly either
+    // way, unlike building a chrome-extension:// url and navigating to
+    // it by hand.
+    onOpenSettings: () => browser.runtime.openOptionsPage(),
   });
 }
 

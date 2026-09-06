@@ -56,11 +56,12 @@ describe("put", () => {
 });
 
 describe("openDatabase", () => {
-  it("creates all three stores on first open", async () => {
+  it("creates all four stores on first open", async () => {
     const db = await openDatabase();
     expect(db.objectStoreNames.contains(STORE_NAMES.reviewsCache)).toBe(true);
     expect(db.objectStoreNames.contains(STORE_NAMES.history)).toBe(true);
     expect(db.objectStoreNames.contains(STORE_NAMES.prefs)).toBe(true);
+    expect(db.objectStoreNames.contains(STORE_NAMES.graphContributionQueue)).toBe(true);
     db.close();
   });
 });

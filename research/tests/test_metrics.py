@@ -76,7 +76,7 @@ class TestPrecisionRecallCurve:
 
 class TestExpectedCalibrationError:
     def test_hand_computed_two_bin_example(self):
-        # worked by hand in the session notes: bin [0, 0.5) holds 0.2 and
+        # worked by hand: bin [0, 0.5) holds 0.2 and
         # 0.3 (mean 0.25, true labels 0 and 1, fraction positive 0.5),
         # bin [0.5, 1.0] holds 0.7 and 0.9 (mean 0.8, both labelled 1,
         # fraction positive 1.0). ece = 0.5*|0.25-0.5| + 0.5*|0.8-1.0|

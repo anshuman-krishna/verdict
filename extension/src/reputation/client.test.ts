@@ -34,6 +34,7 @@ describe("lookupFlaggedReviewers", () => {
       salt: SALT,
       fetchImpl,
       random: varyingRandom,
+      delay: () => Promise.resolve(),
     });
 
     expect(result).toEqual(new Set(["bad-actor"]));
@@ -52,6 +53,7 @@ describe("lookupFlaggedReviewers", () => {
       endpoint: "https://x",
       salt: SALT,
       fetchImpl,
+      delay: () => Promise.resolve(),
     });
     expect(result).toEqual(new Set());
   });
@@ -62,7 +64,46 @@ describe("lookupFlaggedReviewers", () => {
       endpoint: "https://x",
       salt: SALT,
       fetchImpl,
+      delay: () => Promise.resolve(),
     });
     expect(result).toEqual(new Set());
+  });
+
+  it("waits out a random delay before firing the request, PRIVACY.md's stated timing mitigation", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+    const delay = vi.fn().mockResolvedValue(undefined);
+    const order: string[] = [];
+    delay.mockImplementation(() => {
+      order.push("delay");
+      return Promise.resolve();
+    });
+    fetchImpl.mockImplementation(() => {
+      order.push("fetch");
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+    });
+
+    // a constant random source makes buildLookupRequest's padding loop
+    // spin forever, since randomHexPrefix keeps producing the same
+    // prefix and the padded set never reaches BUCKET_COUNT; it has to
+    // vary, same as the "posts a request" test above.
+    let counter = 0;
+    const varyingRandom = () => {
+      counter += 1;
+      return (counter % 997) / 997;
+    };
+
+    await lookupFlaggedReviewers(["someone"], {
+      endpoint: "https://x",
+      salt: SALT,
+      fetchImpl,
+      delay,
+      random: varyingRandom,
+    });
+
+    expect(delay).toHaveBeenCalledOnce();
+    const [waitedMs] = delay.mock.calls[0] as [number];
+    expect(waitedMs).toBeGreaterThanOrEqual(200);
+    expect(waitedMs).toBeLessThanOrEqual(4000);
+    expect(order).toEqual(["delay", "fetch"]);
   });
 });

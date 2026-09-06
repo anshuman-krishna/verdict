@@ -4,6 +4,8 @@ import { analyzeViaHiddenTab } from "../bridge/analyzeViaTab";
 import { handleBridgeMessage } from "../bridge/handler";
 import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
 import { isAnalysisResultMessage } from "../contentScript/internalMessages";
+import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
+import { flushDueContributions } from "../graph/submit";
 
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
@@ -45,6 +47,15 @@ function analyzeUrl(url: string) {
   });
 }
 
+const CONTRIBUTION_ALARM_NAME = "verdict:flush-graph-contributions";
+// how often this checks the queue, not PRIVACY.md section 5's 1-6 hour
+// hold itself (graph/queue.ts enforces that independently, per edge): an
+// edge only ever leaves once one of these checks lands after its own
+// readyAt has passed. chrome.alarms rather than setTimeout/setInterval
+// because MV3 service workers are killed and restarted freely, and a
+// plain in memory timer does not survive that; an alarm does.
+const CONTRIBUTION_ALARM_PERIOD_MINUTES = 30;
+
 // SPEC.md section 11. externally_connectable in wxt.config.ts already
 // scopes who can even reach this listener to the production site and
 // localhost, so this only has to validate the message shape, not the
@@ -53,5 +64,20 @@ export default defineBackground(() => {
   browser.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
     handleBridgeMessage(message, { bundledRules: BUNDLED_AMAZON_RULES, analyzeUrl }).then(sendResponse);
     return true;
+  });
+
+  browser.alarms.create(CONTRIBUTION_ALARM_NAME, {
+    periodInMinutes: CONTRIBUTION_ALARM_PERIOD_MINUTES,
+  });
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== CONTRIBUTION_ALARM_NAME) {
+      return;
+    }
+    // flushDueContributions never throws (graph/submit.ts): a network or
+    // service failure just leaves the batch queued for the next alarm.
+    // This catch only guards against something truly unexpected, so a
+    // bug here cannot take the rest of the background script down with
+    // it.
+    flushDueContributions({ endpoint: DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT }).catch(() => {});
   });
 });

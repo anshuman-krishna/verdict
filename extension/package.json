@@ -7,7 +7,8 @@
     "postinstall": "wxt prepare",
     "dev": "wxt",
     "build": "wxt prepare && tsc --noEmit && wxt build && wxt build -b firefox",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "zip": "rm -rf .output && wxt zip && wxt zip -b firefox"
   },
   "devDependencies": {
     "@types/chrome": "0.2.8",

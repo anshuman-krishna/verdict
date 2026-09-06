@@ -1,8 +1,9 @@
-import { fetchReviewPages } from "../extract/fetchReviewPages";
+import { fetchReviewPages, type FetchProgress } from "../extract/fetchReviewPages";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import { parseAmazonProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/productPage";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
+import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { CombinerModel } from "../score/combine";
@@ -20,6 +21,11 @@ export interface ReputationLookupDeps {
   salt: string;
   fetchImpl?: typeof fetch;
   random?: () => number;
+  // reputation/client.ts's own default (a real setTimeout, PRIVACY.md
+  // section 4's random request delay) is what production uses; exposed
+  // here only so a test can swap in an instant no-op instead of actually
+  // waiting up to MAX_DELAY_MS.
+  delay?: (ms: number) => Promise<void>;
 }
 
 export interface OrchestratorDeps {
@@ -34,6 +40,19 @@ export interface OrchestratorDeps {
   // omitted entirely (not just disabled) is also valid: analyzePage never
   // attempts a reputation lookup unless a caller supplies this.
   reputation?: ReputationLookupDeps;
+  // omitted entirely is also valid, same as reputation above: analyzePage
+  // never queues a contribution unless a caller supplies this.
+  graphContribution?: GraphContributionDeps;
+}
+
+// PRIVACY.md section 5: a second, separate opt in from reputation lookup
+// above. isEnabled is checked fresh per analysis for the same reason
+// reputation's is: the options page toggle should take effect on the
+// very next check.
+export interface GraphContributionDeps {
+  isEnabled: () => Promise<boolean>;
+  salt: string;
+  enqueue: (edges: readonly ContributionEdge[]) => Promise<void>;
 }
 
 export interface AnalysisResult {
@@ -95,6 +114,10 @@ async function scoreAndMaybeSave(
     };
   }
 
+  if (outcome.status === "ok" && deps.graphContribution && (await deps.graphContribution.isEnabled())) {
+    await queueGraphContribution(page, reviews, deps.graphContribution);
+  }
+
   if (outcome.status === "ok" && (await deps.isHistoryEnabled())) {
     await deps.saveHistory({
       title: product.title,
@@ -104,6 +127,26 @@ async function scoreAndMaybeSave(
   }
 
   return outcome;
+}
+
+// PRIVACY.md section 5: builds one edge per review this page's reviews
+// contain enough to place (buildContributionEdge already returns null for
+// the rest) and hands the batch to the queue, which is what actually
+// applies the randomised hold before anything is sent. Best effort: a
+// review whose edge cannot be built is simply not contributed, never a
+// reason to fail the analysis that surfaced it.
+async function queueGraphContribution(
+  page: ParsedProductPage,
+  reviews: readonly Review[],
+  graphContribution: GraphContributionDeps,
+): Promise<void> {
+  const edges = await Promise.all(
+    reviews.map((review) => buildContributionEdge(review, page.productId, graphContribution.salt)),
+  );
+  const built = edges.filter((edge): edge is ContributionEdge => edge !== null);
+  if (built.length > 0) {
+    await graphContribution.enqueue(built);
+  }
 }
 
 // SPEC.md 5.6 and section 8: looks up whether any of this review set's
@@ -127,6 +170,7 @@ async function withReviewerGraphEvidence(
     salt: reputation.salt,
     fetchImpl: reputation.fetchImpl,
     random: reputation.random,
+    delay: reputation.delay,
   });
   const row = reviewerGraphEvidenceRow(flagged.size, reviewerIds.length);
   return { ...report, evidence: [...report.evidence, row] };
@@ -165,6 +209,9 @@ export interface CheckMoreDeeplyOptions {
   fetchImpl?: typeof fetch;
   delay?: (ms: number) => Promise<void>;
   random?: () => number;
+  // SPEC.md section 13's spinner rule: this run takes seconds, so whoever
+  // is showing a busy state needs something to put underneath it.
+  onProgress?: (progress: FetchProgress) => void;
 }
 
 // SPEC.md section 9: fetching additional review pages happens only on
@@ -187,6 +234,7 @@ export async function checkMoreDeeply(
     maxPages: options.maxPages,
     delay: options.delay,
     random: options.random,
+    onProgress: options.onProgress,
     fetchPage: async (pageNumber) => {
       const response = await fetchImpl(reviewPageUrl(page, pageNumber));
       if (!response.ok) {

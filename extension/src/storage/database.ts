@@ -1,10 +1,15 @@
 const DATABASE_NAME = "verdict";
-const DATABASE_VERSION = 1;
+// bumped from 1 to 2 to add graphContributionQueue below. onupgradeneeded's
+// own "if not exists, create" guards mean a browser already at version 1
+// runs the same handler and only the new store is added; nothing about
+// reviewsCache, history, or prefs changes.
+const DATABASE_VERSION = 2;
 
 export const STORE_NAMES = {
   reviewsCache: "reviews_cache",
   history: "history",
   prefs: "prefs",
+  graphContributionQueue: "graph_contribution_queue",
 } as const;
 
 export function openDatabase(): Promise<IDBDatabase> {
@@ -28,6 +33,17 @@ export function openDatabase(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.prefs)) {
         db.createObjectStore(STORE_NAMES.prefs, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(STORE_NAMES.graphContributionQueue)) {
+        // PRIVACY.md section 5: edges wait here for a randomised interval
+        // before being sent, so "readyAt" is indexed to let
+        // graph/queue.ts ask for exactly the ones due without a full
+        // table scan.
+        const queue = db.createObjectStore(STORE_NAMES.graphContributionQueue, {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        queue.createIndex("readyAt", "readyAt");
       }
     };
 

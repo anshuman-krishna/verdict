@@ -7,8 +7,8 @@ import type { EvidenceRow, EvidenceStrength } from "./report";
 // product. Neither document sets the weak/moderate/strong cut points, so
 // the thresholds below are a proposal, in the same spirit as rosette.ts's
 // harmonic mapping: not a ratified spec line, and expected to move once
-// SPEC.md section 16's open questions are settled. CLAUDE.md non negotiable
-// 6 governs the wording: statistical, never accusatory.
+// SPEC.md section 16's open questions are settled. DESIGN.md section 10
+// governs the wording: statistical, never accusatory.
 
 function strengthFromRatio(value: number, weak: number, moderate: number): EvidenceStrength {
   if (value < weak) {

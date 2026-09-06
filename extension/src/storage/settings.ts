@@ -1,4 +1,5 @@
 import { getPref, setPref } from "./prefs";
+import { getSyncedBoolean, setSyncedBoolean } from "./syncedBoolean";
 
 const HISTORY_ENABLED_KEY = "historyEnabled";
 
@@ -8,13 +9,15 @@ const HISTORY_ENABLED_KEY = "historyEnabled";
 // itself the decision.
 const DEFAULT_HISTORY_ENABLED = true;
 
+// SPEC.md section 10: one of the prefs "mirrored to chrome.storage.sync
+// where it makes sense" (syncedBoolean.ts explains why this one qualifies
+// and reputationLookupEnabled/graphContributionEnabled below do not).
 export async function getHistoryEnabled(): Promise<boolean> {
-  const value = await getPref<boolean>(HISTORY_ENABLED_KEY);
-  return value ?? DEFAULT_HISTORY_ENABLED;
+  return getSyncedBoolean(HISTORY_ENABLED_KEY, DEFAULT_HISTORY_ENABLED);
 }
 
 export function setHistoryEnabled(enabled: boolean) {
-  return setPref(HISTORY_ENABLED_KEY, enabled);
+  return setSyncedBoolean(HISTORY_ENABLED_KEY, enabled);
 }
 
 const REPUTATION_LOOKUP_ENABLED_KEY = "reputationLookupEnabled";
@@ -25,6 +28,9 @@ const REPUTATION_LOOKUP_ENABLED_KEY = "reputationLookupEnabled";
 // already says.
 const DEFAULT_REPUTATION_LOOKUP_ENABLED = false;
 
+// deliberately not a synced pref, unlike historyEnabled above:
+// syncedBoolean.ts's own comment explains why a permission gated toggle
+// is not "where it makes sense" for chrome.storage.sync.
 export async function getReputationLookupEnabled(): Promise<boolean> {
   const value = await getPref<boolean>(REPUTATION_LOOKUP_ENABLED_KEY);
   return value ?? DEFAULT_REPUTATION_LOOKUP_ENABLED;
@@ -32,4 +38,22 @@ export async function getReputationLookupEnabled(): Promise<boolean> {
 
 export function setReputationLookupEnabled(enabled: boolean) {
   return setPref(REPUTATION_LOOKUP_ENABLED_KEY, enabled);
+}
+
+const GRAPH_CONTRIBUTION_ENABLED_KEY = "graphContributionEnabled";
+
+// PRIVACY.md section 5: "opt in contribution", off by default, a
+// separate switch from reputationLookupEnabled above. Asking whether a
+// reviewer is flagged (section 4) and contributing edges that help build
+// the graph in the first place (section 5) are two different consents:
+// someone can want one without the other.
+const DEFAULT_GRAPH_CONTRIBUTION_ENABLED = false;
+
+export async function getGraphContributionEnabled(): Promise<boolean> {
+  const value = await getPref<boolean>(GRAPH_CONTRIBUTION_ENABLED_KEY);
+  return value ?? DEFAULT_GRAPH_CONTRIBUTION_ENABLED;
+}
+
+export function setGraphContributionEnabled(enabled: boolean) {
+  return setPref(GRAPH_CONTRIBUTION_ENABLED_KEY, enabled);
 }

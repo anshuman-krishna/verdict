@@ -1,5 +1,5 @@
 import { browser } from "wxt/browser";
-import { setReputationLookupEnabled } from "../storage/settings";
+import { getGraphContributionEnabled, setReputationLookupEnabled } from "../storage/settings";
 import { DEFAULT_REPUTATION_ENDPOINT } from "./endpoint";
 
 // SPEC.md section 4: the reviewer graph service is opt in. wxt.config.ts
@@ -28,25 +28,36 @@ export interface SetReputationLookupOptions {
   endpoint?: string;
   permissionApi?: PermissionApi;
   setEnabled?: (enabled: boolean) => Promise<unknown>;
+  // graph/endpoint.ts's contribution endpoint lives on the same
+  // api.verdict.tools origin as this one, so they share one granted host
+  // permission. Releasing it here would silently break contribution if
+  // that toggle is still on, so turning reputation lookup off only
+  // releases the permission when this also reports false.
+  isGraphContributionStillEnabled?: () => Promise<boolean>;
 }
 
 // turning the toggle on requests the host permission first and only
 // persists the setting if it was granted; turning it off persists the
 // setting and releases the permission, the least privilege state for
-// someone who no longer wants this running. Returns the state that
-// actually ended up stored, since a denied request means "on" did not
-// happen, which the caller (the options page) needs to re-render.
+// someone who no longer wants this running, unless graph contribution
+// still needs the same origin. Returns the state that actually ended up
+// stored, since a denied request means "on" did not happen, which the
+// caller (the options page) needs to re-render.
 export async function setReputationLookupWithPermission(
   enabled: boolean,
   options: SetReputationLookupOptions = {},
 ): Promise<boolean> {
   const permissionApi = options.permissionApi ?? realPermissionApi;
   const setEnabled = options.setEnabled ?? setReputationLookupEnabled;
+  const isGraphContributionStillEnabled =
+    options.isGraphContributionStillEnabled ?? getGraphContributionEnabled;
   const origin = originPattern(options.endpoint ?? DEFAULT_REPUTATION_ENDPOINT);
 
   if (!enabled) {
     await setEnabled(false);
-    await permissionApi.remove([origin]);
+    if (!(await isGraphContributionStillEnabled())) {
+      await permissionApi.remove([origin]);
+    }
     return false;
   }
 

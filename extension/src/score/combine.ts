@@ -5,8 +5,7 @@ import type { FeatureVector } from "./featureVector";
 // it does not fit one. fitting needs ground truth (PLAN.md week 4) and
 // lives in the research pipeline; nothing here invents coefficients, a
 // calibration curve, or which features matter, since choosing those is
-// the calibration target SPEC.md section 16 and CLAUDE.md's division of
-// work reserve for anshuman.
+// the calibration target SPEC.md section 16 reserves for anshuman.
 
 // every numeric leaf of a feature vector, under a stable dot path name.
 // a model.json declares coefficients against a subset of these keys, so
@@ -80,8 +79,8 @@ export function applyCalibration(points: readonly CalibrationPoint[], x: number)
 
 // never guesses a value for a feature the model needs but this review set
 // did not produce (SPEC.md section 5.2/5.3 both null out under thin data).
-// a missing required feature is reported, not imputed, per CLAUDE.md non
-// negotiable 5: never confident on thin data.
+// a missing required feature is reported, not imputed, per SPEC.md section
+// 6's own rule: never confident on thin data.
 export function applyModel(featureVector: FeatureVector, model: CombinerModel): CombinerResult {
   if (!featureVector.meetsMinimumData) {
     return { status: "insufficient-data" };

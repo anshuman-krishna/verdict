@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_MAX_PAGES } from "../extract/fetchReviewPages";
 import type { RulesDocument } from "../extract/rules";
 import type { CombinerModel } from "../score/combine";
 import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
@@ -133,6 +134,83 @@ describe("mountResult", () => {
       mountResult(document, { page: PAGE, product: PRODUCT, reviews: [], outcome }, deps());
       expect(document.body.children).toHaveLength(0);
     }
+  });
+
+  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms
+  // without showing partial results underneath." A review fetch is spaced
+  // at least 800ms per page, so the busy notice has to carry something
+  // from the moment it appears, and has to keep it current as pages land.
+  it("shows partial results under the busy notice from the moment checking starts", async () => {
+    const reviews = Array.from({ length: 4 }, (_, i) => ({
+      rating: 5,
+      text: `body number ${i} has enough distinguishing words to avoid near duplication`,
+      date: `2024-01-0${i + 1}`,
+      verified: true,
+      reviewerId: `reviewer-${i}`,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            `<script type="application/ld+json">${JSON.stringify({ reviewsData: { reviews } })}</script>`,
+          ),
+      }),
+    );
+
+    const result: AnalysisResult = {
+      // fetchReviewPages caches by product id and fake-indexeddb keeps that
+      // cache for the whole file, so every test that fetches needs its own.
+      page: { ...PAGE, productId: "B0PROGRESS1" },
+      product: PRODUCT,
+      reviews: [],
+      outcome: { status: "not-enough-data" },
+    };
+    mountResult(document, result, deps(), { maxPages: 2, delay: () => Promise.resolve() });
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    root.querySelector<HTMLButtonElement>(".action")?.click();
+
+    // synchronously after the click, before any page has come back
+    expect(root.querySelector(".progress")?.textContent).toBe(
+      "Reading up to 2 more pages of reviews.",
+    );
+
+    await vi.waitFor(() => {
+      expect(root.querySelector(".progress")?.textContent).toBe(
+        "2 of 2 pages read, 8 reviews so far.",
+      );
+    });
+  });
+
+  it("defaults the progress line to the fetcher's own page cap", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, text: () => Promise.resolve("") }));
+    const result: AnalysisResult = {
+      page: { ...PAGE, productId: "B0PROGRESS2" },
+      product: PRODUCT,
+      reviews: [],
+      outcome: { status: "not-enough-data" },
+    };
+    mountResult(document, result, deps(), { delay: () => Promise.resolve() });
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    root.querySelector<HTMLButtonElement>(".action")?.click();
+
+    expect(root.querySelector(".progress")?.textContent).toBe(
+      `Reading up to ${DEFAULT_MAX_PAGES} more pages of reviews.`,
+    );
+
+    // every page came back empty, so the run ends back on a fresh notice.
+    // waited on rather than left running, so the chain cannot settle into
+    // a later test's document.
+    await vi.waitFor(() => {
+      expect(document.body.querySelector("verdict-notice")).not.toBe(notice);
+    });
   });
 
   it("checking more deeply replaces the notice with a panel once enough data is fetched", async () => {

@@ -3,8 +3,9 @@ import type { ReportSummary } from "../score/report";
 
 // SPEC.md section 11. every message the website can send the extension,
 // and every response the extension can send back. the message names are
-// claude's proposal (SPEC.md only shows "verdict:history:list" as an
-// example), kept in the same "verdict:noun:verb" shape.
+// a proposal, not a ratified spec line (SPEC.md only shows
+// "verdict:history:list" as an example), kept in the same
+// "verdict:noun:verb" shape.
 
 export interface HistoryListRequest {
   type: "verdict:history:list";

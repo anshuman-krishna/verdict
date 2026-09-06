@@ -2,7 +2,7 @@ import json
 import random
 from dataclasses import dataclass, field
 
-# CLAUDE.md reserves the label corpus and its methodology to anshuman:
+# the label corpus and its methodology are anshuman's (SPEC.md section 12):
 # what counts as a positive label, how solicitation groups were read, what
 # goes in the negative set. None of that is decided here. This is the
 # mechanical layer underneath it: a record shape, JSONL read and write,

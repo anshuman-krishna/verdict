@@ -1,21 +1,45 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import status from "../../data/status.json";
+
+// SITE.md: "a register table. One row per site and locale: last verified,
+// extraction health, rules version, median reviews extracted. Updated by
+// the Python canary job." That job writes src/data/status.json
+// (research/verdict_research/canary/status_document.py) and the site is
+// rebuilt, so this stays a static page with no client javascript and no
+// third party request, per SITE.md's build notes.
+//
+// An empty document is the normal state before the canary has ever run,
+// not an error, so it renders as an empty register rather than nothing.
+
+const { rows, generatedAt } = status;
+
+// DESIGN.md section 10: statistical, never accusatory, and never a word
+// that reads as an alarm.
+const HEALTH_LABELS: Record<string, string> = {
+  healthy: "reading correctly",
+  degraded: "reading less than expected",
+  failed: "not reading",
+};
+
+function formatDate(seconds: number): string {
+  return new Date(seconds * 1000).toISOString().slice(0, 10);
+}
 ---
 
-<Layout
-  title="Status"
-  description="Extraction health per site and locale."
->
+<Layout title="Status" description="Extraction health per site and locale.">
   <h1>Status</h1>
   <p>
     When Amazon changes their page layout, Verdict stops reading it correctly. This page tells
     you whether that has happened, before you have to wonder why a report looks wrong.
   </p>
-  <p>
-    Not live yet. The canary job that fills this table in runs from
-    <span class="data">research/verdict_research/canary</span>, and that job has not shipped.
-    Nothing below is real data.
-  </p>
+  {
+    rows.length > 0 && (
+      <p>
+        Last run <span class="data">{formatDate(generatedAt)}</span>.
+      </p>
+    )
+  }
   <div class="table-scroll">
     <table class="register">
       <thead>
@@ -29,9 +53,32 @@ import Layout from "../../layouts/Layout.astro";
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td colspan="6">No canary runs yet.</td>
-        </tr>
+        {
+          rows.length === 0 ? (
+            <tr>
+              <td colspan="6">No canary runs yet.</td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr>
+                <td>{row.site}</td>
+                <td>{row.locale}</td>
+                <td class="data">{formatDate(row.lastVerified)}</td>
+                {/* DESIGN.md section 11: health never depends on colour
+                    alone, so the words carry it and the tint only agrees. */}
+                <td class={row.status === "healthy" ? undefined : "unhealthy"}>
+                  {HEALTH_LABELS[row.status] ?? row.status}
+                </td>
+                <td class={row.rulesVersion === null ? undefined : "data"}>
+                  {row.rulesVersion ?? "unknown"}
+                </td>
+                <td class={row.medianReviewsExtracted === null ? undefined : "data"}>
+                  {row.medianReviewsExtracted ?? "none read"}
+                </td>
+              </tr>
+            ))
+          )
+        }
       </tbody>
     </table>
   </div>
@@ -40,5 +87,11 @@ import Layout from "../../layouts/Layout.astro";
 <style>
   .table-scroll {
     overflow-x: auto;
+  }
+
+  /* cancellation red, DESIGN.md section 4, the same ink the panel strikes
+     excluded reviews with. */
+  .unhealthy {
+    color: var(--cancel);
   }
 </style>

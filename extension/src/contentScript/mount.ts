@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { DEFAULT_MAX_PAGES, type FetchProgress } from "../extract/fetchReviewPages";
 import type { Report } from "../score/report";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
 import type { VerdictNoticeElement } from "../ui/notice";
@@ -61,6 +62,8 @@ function mountNotEnoughDataNotice(
   document.body.appendChild(notice);
   notice.addEventListener("verdict:close", () => notice.remove());
 
+  const maxPages = checkOptions.maxPages ?? DEFAULT_MAX_PAGES;
+
   const renderIdle = (): void => {
     notice.render({
       message: "Not enough data to judge yet.",
@@ -77,9 +80,13 @@ function mountNotEnoughDataNotice(
       message: "Not enough data to judge yet.",
       busy: true,
       action: { label: "check more deeply", pendingLabel: "checking more deeply...", onClick: () => {} },
+      progress: startingProgressLine(maxPages),
     });
     try {
-      const next = await checkMoreDeeply(result.page, result.product, result.reviews, deps, checkOptions);
+      const next = await checkMoreDeeply(result.page, result.product, result.reviews, deps, {
+        ...checkOptions,
+        onProgress: (progress) => notice.updateProgress(progressLine(progress)),
+      });
       notice.remove();
       mountResult(document, next, deps, checkOptions, openTab);
     } catch {
@@ -93,12 +100,24 @@ function mountNotEnoughDataNotice(
   renderIdle();
 }
 
+// SPEC.md section 13's spinner rule. The first page carries no spacing
+// delay before it, so a real count replaces this line as soon as that page
+// lands, well before the 800ms gap lets a second one start.
+function startingProgressLine(maxPages: number): string {
+  return `Reading up to ${maxPages} more pages of reviews.`;
+}
+
+function progressLine(progress: FetchProgress): string {
+  const reviews = progress.reviewCount === 1 ? "1 review" : `${progress.reviewCount} reviews`;
+  return `${progress.pagesFetched} of ${progress.maxPages} pages read, ${reviews} so far.`;
+}
+
 // the one place that turns a ReportOutcome into something on the page.
 // missing-features and no-model render nothing: SPEC.md section 13 does
 // not specify copy for either (a production model.json, once one exists,
 // is not expected to ever be missing a feature it was trained needing;
 // no-model cannot happen once a model is bundled), so this stays silent
-// rather than inventing user facing wording CLAUDE.md reserves.
+// rather than inventing user facing wording that is not ours to write.
 export function mountResult(
   document: Document,
   result: AnalysisResult,

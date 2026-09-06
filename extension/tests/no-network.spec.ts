@@ -7,11 +7,12 @@ import { resolveField } from "../src/extract/interpreter";
 import type { FieldRule } from "../src/extract/rules";
 import type { RulesDocument } from "../src/extract/rules";
 import type { ProductSnapshot, Review } from "../src/extract/types";
+import { enqueueContributionEdges } from "../src/graph/queue";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../src/reputation/endpoint";
 import { REPUTATION_SALT } from "../src/reputation/salt";
 import type { CombinerModel } from "../src/score/combine";
 import { getPref, setPref } from "../src/storage/prefs";
-import { getReputationLookupEnabled } from "../src/storage/settings";
+import { getGraphContributionEnabled, getReputationLookupEnabled } from "../src/storage/settings";
 import {
   cacheKey,
   getCachedReviews,
@@ -189,6 +190,59 @@ describe("the default analysis path makes no network requests", () => {
         isEnabled: getReputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,
         salt: REPUTATION_SALT,
+      },
+    });
+
+    expect(result?.outcome.status).toBe("ok");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("the graph contribution queue, opt in and off by default, never calls fetch with the real default settings", async () => {
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        claimedRating: { strategy: "selector", value: ".rating" },
+        reviews: { strategy: "embedded-json", path: "$.reviewsData.reviews[*]" },
+      },
+    };
+    const model: CombinerModel = {
+      intercept: 0,
+      coefficients: { "ratingDeconvolution.injectedShare": 1 },
+      calibration: [],
+    };
+    const container = document.createElement("div");
+    container.innerHTML = `
+      <span class="title">a product</span>
+      <span class="rating">4.6</span>
+      <script type="application/ld+json">${JSON.stringify({
+        reviewsData: {
+          reviews: Array.from({ length: 30 }, (_, i) => ({
+            ...review,
+            date: `2026-01-${String((i % 25) + 1).padStart(2, "0")}`,
+            reviewerId: `r-${i}`,
+          })),
+        },
+      })}</script>
+    `;
+
+    const result = await analyzePage(container, "https://www.amazon.com/dp/B0EXAMPLE1", {
+      rules,
+      model,
+      priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
+      isHistoryEnabled: async () => true,
+      saveHistory: async () => undefined,
+      bootstrapResamples: 5,
+      // enqueueContributionEdges only ever writes to IndexedDB, never the
+      // network; the real settings lookup defaults to false anyway, so
+      // this proves nothing enqueues, not just that nothing would have
+      // been sent if it had.
+      graphContribution: {
+        isEnabled: getGraphContributionEnabled,
+        salt: REPUTATION_SALT,
+        enqueue: (edges) => enqueueContributionEdges(edges),
       },
     });
 

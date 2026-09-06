@@ -6,7 +6,7 @@ from dataclasses import dataclass
 # in SPEC.md, not something this module chooses; what is built here is the
 # arithmetic that turns predictions and true labels into the figures those
 # criteria are checked against. It never sees or produces a label itself,
-# so it does not touch CLAUDE.md's reserved label corpus and methodology.
+# so it does not touch the reserved label corpus and methodology.
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ def confusion_counts(y_true: list[int], y_pred: list[int]) -> ConfusionCounts:
 
 # None rather than 0.0 when the denominator is zero (no predicted
 # positives, or no actual positives): "no precision computed" and "zero
-# precision" are different facts, and CLAUDE.md non negotiable 5 applies
+# precision" are different facts, and SPEC.md section 6's rule applies
 # here as much as it does to a signal with too little data.
 def precision(counts: ConfusionCounts) -> float | None:
     denominator = counts.true_positive + counts.false_positive

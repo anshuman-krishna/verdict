@@ -164,6 +164,33 @@ describe("loadRules", () => {
     expect(result).toEqual(fallback);
   });
 
+  it("falls back to the bundled default rather than hanging when the fetch never resolves", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const fallback = bundledDefault();
+    // never resolves and never rejects on its own: only AbortSignal.timeout
+    // aborting the request can end this call. a passed abort signal is
+    // proof the caller can actually cut this fetch off; a real hang
+    // exercises the same path in production, just slower.
+    const fetchImpl: typeof fetch = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: fallback,
+      cacheKey: freshCacheKey(),
+      fetchImpl,
+      fetchTimeoutMs: 10,
+    });
+
+    expect(result).toEqual(fallback);
+  });
+
   it("rejects a version rollback even with a valid signature", async () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);

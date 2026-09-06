@@ -9,7 +9,7 @@ from verdict_research.features.feature_vector import FeatureVector
 # output artefact, model.json, is what training/calibration/export produce
 # elsewhere in this package once that corpus exists. nothing here invents
 # coefficients, a calibration curve, or which features matter, since
-# choosing those is the calibration target CLAUDE.md reserves for anshuman.
+# choosing those is the calibration target SPEC.md section 6 leaves to anshuman.
 
 FlatFeatures = dict[str, float | None]
 
@@ -92,7 +92,7 @@ def apply_calibration(points: list[CalibrationPoint], x: float) -> float:
 
 # never guesses a value for a feature the model needs but this review set
 # did not produce. a missing required feature is reported, not imputed,
-# per CLAUDE.md non negotiable 5: never confident on thin data.
+# per SPEC.md section 6's own rule: never confident on thin data.
 def apply_model(feature_vector: FeatureVector, model: CombinerModel) -> CombinerResult:
     if not feature_vector.meets_minimum_data:
         return InsufficientData()
