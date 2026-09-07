@@ -170,10 +170,9 @@ describe("loadRules", () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const fallback = bundledDefault();
-    // never resolves and never rejects on its own: only AbortSignal.timeout
-    // aborting the request can end this call. a passed abort signal is
-    // proof the caller can actually cut this fetch off; a real hang
-    // exercises the same path in production, just slower.
+    // never resolves and never rejects on its own: only AbortSignal.timeout aborting the request
+    // can end this call. a passed abort signal is proof the caller can actually cut this fetch off;
+    // a real hang exercises the same path in production, just slower.
     const fetchImpl: typeof fetch = vi.fn(
       (_input: RequestInfo | URL, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
@@ -236,10 +235,9 @@ describe("loadRules", () => {
   });
 });
 
-// a signature says who wrote the document, not that it is a rules
-// document. A bug in whatever publishes the file would produce something
-// correctly signed and structurally wrong, and the interpreter is defensive
-// enough that it would degrade to zero matches, which looks exactly like a
+// a signature says who wrote the document, not that it is a rules document. A bug in whatever
+// publishes the file would produce something correctly signed and structurally wrong, and the
+// interpreter is defensive enough that it would degrade to zero matches, which looks exactly like a
 // page that changed.
 describe("loadRules against a signed but malformed document", () => {
   async function envelopeFor(rules: unknown): Promise<{
@@ -333,5 +331,82 @@ describe("loadRules against a signed but malformed document", () => {
       fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
     });
     expect(Object.keys(result.fields)).toEqual(["title"]);
+  });
+});
+
+// a dropped field is a fix that silently did not apply, so the loader says so rather than computing
+// the reason and throwing it away.
+describe("loadRules reporting what it had to drop", () => {
+  async function envelopeFor(rules: unknown): Promise<{
+    envelope: SignedRulesEnvelope;
+    publicKeyJwk: JsonWebKey;
+  }> {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    return {
+      envelope: { rules: rules as RulesDocument, signature: await sign(rules as RulesDocument, keyPair.privateKey) },
+      publicKeyJwk,
+    };
+  }
+
+  it("names each field it discarded", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: { title: { strategy: "selector", value: "h1" }, reviews: { strategy: "unheard-of" } },
+    });
+    const problems: string[][] = [];
+
+    await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+      onProblems: (lines) => problems.push([...lines]),
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.[0]).toMatch(/reviews/);
+  });
+
+  it("says so when the whole document is refused", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: {},
+    });
+    const problems: string[][] = [];
+
+    await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+      onProblems: (lines) => problems.push([...lines]),
+    });
+    expect(problems[0]?.[0]).toMatch(/not a rules document/);
+  });
+
+  it("says nothing when every field was usable", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: { title: { strategy: "selector", value: "h1" } },
+    });
+    const problems: string[][] = [];
+
+    await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+      onProblems: (lines) => problems.push([...lines]),
+    });
+    expect(problems).toEqual([]);
   });
 });

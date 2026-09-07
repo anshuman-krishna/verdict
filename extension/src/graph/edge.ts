@@ -1,37 +1,19 @@
 import { DEFAULT_NUM_PERMUTATIONS, DEFAULT_SHINGLE_SIZE, minhashSignature, shingle } from "../score/textNearDuplication";
 import type { Review } from "../extract/types";
 
-// PRIVACY.md section 5, "opt in contribution": what the reviewer graph
-// service (SPEC.md 5.6, PLAN.md week 9) needs from each review to build
-// the bipartite reviewer-product graph, and nothing else. Sent: hashed
-// reviewer identifier, hashed product identifier, star rating, week
-// bucket of the review date, verified flag, minhash signature. Never
-// sent: review text itself, product title, category, price, url, or any
-// persistent client identifier: this interface is the enforcement of
-// that list, not just a description of it, since only these fields exist
-// to be sent in the first place.
+// PRIVACY.md section 5's sent list, enforced rather than described: no other field exists to send
 export interface ContributionEdge {
   reviewerHash: string;
   productHash: string;
   starRating: number;
   weekBucket: number;
   verified: boolean | null;
-  // bigint is not JSON serialisable, so the signature travels as decimal
-  // strings, the same representation schema/minhash-coefficients.json
-  // already uses for the same reason.
+  // bigint is not json serialisable, so the signature travels as decimal strings
   minhashSignature: string[];
 }
 
-// sha256(input), hex encoded. Deliberately a separate implementation from
-// reputation/lookup.ts's sha256Hex rather than a shared import, so this
-// file does not need to know the lookup protocol's module exists at all;
-// the two do, however, need to be called with the same salt for the
-// reviewer hash specifically (reputation/salt.ts's REPUTATION_SALT, see
-// its own comment) so a community this produces can ever be looked up
-// again. The product hash has no such constraint: nothing outside this
-// pipeline ever looks one up, so any salt works for it, and reusing the
-// same one the caller already passes in is simpler than inventing a
-// second constant with no purpose.
+// separate from reputation/lookup.ts's copy so this file need not know that protocol exists, but the
+// reviewer hash must use the same salt or a community this builds can never be looked up again
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -43,12 +25,7 @@ async function sha256Hex(input: string): Promise<string> {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_PER_WEEK = 7;
 
-// PRIVACY.md: "week bucket of the review date", not the date itself.
-// Floor division against the epoch, so this needs no calendar library and
-// two reviews on the same real week always land in the same bucket
-// regardless of which day of that week they fall on. Returns null for a
-// date this extension cannot parse, which buildContributionEdge treats
-// the same as a missing date: not enough to build an edge from.
+// the week bucket, never the date itself. floor division against the epoch, so no calendar library
 export function weekBucket(dateIso: string): number | null {
   const parsed = Date.parse(dateIso);
   if (Number.isNaN(parsed)) {
@@ -57,12 +34,8 @@ export function weekBucket(dateIso: string): number | null {
   return Math.floor(parsed / MS_PER_DAY / DAYS_PER_WEEK);
 }
 
-// a review missing a reviewer id or a date cannot be placed as an edge at
-// all (there is no node to hang it off, or no week bucket to put it in),
-// so this returns null for those rather than a degraded edge: an edge
-// with an invented value would be worse than no edge, not just weaker.
-// A review with no text still becomes an edge, with an empty signature:
-// the graph signal here is co-review structure and rating, not text.
+// no reviewer id or date means no edge: an invented value would be worse than none, not just weaker.
+// no text still makes an edge, since the signal here is co-review structure, not text
 export async function buildContributionEdge(
   review: Review,
   productId: string,

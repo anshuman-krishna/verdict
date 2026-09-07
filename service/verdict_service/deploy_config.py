@@ -2,16 +2,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-# PRIVACY.md section 4 commits to a published reverse proxy configuration
-# with IP logging disabled: "if we ever cannot demonstrate this, the feature
-# comes out." A config file alone is a promise. This reader is what turns it
-# into something a test can hold to, so an edit that re-enables logging
+# PRIVACY.md section 4 commits to a published reverse proxy configuration with IP logging disabled:
+# "if we ever cannot demonstrate this, the feature comes out." A config file alone is a promise.
+# this reader is what turns it into something a test can hold to, so an edit that re-enables logging
 # fails the build instead of the audit.
 #
-# Deliberately a small structural reader rather than a full Caddyfile
-# parser. It answers only the questions PRIVACY.md makes claims about, and
-# it fails loudly on a file it cannot follow rather than reporting that an
-# unreadable config is fine.
+# deliberately a small structural reader rather than a full Caddyfile parser. It answers only the
+# questions PRIVACY.md makes claims about, and it fails loudly on a file it cannot follow rather
+# than reporting that an unreadable config is fine.
 
 CADDYFILE = Path(__file__).resolve().parents[1] / "deploy" / "Caddyfile"
 

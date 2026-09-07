@@ -27,14 +27,13 @@ from verdict_research.canary.status_document import (
 )
 from verdict_research.canary.targets import read_targets
 
-# PLAN.md week 7's canary as one command. Fetch each target, ask the shipped
-# extractor what it finds, classify, alert on what changed since last time,
-# and write the document SITE.md's /status page renders.
+# PLAN.md week 7's canary as one command. Fetch each target, ask the shipped extractor what it
+# finds, classify, alert on what changed since last time, and write the document SITE.md's /status
+# page renders.
 #
-# The order matters and is the reason this exists as a single command rather
-# than as four the operator sequences: alerts are decided against the
-# summaries from before this run was folded in, so a locale that has been
-# broken for a week does not alert again every run.
+# the order matters and is the reason this exists as a single command rather than as four the
+# operator sequences: alerts are decided against the summaries from before this run was folded in,
+# so a locale that has been broken for a week does not alert again every run.
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_STATUS_OUTPUT = REPOSITORY / "site" / "src" / "data" / "status.json"
@@ -94,9 +93,8 @@ def main(
     parser.add_argument("--status-output", default=str(DEFAULT_STATUS_OUTPUT))
     parser.add_argument("--retained-checks", type=int, default=DEFAULT_RETAINED_CHECKS)
     parser.add_argument("--timeout", type=float, default=20.0)
-    # writing nothing is the right default for a first look at a new target
-    # list: a run that has not been reviewed should not be able to change
-    # what the public status page says.
+    # writing nothing is the right default for a first look at a new target list: a run that has not
+    # been reviewed should not be able to change what the public status page says.
     parser.add_argument("--write", action="store_true", help="update the history and status files")
     args = parser.parse_args(argv)
 

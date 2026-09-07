@@ -7,18 +7,11 @@ import { bootstrap, interquartileRange } from "./bootstrap";
 import { generateSerial, type Report } from "./report";
 
 export type ReportOutcome =
-  // SPEC.md section 13: "extraction yields under 30 reviews: not enough
-  // data to judge, no score, no error styling." this also covers the other
-  // two SPEC.md section 6 thresholds (dated reviews, history span), which
-  // meetsMinimumDataThresholds already folds together.
+  // SPEC.md section 13, and section 6's dated count and history span thresholds with it
   | { status: "not-enough-data" }
-  // SPEC.md non negotiable 5: never confident on thin data. a model that
-  // needs a feature this review set could not produce reports the gap
-  // instead of a guess, same as combine.ts's own status.
+  // a missing feature is reported as a gap, never guessed
   | { status: "missing-features"; missing: string[] }
-  // no trained model is bundled yet, model.ts's BUNDLED_MODEL is null
-  // until PLAN.md week 5. distinct from "not-enough-data": the review set
-  // may be perfectly adequate, there is simply nothing to score it with.
+  // distinct from not-enough-data: the reviews may be fine, there is nothing to score them with
   | { status: "no-model" }
   | { status: "ok"; report: Report };
 
@@ -31,31 +24,17 @@ export interface BuildReportOptions {
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
-  // PRIVACY.md section 2: reviews restored from the 7 day cache carry no
-  // text, only their minhash signature. Passing that here is what keeps a
-  // report built from a cache hit numerically identical to one built from
-  // a fresh fetch.
+  // cached reviews carry no text (PRIVACY.md section 2); this keeps a cache hit scoring identically
   signatureCache?: WeakMap<Review, bigint[]>;
 }
 
-// SPEC.md 5.1's injectedShare is already defined there as "an interpretable
-// estimate of injected share": the natural source for "estimated share of
-// reviews that do not look organic" in SPEC.md section 2, distinct from the
-// combiner's probability (which answers "how concerning is this listing
-// overall", used for the band). when the histogram could not be built at
-// all, there is nothing to estimate from, so the share is 0 rather than a
-// guess.
+// SPEC.md 5.1's injected share, distinct from the combiner's probability which sets the band
 function estimatedInorganicShare(vector: ReturnType<typeof buildFeatureVector>): number {
   return vector.ratingDeconvolution?.injectedShare ?? 0;
 }
 
-// SPEC.md section 2 says the adjusted rating is "recomputed with suspect
-// reviews removed" but does not say which reviews. No signal here scores
-// individual reviews, only the review set as a whole, so this applies
-// SPEC.md 5.1's own generative assumption backwards: since the injection
-// kernel concentrates on four and five stars, the reviews most likely to be
-// the injected share are the highest rated ones. This is a proposal, like
-// rosette.ts's harmonic mapping, not a ratified reading of that line.
+// no signal scores individual reviews, so this drops the highest rated, per 5.1's injection kernel.
+// a proposal, not a ratified reading of section 2
 function adjustedRating(reviews: readonly Review[], claimedRating: number, excludedCount: number): number {
   const rated = reviews.filter((review): review is Review & { rating: number } => review.rating !== null);
   if (rated.length === 0 || excludedCount === 0) {
@@ -71,13 +50,8 @@ function adjustedRating(reviews: readonly Review[], claimedRating: number, exclu
 
 export function buildReport(options: BuildReportOptions): ReportOutcome {
   const now = options.now ?? Date.now;
-  // scoped to this single buildReport() call, never the caller's own
-  // options.priors object: options.priors can be a shared constant across
-  // many unrelated analyses (score/priors.ts's PLACEHOLDER_PRIORS, for
-  // one), and caching into it directly would leak signatures from one
-  // product's reviews into another's. Spans the main computation below
-  // and every bootstrap resample, since a review's text, and so its
-  // signature, is the same reviews[i] object throughout.
+  // scoped to this call: priors can be a shared constant, and caching into it would leak signatures
+  // from one product into another
   const priors: FeatureVectorInputs = {
     ...options.priors,
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
@@ -99,15 +73,8 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "missing-features", missing: result.missing };
   }
 
-  // measured: 200 resamples (SPEC.md section 6's number, the default when
-  // options.bootstrapResamples is not overridden) over 30 reviews took
-  // roughly 2 seconds on a dev laptop before priors.textNearDuplicationSignatureCache
-  // above, entirely spent redoing textNearDuplication's 128 permutation
-  // minhash from scratch on every resample even though bootstrap.ts's
-  // resample() draws with replacement from the same source array, so the
-  // same review object, and so the same signature, recurs constantly.
-  // With the cache this is down to milliseconds, comfortably inside
-  // SPEC.md section 14's 1.5 second budget.
+  // 200 resamples took ~2s before the signature cache above, milliseconds after: resample() draws the
+  // same review objects repeatedly, so their minhashes were being recomputed from scratch each time
   const model = options.model;
   const samples = bootstrap(
     options.reviews,

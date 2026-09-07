@@ -3,10 +3,9 @@ import { BAND_LABELS } from "../score/report";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
-// DESIGN.md renders the panel in a closed shadow root so a hostile host
-// page stylesheet cannot make verdict say something it does not say. a
-// closed root cannot be read back via element.shadowRoot, so tests reach in
-// through this module private map instead of loosening the mode.
+// DESIGN.md renders the panel in a closed shadow root so a hostile host page stylesheet cannot make
+// verdict say something it does not say. a closed root cannot be read back via element.shadowRoot,
+// so tests reach in through this module private map instead of loosening the mode.
 const shadowRoots = new WeakMap<VerdictPanelElement, ShadowRoot>();
 
 export function getPanelShadowRootForTesting(panel: VerdictPanelElement): ShadowRoot {
@@ -190,9 +189,8 @@ export class VerdictPanelElement extends HTMLElement {
     });
   }
 
-  // the panel itself never knows how to open a tab or reach an extension
-  // url, that is content script territory (contentScript/mount.ts), same
-  // separation as verdict:close.
+  // the panel itself never knows how to open a tab or reach an extension url, that is content
+  // script territory (contentScript/mount.ts), same separation as verdict:close.
   private wireFullReport(root: ShadowRoot): void {
     const fullReportButton = root.querySelector(".full-report");
     fullReportButton?.addEventListener("click", () => {
@@ -253,10 +251,9 @@ if (typeof customElements !== "undefined" && customElements.get("verdict-panel")
   customElements.define("verdict-panel", VerdictPanelElement);
 }
 
-// DESIGN.md section 6, "the certificate block": a raised panel on tinted
-// ground, a 1px rule, a rosette, tabular figures. section 9 for buttons and
-// the evidence row and specimen strip. section 5 for type, using fallbacks
-// since the actual woff2 files are not part of this repository yet.
+// DESIGN.md section 6, "the certificate block": a raised panel on tinted ground, a 1px rule, a
+// rosette, tabular figures. section 9 for buttons and the evidence row and specimen strip. section
+// 5 for type, using fallbacks since the actual woff2 files are not part of this repository yet.
 const PANEL_CSS = `
 * { box-sizing: border-box; }
 

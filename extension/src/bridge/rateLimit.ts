@@ -1,17 +1,7 @@
 import type { BridgeRequest } from "./messages";
 
-// PRIVACY.md section 7: the bridge "is rate limited per origin". Per origin
-// rather than globally because the two allowed origins are the production
-// site and localhost (externally_connectable in wxt.config.ts), and a
-// developer hammering localhost should not be able to starve the real site.
-//
-// The three message types are not equally expensive, so they do not share a
-// budget. verdict:analyze opens a background tab and fetches a storefront
-// page in the user's own session, which is the only one of the three that
-// leaves the machine at all, so it gets the tightest allowance. The numbers
-// below are build configuration, set to sit well above anything a person
-// clicking through the site can produce and well below anything that would
-// read as automated use of somebody's browser.
+// PRIVACY.md section 7. per origin so a developer hammering localhost cannot starve the real site.
+// the three types do not share a budget: verdict:analyze is the only one that leaves the machine
 
 export interface RateLimitRule {
   limit: number;
@@ -27,16 +17,14 @@ export const RATE_LIMITS: Record<BridgeRequest["type"], RateLimitRule> = {
   // destructive and never something a person does twice in a row by
   // intent, so this is low enough that a loop stands out
   "verdict:history:clear": { limit: 6, windowMs: MINUTE_MS },
+  // reads the whole history and serialises it: more than a list, still local
+  "verdict:history:export": { limit: 12, windowMs: MINUTE_MS },
   // a tab open plus a storefront fetch each time
   "verdict:analyze": { limit: 6, windowMs: MINUTE_MS },
 };
 
-// externally_connectable allows http://localhost/*, and every port is a
-// separate origin, so an unbounded map is reachable from a machine the user
-// is already running code on. The cap is on tracked origins, not on
-// requests: when it is hit the least recently seen origin is dropped, which
-// at worst forgives someone their earlier requests rather than locking
-// anybody out.
+// every localhost port is a separate origin, so the map needs a bound. dropping the oldest at worst
+// forgives someone their earlier requests rather than locking anybody out
 const MAX_TRACKED_ORIGINS = 32;
 
 interface OriginState {

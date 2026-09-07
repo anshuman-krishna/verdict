@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Store removal is the main operational risk for this project, not lawsuits.
-// This reads a built bundle and refuses it if it would earn one.
+// store removal is the main operational risk for this project, not lawsuits.
+// this reads a built bundle and refuses it if it would earn one.
 //
-// Usage:
+// usage:
 //   just preflight
 //   node scripts/store-preflight.mjs [--target chrome-mv3] [--output .output]
 //

@@ -1,9 +1,8 @@
 import type { FixtureResult } from "./harness";
 
-// SPEC.md section 14, first acceptance criterion for version 0.1: "correct
-// extraction on 95 percent of the fixture corpus across at least four
-// locales". Both halves are gates, and both are here rather than in the
-// test that calls this, so the number lives in one place and the standalone
+// SPEC.md section 14, first acceptance criterion for version 0.1: "correct extraction on 95 percent
+// of the fixture corpus across at least four locales". Both halves are gates, and both are here
+// rather than in the test that calls this, so the number lives in one place and the standalone
 // runner and the vitest run cannot disagree about it.
 export const REQUIRED_PASS_RATE = 0.95;
 export const REQUIRED_LOCALE_COUNT = 4;

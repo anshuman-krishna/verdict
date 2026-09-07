@@ -17,15 +17,13 @@ from verdict_research.model.pipeline import (
     train_pipeline,
 )
 
-# PLAN.md week 5's outcome as one command. SPEC.md section 4 calls model.json
-# "a small parameter file bundled into the extension at build time", so the
-# default output path is the file extension/src/score/model.ts imports; there
-# is no separate copy step to forget.
+# PLAN.md week 5's outcome as one command. SPEC.md section 4 calls model.json "a small parameter
+# file bundled into the extension at build time", so the default output path is the file
+# extension/src/score/model.ts imports; there is no separate copy step to forget.
 #
-# The corpus this reads is anshuman's (SPEC.md section 12) and so is the
-# choice of features, which is why --features is required rather than
-# inferred. --list-features exists so the choice can be made from what the
-# corpus actually carries rather than from memory.
+# the corpus this reads is anshuman's (SPEC.md section 12) and so is the choice of features, which
+# is why --features is required rather than inferred. --list-features exists so the choice can be
+# made from what the corpus actually carries rather than from memory.
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2].parent / "extension/src/score/model.json"
 
@@ -76,9 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--iterations", type=int, default=2000)
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.0)
-    # a model that misses section 14 is still worth inspecting, but it does
-    # not get bundled by accident: writing one takes saying so, and the file
-    # then records that it missed.
+    # a model that misses section 14 is still worth inspecting, but it does not get bundled by
+    # accident: writing one takes saying so, and the file then records that it missed.
     parser.add_argument(
         "--write-below-criteria",
         action="store_true",

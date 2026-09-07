@@ -1,16 +1,13 @@
 from dataclasses import dataclass
 from math import comb, log10
 
-# SPEC.md section 5.6 step 1: "project to a reviewer to reviewer graph,
-# weighting each edge against a configuration model null so that two
-# people both reviewing a popular charging cable does not create a
-# link." two reviewers who reviewed the same m products by pure chance,
-# given how many products each of them reviewed in total, is exactly the
-# hypergeometric distribution: draw degree_j products at random out of
-# total_products, ask how likely degree_i of a fixed reviewer's products
-# would land in that draw purely by chance. a small p-value means the
-# overlap is bigger than chance predicts, which is the "significant"
-# co-review relationship this projection keeps.
+# SPEC.md section 5.6 step 1: "project to a reviewer to reviewer graph, weighting each edge against
+# a configuration model null so that two people both reviewing a popular charging cable does not
+# create a link." two reviewers who reviewed the same m products by pure chance, given how many
+# products each of them reviewed in total, is exactly the hypergeometric distribution: draw degree_j
+# products at random out of total_products, ask how likely degree_i of a fixed reviewer's products
+# would land in that draw purely by chance. a small p-value means the overlap is bigger than chance
+# predicts, which is the "significant" co-review relationship this projection keeps.
 
 
 def hypergeometric_overlap_pvalue(
@@ -43,10 +40,9 @@ class ReviewerEdge:
 
 
 DEFAULT_SIGNIFICANCE_LEVEL = 0.05
-# a p-value of exactly 0 (every one of reviewer i's products fell inside
-# reviewer j's draw) has no finite -log10, so its weight is capped here
-# rather than becoming infinity, which would dominate every later
-# weighted comparison.
+# a p-value of exactly 0 (every one of reviewer i's products fell inside reviewer j's draw) has no
+# finite -log10, so its weight is capped here rather than becoming infinity, which would dominate
+# every later weighted comparison.
 _MAX_WEIGHT = 300.0
 
 
@@ -56,10 +52,9 @@ def _weight(p_value: float) -> float:
     return min(-log10(p_value), _MAX_WEIGHT)
 
 
-# reviewer_products maps a reviewer id to the set of product ids they
-# reviewed. only pairs that share at least one product are considered,
-# since a pair with zero overlap has p_value 1.0 and would never survive
-# the significance_level filter anyway.
+# reviewer_products maps a reviewer id to the set of product ids they reviewed. only pairs that
+# share at least one product are considered, since a pair with zero overlap has p_value 1.0 and
+# would never survive the significance_level filter anyway.
 def project_reviewer_graph(
     reviewer_products: dict[str, set[str]],
     significance_level: float = DEFAULT_SIGNIFICANCE_LEVEL,

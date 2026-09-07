@@ -7,12 +7,10 @@ from fastapi.testclient import TestClient
 from verdict_service.api.contribution import create_contribution_router
 from verdict_service.graph.contribution_store import InMemoryContributionEdgeStore
 
-# tests/contract/contributionBatch.json is written the way the extension
-# actually puts a batch on the wire. This file reads it rather than
-# restating it, which is the whole point: the service used to reject every
-# real batch with a 422 while every test here passed, because the tests
-# wrote the field names the python model declared and nobody compared them
-# against what javascript sends.
+# tests/contract/contributionBatch.json is written the way the extension actually puts a batch on
+# the wire. This file reads it rather than restating it, which is the whole point: the service used
+# to reject every real batch with a 422 while every test here passed, because the tests wrote the
+# field names the python model declared and nobody compared them against what javascript sends.
 
 CONTRACT = Path(__file__).resolve().parents[2] / "tests" / "contract" / "contributionBatch.json"
 

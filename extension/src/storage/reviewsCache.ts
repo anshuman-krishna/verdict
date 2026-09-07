@@ -9,32 +9,16 @@ import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } fr
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// PRIVACY.md section 2 is unambiguous about this store: "review text is
-// never persisted. It is parsed, hashed for the duplication signal,
-// embedded for the drift signal, and dropped. The MinHash signature and
-// the embedding centroid are kept, and neither can reconstruct the text."
-// SPEC.md section 9 still wants the fetched pages cached for 7 days, so
-// what is written here is every field except the text, plus the signature
-// that stands in for it.
-//
-// The signature is not a compression of the text. It is 128 minima over
-// hashed 5 character shingles, so it supports "how similar are these two
-// reviews" and nothing else: there is no inverse.
-//
-// Keeping the numbers identical is the point. score/textNearDuplication.ts
-// accepts a seeded signature in place of text, so a report built from a
-// cache hit and one built from a fresh fetch produce the same duplication
-// figures rather than quietly different ones.
+// PRIVACY.md section 2: review text is never persisted. every field except the text is, plus the
+// minhash signature that stands in for it, which supports "how similar" and has no inverse.
+// textNearDuplication.ts takes a seeded signature, so a cache hit scores identically to a fresh fetch
 
 interface StoredReview {
   rating: number | null;
   date: string | null;
   verified: boolean | null;
   reviewerId: string | null;
-  // bigints as decimal strings: IndexedDB's structured clone does carry
-  // BigInt, but a stored value that survives an export, a devtools
-  // inspection, and a schema migration in one obvious form is worth more
-  // here than saving a few bytes.
+  // decimal strings rather than bigint: worth more in an export or a migration than the bytes saved
   textSignature: string[] | null;
 }
 
@@ -42,11 +26,7 @@ interface CacheRecord {
   key: string;
   reviews: StoredReview[];
   cachedAt: number;
-  // the parameters the signatures above were computed with. Without these,
-  // a later change to the shingle size would produce signatures of the
-  // right length and the wrong meaning, and the duplication numbers would
-  // be quietly wrong rather than obviously missing. A record whose
-  // parameters do not match this build is discarded, not reinterpreted.
+  // without these, a shingle size change gives signatures of the right length and the wrong meaning
   shingleSize: number;
   numPermutations: number;
 }

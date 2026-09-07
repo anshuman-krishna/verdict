@@ -28,7 +28,7 @@ configure_logging()
 # everything on restart, correct for a throwaway run and useless for a
 # deployment. Set it to a path on a volume and both stores persist there.
 #
-# Opt in rather than a default path, because a service that silently starts
+# opt in rather than a default path, because a service that silently starts
 # writing a file somewhere is worse than one that plainly does not persist.
 DATABASE_PATH = os.environ.get("VERDICT_DATABASE_PATH")
 
@@ -44,21 +44,26 @@ else:
     flagged_hash_store = InMemoryFlaggedHashStore()
     contribution_edge_store = InMemoryContributionEdgeStore()
 
-# community structure does not shift meaningfully within minutes of a
-# handful of new edges landing, and this is a batch computation over the
-# whole retained edge set, not a per request cost, so an hourly cadence
-# keeps flagged_hash_store reasonably current without recomputing the
-# graph far more often than the data underneath it actually changes.
+# community structure does not shift meaningfully within minutes of a handful of new edges landing,
+# and this is a batch computation over the whole retained edge set, not a per request cost, so an
+# hourly cadence keeps flagged_hash_store reasonably current without recomputing the graph far more
+# often than the data underneath it actually changes.
 RECOMPUTE_INTERVAL_SECONDS = 60 * 60
 
 
-def _recompute_job() -> None:
+def _recompute() -> None:
     recompute_flagged_hashes(contribution_edge_store, flagged_hash_store)
-    # PRIVACY.md section 8's 90 day retention, enforced here rather than
-    # by a separate schedule: pruning right after a recompute guarantees
-    # every edge this deletes was already given a chance to contribute to
-    # flagged_hash_store first, never dropped from consideration early.
+    # PRIVACY.md section 8's 90 day retention, enforced here rather than by a separate schedule:
+    # pruning right after a recompute guarantees every edge this deletes was already given a chance
+    # to contribute to flagged_hash_store first, never dropped from consideration early.
     contribution_edge_store.prune_older_than(time.time() - RETENTION_SECONDS)
+
+
+# in a thread, not on the loop. this is leiden community detection over the whole retained edge set,
+# and run_periodically awaits a coroutine but calls a sync job inline, so on the loop it would hold
+# every request for as long as the graph takes.
+async def _recompute_job() -> None:
+    await asyncio.to_thread(_recompute)
 
 
 @asynccontextmanager

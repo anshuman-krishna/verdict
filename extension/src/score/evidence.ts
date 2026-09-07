@@ -1,14 +1,12 @@
 import type { FeatureVector } from "./featureVector";
 import type { EvidenceRow, EvidenceStrength } from "./report";
 
-// SPEC.md section 2 promises "the evidence, one expandable row per signal,
-// in plain language", and DESIGN.md's panel mock names the four rows this
-// produces: rating shape, arrival timing, duplicate text, different
-// product. Neither document sets the weak/moderate/strong cut points, so
-// the thresholds below are a proposal, in the same spirit as rosette.ts's
-// harmonic mapping: not a ratified spec line, and expected to move once
-// SPEC.md section 16's open questions are settled. DESIGN.md section 10
-// governs the wording: statistical, never accusatory.
+// SPEC.md section 2 promises "the evidence, one expandable row per signal, in plain language", and
+// DESIGN.md's panel mock names the four rows this produces: rating shape, arrival timing, duplicate
+// text, different product. Neither document sets the weak/moderate/strong cut points, so the
+// thresholds below are a proposal, in the same spirit as rosette.ts's harmonic mapping: not a
+// ratified spec line, and expected to move once SPEC.md section 16's open questions are settled.
+// DESIGN.md section 10 governs the wording: statistical, never accusatory.
 
 function strengthFromRatio(value: number, weak: number, moderate: number): EvidenceStrength {
   if (value < weak) {
@@ -82,10 +80,9 @@ function duplicateTextRow(vector: FeatureVector): EvidenceRow {
   };
 }
 
-// SPEC.md 5.4, listing identity drift, is not built yet (SPEC.md section 16
-// open question 2, the embedding model bundle size decision). SPEC.md
-// section 13's failure table already covers this exact case for when the
-// embedding model fails to load at runtime: "skip signal 5.4, widen
+// SPEC.md 5.4, listing identity drift, is not built yet (SPEC.md section 16 open question 2, the
+// embedding model bundle size decision). SPEC.md section 13's failure table already covers this
+// exact case for when the embedding model fails to load at runtime: "skip signal 5.4, widen
 // confidence band, note it in the evidence." this row is that note.
 function differentProductRow(): EvidenceRow {
   return {

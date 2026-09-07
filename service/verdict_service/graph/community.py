@@ -3,17 +3,14 @@ import leidenalg
 
 from verdict_service.graph.backbone import BackboneEdge
 
-# SPEC.md section 5.6 step 3: "run leiden community detection." leidenalg
-# is the reference implementation, maintained by the algorithm's own
-# authors (Traag, Waltman, van Eck, 2019), used here rather than a hand
-# rolled reimplementation because leiden's local moving, refinement, and
-# aggregation phases are easy to get subtly wrong in ways a handful of
-# unit tests on toy graphs will not reliably catch. see the graph
-# plumbing decision recorded in the session this shipped in.
+# SPEC.md section 5.6 step 3: "run leiden community detection." leidenalg is the reference
+# implementation, maintained by the algorithm's own authors (Traag, Waltman, van Eck, 2019), used
+# here rather than a hand rolled reimplementation because leiden's local moving, refinement, and
+# aggregation phases are easy to get subtly wrong in ways a handful of unit tests on toy graphs will
+# not reliably catch. see the graph plumbing decision recorded in the session this shipped in.
 #
-# ModularityVertexPartition, not a resolution-parameterised quality
-# function (CPM), so this does not have to pick a resolution value:
-# choosing one is the kind of threshold reserved for anshuman, and
+# modularityVertexPartition, not a resolution-parameterised quality function (CPM), so this does not
+# have to pick a resolution value: choosing one is the kind of threshold reserved for anshuman, and
 # modularity optimisation needs none.
 
 

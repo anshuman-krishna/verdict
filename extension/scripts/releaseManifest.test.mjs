@@ -107,9 +107,8 @@ describe("buildReleaseManifest", () => {
     ).toThrow(/chrome-mv3.*firefox-mv2/);
   });
 
-  // a manifest whose commit is missing or abbreviated cannot be used to
-  // check a download against the repository, which is the only reason it
-  // exists.
+  // a manifest whose commit is missing or abbreviated cannot be used to check a download against
+  // the repository, which is the only reason it exists.
   it("refuses anything but a full commit sha", () => {
     for (const commit of ["", "abc1234", "A".repeat(40), undefined]) {
       expect(() =>

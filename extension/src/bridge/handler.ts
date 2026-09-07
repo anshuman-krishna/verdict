@@ -1,6 +1,11 @@
 import type { RulesDocument } from "../extract/rules";
 import { summarizeReport } from "../score/report";
-import { deleteAllHistory, listHistory } from "../storage/history";
+import {
+  deleteAllHistory,
+  exportHistoryAsCsv,
+  exportHistoryAsJson,
+  listHistory,
+} from "../storage/history";
 import type { BridgeRateLimiter } from "./rateLimit";
 import {
   type AnalyzeResponse,
@@ -9,10 +14,9 @@ import {
   isBridgeRequest,
 } from "./messages";
 
-// SPEC.md section 9's site/locale pair for the bundled rules doubles as
-// the supported storefront domain list: "amazon" + "co.uk" is
-// amazon.co.uk. Deriving it from the rules document rather than a second
-// hardcoded list means the two can never quietly drift apart.
+// SPEC.md section 9's site/locale pair for the bundled rules doubles as the supported storefront
+// domain list: "amazon" + "co.uk" is amazon.co.uk. Deriving it from the rules document rather than
+// a second hardcoded list means the two can never quietly drift apart.
 export function deriveAllowedHostnames(rules: RulesDocument): string[] {
   return rules.locales.map((locale) => `${rules.site}.${locale}`);
 }
@@ -37,9 +41,8 @@ async function handleAnalyze(
   if (!isAllowedHostname(hostname, allowedHostnames)) {
     return { status: "unsupported-domain" };
   }
-  // PRIVACY.md section 1: no page url or product identifier the
-  // server can read. this domain check runs before anything else so an
-  // unsupported url is rejected before a tab ever opens for it.
+  // PRIVACY.md section 1: no page url or product identifier the server can read. this domain check
+  // runs before anything else so an unsupported url is rejected before a tab ever opens for it.
   return analyzeUrl(url);
 }
 
@@ -50,15 +53,13 @@ export interface BridgeHandlerOptions {
   // has not wired one is obvious in review rather than silently unlimited:
   // an absent limiter is treated as an unknown sender below, not as a pass.
   rateLimiter?: BridgeRateLimiter;
-  // the sender's origin, from browser.runtime.onMessageExternal. Absent
-  // means the runtime did not tell us who is asking, which is not a reason
-  // to answer anyway.
+  // the sender's origin, from browser.runtime.onMessageExternal. Absent means the runtime did not
+  // tell us who is asking, which is not a reason to answer anyway.
   origin?: string;
 }
 
-// never accepts a message that is not one of the shapes messages.ts
-// declares, and never throws: an unrecognised or malformed message is
-// rejected rather than passed through to storage or a fetch.
+// never accepts a message that is not one of the shapes messages.ts declares, and never throws: an
+// unrecognised or malformed message is rejected rather than passed through to storage or a fetch.
 export async function handleBridgeMessage(
   message: unknown,
   options: BridgeHandlerOptions,
@@ -100,6 +101,15 @@ async function handleRequest(
     case "verdict:history:clear": {
       await deleteAllHistory();
       return { ok: true };
+    }
+    case "verdict:history:export": {
+      const json = request.format === "json";
+      return {
+        format: request.format,
+        // dated so two exports do not overwrite each other in a downloads folder
+        filename: `verdict-history-${new Date().toISOString().slice(0, 10)}.${request.format}`,
+        content: json ? await exportHistoryAsJson() : await exportHistoryAsCsv(),
+      };
     }
     case "verdict:analyze": {
       return handleAnalyze(

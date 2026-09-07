@@ -42,9 +42,8 @@ describe("sanitiseRulesDocument", () => {
     expect(sanitiseRulesDocument(document({ title: { strategy: "telepathy" } }))).toBeNull();
   });
 
-  // a rules version using a strategy this build predates should still
-  // deliver every other fix in it, so one unusable field is dropped rather
-  // than costing the whole document.
+  // a rules version using a strategy this build predates should still deliver every other fix in
+  // it, so one unusable field is dropped rather than costing the whole document.
   it("drops an unusable field and keeps the rest, saying which", () => {
     const result = sanitiseRulesDocument(
       document({ title: SELECTOR, reviews: { strategy: "from-the-future" } }),

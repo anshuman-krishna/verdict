@@ -5,10 +5,9 @@ export const DEFAULT_MAX_PAGES = 5;
 const MIN_SPACING_MS = 800;
 const JITTER_MS = 400;
 
-// SPEC.md section 13: "verdict never shows a spinner longer than 400 ms
-// without showing partial results underneath". this run is spaced at least
-// 800ms per page, so it is always over that line, and the caller cannot
-// show anything underneath a spinner it is given no visibility into.
+// SPEC.md section 13: "verdict never shows a spinner longer than 400 ms without showing partial
+// results underneath". this run is spaced at least 800ms per page, so it is always over that line,
+// and the caller cannot show anything underneath a spinner it is given no visibility into.
 export interface FetchProgress {
   pagesFetched: number;
   maxPages: number;
@@ -18,10 +17,9 @@ export interface FetchProgress {
   reviewCount: number;
 }
 
-// PRIVACY.md section 2: a cache hit returns reviews with no text, so the
-// duplication signal is fed the stored minhash signature instead. A fresh
-// fetch carries its text and leaves this empty, which is the same thing
-// score/textNearDuplication.ts does when no cache is supplied at all.
+// PRIVACY.md section 2: a cache hit returns reviews with no text, so the duplication signal is fed
+// the stored minhash signature instead. A fresh fetch carries its text and leaves this empty, which
+// is the same thing score/textNearDuplication.ts does when no cache is supplied at all.
 export interface FetchedReviews {
   reviews: Review[];
   signatures: WeakMap<Review, bigint[]>;
@@ -41,10 +39,9 @@ function defaultDelay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// fetches up to maxPages of reviews in the user's own session, spaced at
-// least 800ms apart with jitter, and caches the combined result. only ever
-// runs when a caller explicitly invokes it: nothing here fetches on import
-// or on page load, per SPEC.md section 9.
+// fetches up to maxPages of reviews in the user's own session, spaced at least 800ms apart with
+// jitter, and caches the combined result. only ever runs when a caller explicitly invokes it:
+// nothing here fetches on import or on page load, per SPEC.md section 9.
 export async function fetchReviewPages(
   options: FetchReviewPagesOptions,
 ): Promise<FetchedReviews> {

@@ -84,21 +84,18 @@ describe("buildReport", () => {
     }
     const { report } = outcome;
 
-    // histogram is [5/30, 0, 0, 0, 25/30]; against organicPrior [0.2]*5 and
-    // injectionKernel [0,0,0,0.5,0.5], constrained least squares (worked
-    // out by hand from ratingDeconvolution.ts's formula) gives
-    // injectedShare = 13/18 = 0.72222.
+    // histogram is [5/30, 0, 0, 0, 25/30]; against organicPrior [0.2]*5 and injectionKernel
+    // [0,0,0,0.5,0.5], constrained least squares (worked out by hand from ratingDeconvolution.ts's
+    // formula) gives injectedShare = 13/18 = 0.72222.
     expect(report.estimatedInorganicShare).toBeCloseTo(13 / 18, 5);
 
-    // linear = -1 + 3 * (13/18) = 7/6, sigmoid(7/6) = 0.76252, unmodified
-    // by an empty calibration curve (combine.ts's applyCalibration
-    // identity). bandFromProbability(0.76252) falls in the fourth
-    // quintile.
+    // linear = -1 + 3 * (13/18) = 7/6, sigmoid(7/6) = 0.76252, unmodified by an empty calibration
+    // curve (combine.ts's applyCalibration identity). bandFromProbability(0.76252) falls in the
+    // fourth quintile.
     expect(report.band).toBe("doubtful");
 
-    // excludedReviewCount = round((13/18) * 30) = round(21.667) = 22;
-    // removing the 22 highest rated reviews (all five star, only 25
-    // exist) leaves 3 fives and 5 ones: mean (3*5 + 5*1) / 8 = 2.5.
+    // excludedReviewCount = round((13/18) * 30) = round(21.667) = 22; removing the 22 highest rated
+    // reviews (all five star, only 25 exist) leaves 3 fives and 5 ones: mean (3*5 + 5*1) / 8 = 2.5.
     expect(report.excludedReviewCount).toBe(22);
     expect(report.adjustedRating).toBeCloseTo(2.5, 5);
     expect(report.claimedRating).toBe(4.6);
@@ -107,12 +104,10 @@ describe("buildReport", () => {
     expect(report.serial).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
     expect(report.evidence).toHaveLength(5);
 
-    // random always returning 0 makes every bootstrap resample 30 copies
-    // of the same review, which collapses its dated span to zero days,
-    // failing the minimum data threshold inside that resample. every
-    // sample is therefore excluded, and the interval degenerates to a
-    // single point at the real probability rather than a meaningless
-    // spread.
+    // random always returning 0 makes every bootstrap resample 30 copies of the same review, which
+    // collapses its dated span to zero days, failing the minimum data threshold inside that
+    // resample. every sample is therefore excluded, and the interval degenerates to a single point
+    // at the real probability rather than a meaningless spread.
     expect(report.confidence.low).toBeCloseTo(report.confidence.high, 10);
   });
 

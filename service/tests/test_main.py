@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 
 from fastapi.testclient import TestClient
@@ -21,17 +22,15 @@ def contribution_edge(
 
 
 def test_lifespan_starts_and_stops_without_error():
-    # TestClient used as a context manager runs main.py's lifespan
-    # startup and shutdown, the only way asyncio.create_task's scheduled
-    # loop ever runs at all: this is a smoke test that the wiring itself
-    # (the import, the task creation, the cancel on shutdown) is sound,
-    # not a test of RECOMPUTE_INTERVAL_SECONDS's hour long cadence.
+    # testClient used as a context manager runs main.py's lifespan startup and shutdown, the only
+    # way asyncio.create_task's scheduled loop ever runs at all: this is a smoke test that the
+    # wiring itself (the import, the task creation, the cancel on shutdown) is sound, not a test of
+    # RECOMPUTE_INTERVAL_SECONDS's hour long cadence.
     #
     # imported inside the test, not at module level: test_logging_config.py's
-    # test_importing_main_disables_the_access_logger relies on being the
-    # first thing in the process to import verdict_service.main, and a
-    # module level import here would run at collection time, before any
-    # test body executes, and beat it there.
+    # test_importing_main_disables_the_access_logger relies on being the first thing in the process
+    # to import verdict_service.main, and a module level import here would run at collection time,
+    # before any test body executes, and beat it there.
     from verdict_service.main import app
 
     with TestClient(app):
@@ -39,11 +38,10 @@ def test_lifespan_starts_and_stops_without_error():
 
 
 def test_a_contributed_batch_becomes_a_flagged_lookup_result_once_recomputed():
-    # same tight_group / pad shape as test_pipeline.py and
-    # test_recompute.py's hand checked scenario, submitted through the
-    # real HTTP contribution endpoint this time, then folded into
-    # flagged_hash_store by calling the same job the schedule runs,
-    # directly rather than waiting an hour for it.
+    # same tight_group / pad shape as test_pipeline.py and test_recompute.py's hand checked
+    # scenario, submitted through the real HTTP contribution endpoint this time, then folded into
+    # flagged_hash_store by calling the same job the schedule runs, directly rather than waiting an
+    # hour for it.
     from verdict_service.main import (
         _recompute_job,
         app,
@@ -70,7 +68,7 @@ def test_a_contributed_batch_becomes_a_flagged_lookup_result_once_recomputed():
         assert response.status_code == 200
         assert response.json() == {"accepted": len(edges)}
 
-        _recompute_job()
+        asyncio.run(_recompute_job())
 
         real_prefixes = [full_hash(reviewer)[:4] for reviewer in tight_group]
         padding = [f"{i:04x}" for i in range(65536) if f"{i:04x}" not in real_prefixes]
@@ -84,9 +82,8 @@ def test_a_contributed_batch_becomes_a_flagged_lookup_result_once_recomputed():
     assert full_hash("g1") not in [h for hashes in matches.values() for h in hashes]
 
 
-# the two stores are chosen at import time from an environment variable, so
-# this reloads the module rather than reaching into it: what is being
-# checked is what a deployment actually gets.
+# the two stores are chosen at import time from an environment variable, so this reloads the module
+# rather than reaching into it: what is being checked is what a deployment actually gets.
 class TestStoreSelection:
     @staticmethod
     def _load(monkeypatch, path):

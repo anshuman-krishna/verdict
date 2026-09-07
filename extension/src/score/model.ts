@@ -1,20 +1,17 @@
 import type { CalibrationPoint, CombinerModel } from "./combine";
 import artifact from "./model.json";
 
-// SPEC.md section 4: "output artefact is model.json, a small parameter file
-// bundled into the extension at build time". That file is written by the
-// research pipeline (research/verdict_research/model/cli.py) straight into
-// this directory, so the bundle takes it by import rather than by a copy
-// step somebody has to remember.
+// SPEC.md section 4: "output artefact is model.json, a small parameter file bundled into the
+// extension at build time". That file is written by the research pipeline
+// (research/verdict_research/model/cli.py) straight into this directory, so the bundle takes it by
+// import rather than by a copy step somebody has to remember.
 //
-// model.json states absence rather than implying it. A model that does not
-// exist yet, one exported from a version this build does not understand,
-// and one that is malformed all resolve to null here, and buildReport.ts
-// turns null into { status: "no-model" }. Nothing in this file substitutes
-// a zero, a default coefficient, or an uncalibrated probability, because
-// every one of those would read downstream as a real model reporting no
-// risk, and SPEC.md section 6's minimum data thresholds point the same way:
-// under them the report says "not enough data", never a score.
+// model.json states absence rather than implying it. A model that does not exist yet, one exported
+// from a version this build does not understand, and one that is malformed all resolve to null
+// here, and buildReport.ts turns null into { status: "no-model" }. Nothing in this file substitutes
+// a zero, a default coefficient, or an uncalibrated probability, because every one of those would
+// read downstream as a real model reporting no risk, and SPEC.md section 6's minimum data
+// thresholds point the same way: under them the report says "not enough data", never a score.
 
 export const ARTIFACT_VERSION = 1;
 

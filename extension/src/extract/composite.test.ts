@@ -146,10 +146,9 @@ describe("tracing the new strategies", () => {
   });
 });
 
-// SPEC.md section 9's own rules.json example falls back from an embedded
-// json path to a selector for the reviews field. Before the composite
-// strategy that fallback extracted nothing, so the most important field in
-// the document was the one field with no working fallback.
+// SPEC.md section 9's own rules.json example falls back from an embedded json path to a selector
+// for the reviews field. Before the composite strategy that fallback extracted nothing, so the most
+// important field in the document was the one field with no working fallback.
 describe("reviews through a fallback chain", () => {
   const RULES: RulesDocument = {
     version: 1,

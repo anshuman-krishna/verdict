@@ -1,24 +1,13 @@
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 from verdict_service.graph.contribution_store import ContributionEdge
 
-# api/store.py and graph/contribution_store.py each say, in a comment, that
-# a real deployment would persist what they hold. This is that. Until now a
-# restart lost every contributed edge and every flagged hash, which means a
-# service that can never accumulate the ninety days of edges PRIVACY.md
-# section 8 describes retaining, and a reputation endpoint that answers
-# every lookup with nothing until an hour after the process last started.
-#
-# SQLite, from the standard library, rather than a database server. The
-# write path is one small row per contributed edge arriving at human speed,
-# the read path is a prefix lookup over a single indexed column, and the
-# recompute is a batch scan. None of that wants a second process to operate,
-# back up, and keep patched, and PRIVACY.md section 10 lists server
-# compromise as a threat: one file on a volume is a smaller thing to secure
-# than a network service. It also adds no dependency, which is worth saying
-# out loud rather than discovering later.
+# without this a restart loses every edge, so the ninety days PRIVACY.md section 8 retains never
+# accumulate. sqlite from the standard library: one file on a volume is a smaller thing to secure
+# than a second process, and the load is one row per contribution plus an indexed prefix read
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS contribution_edges (
@@ -41,7 +30,28 @@ CREATE TABLE IF NOT EXISTS flagged_hashes (
 """
 
 
-def connect(path: str | Path) -> sqlite3.Connection:
+# fastapi runs sync handlers in a threadpool and the recompute runs in another thread, so several
+# threads reach one connection. without this they lose writes silently: two concurrent writers and a
+# reader dropped 597 of 600 edges and raised "bad parameter or other API misuse"
+class Database:
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+        self._lock = threading.Lock()
+
+    def read(self, sql: str, params: tuple = ()) -> list[tuple]:
+        with self._lock:
+            return self._connection.execute(sql, params).fetchall()
+
+    def write(self, sql: str, params: tuple = ()) -> int:
+        with self._lock, self._connection:
+            return self._connection.execute(sql, params).rowcount
+
+    def write_many(self, sql: str, rows: list[tuple]) -> None:
+        with self._lock, self._connection:
+            self._connection.executemany(sql, rows)
+
+
+def connect(path: str | Path) -> Database:
     connection = sqlite3.connect(str(path), check_same_thread=False)
     # wal so the hourly recompute's writes do not block a lookup mid batch,
     # and so a lookup never sees a half applied recompute.
@@ -49,17 +59,17 @@ def connect(path: str | Path) -> sqlite3.Connection:
     connection.execute("PRAGMA synchronous=NORMAL")
     connection.executescript(SCHEMA)
     connection.commit()
-    return connection
+    return Database(connection)
 
 
 class SqliteContributionEdgeStore:
     """ContributionEdgeStore backed by a file, so edges survive a restart."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self._connection = connection
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     def add(self, edge: ContributionEdge) -> None:
-        self._connection.execute(
+        self._database.write(
             "INSERT INTO contribution_edges "
             "(reviewer_hash, product_hash, star_rating, week_bucket, verified, "
             "minhash_signature, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -68,85 +78,64 @@ class SqliteContributionEdgeStore:
                 edge.product_hash,
                 edge.star_rating,
                 edge.week_bucket,
-                # sqlite has no boolean, and None has to survive the round
-                # trip as None: PRIVACY.md section 5 sends the verified flag
-                # only when the page carried one, and "not stated" is not
-                # the same claim as "not verified".
+                # "not stated" is not the same claim as "not verified", so None has to survive
                 None if edge.verified is None else int(edge.verified),
                 json.dumps(edge.minhash_signature),
                 edge.received_at,
             ),
         )
-        self._connection.commit()
 
     def list_since(self, cutoff: float) -> list[ContributionEdge]:
-        rows = self._connection.execute(
+        rows = self._database.read(
             "SELECT reviewer_hash, product_hash, star_rating, week_bucket, verified, "
             "minhash_signature, received_at FROM contribution_edges "
             "WHERE received_at >= ? ORDER BY received_at",
             (cutoff,),
-        ).fetchall()
+        )
         return [_edge(row) for row in rows]
 
     def prune_older_than(self, cutoff: float) -> int:
-        cursor = self._connection.execute(
+        return self._database.write(
             "DELETE FROM contribution_edges WHERE received_at < ?", (cutoff,)
         )
-        self._connection.commit()
-        return cursor.rowcount
 
 
 class SqliteFlaggedHashStore:
     """FlaggedHashStore backed by a file, so a restart does not unflag everyone."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self._connection = connection
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     def matches(self, prefix: str) -> list[str]:
         if prefix == "":
-            rows = self._connection.execute("SELECT full_hash FROM flagged_hashes").fetchall()
-            return [row[0] for row in rows]
+            return [row[0] for row in self._database.read("SELECT full_hash FROM flagged_hashes")]
         upper = _prefix_upper_bound(prefix)
         if upper is None:
-            # no representable bound, so fall back to comparing in python
-            # rather than answering a lookup wrongly. Unreachable through
-            # api/reputation.py, which only accepts hex.
-            rows = self._connection.execute("SELECT full_hash FROM flagged_hashes").fetchall()
+            # no representable bound; unreachable through api/reputation.py, which accepts only hex
+            rows = self._database.read("SELECT full_hash FROM flagged_hashes")
             return [row[0] for row in rows if row[0].startswith(prefix)]
-        # a range over the primary key, not LIKE or GLOB. It uses the index,
-        # and it cannot be made to mean something else by a prefix
-        # containing a pattern character, which matters because a store
-        # should not depend on its caller having validated the input.
-        rows = self._connection.execute(
+        # a range, not LIKE or GLOB: uses the index, and a pattern character cannot change its
+        # meaning
+        rows = self._database.read(
             "SELECT full_hash FROM flagged_hashes WHERE full_hash >= ? AND full_hash < ?",
             (prefix, upper),
-        ).fetchall()
+        )
         return [row[0] for row in rows]
 
     def add(self, full_hash: str) -> None:
-        self._connection.execute(
+        self._database.write(
             "INSERT OR IGNORE INTO flagged_hashes (full_hash) VALUES (?)", (full_hash,)
         )
-        self._connection.commit()
 
     def add_many(self, hashes: list[str]) -> None:
         """record a whole recompute's flagged hashes in one transaction."""
-        # graph/recompute.py folds in every hash a run flagged, and a run
-        # over a real edge set flags many. One commit each would make an
-        # hourly batch job into thousands of fsyncs.
-        #
-        # Additive, like add, and deliberately not a replace: PRIVACY.md
-        # section 8 keeps derived community assignments after their source
-        # edges age out of retention, so a hash flagged by a past run must
-        # survive a later run that no longer sees the edges which flagged
-        # it. There is no remove here for the same reason recompute.py
-        # gives: nothing in this pipeline is a considered decision to lift
-        # a flag, only an artifact of which edges are still retained.
-        with self._connection:
-            self._connection.executemany(
-                "INSERT OR IGNORE INTO flagged_hashes (full_hash) VALUES (?)",
-                [(full_hash,) for full_hash in hashes],
-            )
+        # one commit, not thousands of fsyncs per run. additive, never a replace: PRIVACY.md section
+        # 8 keeps assignments after their edges age out, and nothing here is a decision to lift a
+        # flag
+        self._database.write_many(
+            "INSERT OR IGNORE INTO flagged_hashes (full_hash) VALUES (?)",
+            [(full_hash,) for full_hash in hashes],
+        )
 
 
 def _edge(row: tuple) -> ContributionEdge:

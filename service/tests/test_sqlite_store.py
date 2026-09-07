@@ -134,10 +134,9 @@ class TestFlaggedHashes:
         assert store.matches("abcd") == ["abcd1111"]
 
 
-# the whole point: a restart used to lose every contributed edge, so the
-# service could never accumulate the ninety days PRIVACY.md section 8
-# describes retaining, and answered every lookup with nothing until an hour
-# after the process last started.
+# the whole point: a restart used to lose every contributed edge, so the service could never
+# accumulate the ninety days PRIVACY.md section 8 describes retaining, and answered every lookup
+# with nothing until an hour after the process last started.
 class TestSurvivingARestart:
     def test_edges_are_still_there_after_reopening_the_file(self, tmp_path):
         path = tmp_path / "verdict.db"
@@ -162,15 +161,14 @@ class TestSurvivingARestart:
 
 def test_connect_uses_write_ahead_logging(tmp_path):
     # so the hourly recompute's writes do not block a lookup mid batch
-    connection = connect(tmp_path / "verdict.db")
-    assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    database = connect(tmp_path / "verdict.db")
+    assert database.read("PRAGMA journal_mode")[0][0] == "wal"
 
 
 def test_the_edge_table_is_indexed_on_what_every_query_filters_by(tmp_path):
-    connection = connect(tmp_path / "verdict.db")
-    indexes = connection.execute(
+    indexes = connect(tmp_path / "verdict.db").read(
         "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='contribution_edges'"
-    ).fetchall()
+    )
     assert any("received_at" in row[0] for row in indexes)
 
 

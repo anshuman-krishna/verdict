@@ -2,12 +2,8 @@ import { browser } from "wxt/browser";
 import { getGraphContributionEnabled, setReputationLookupEnabled } from "../storage/settings";
 import { DEFAULT_REPUTATION_ENDPOINT } from "./endpoint";
 
-// SPEC.md section 4: the reviewer graph service is opt in. wxt.config.ts
-// declares api.verdict.tools under optional_host_permissions rather than
-// host_permissions, so nobody installing Verdict is asked to grant it: the
-// browser only prompts here, at the moment someone actually turns the
-// toggle on, per chrome.permissions.request()'s own requirement that it
-// run inside a user gesture (the checkbox's own change event).
+// optional rather than declared, so nobody is asked at install. the prompt happens inside the
+// checkbox's own change event, which permissions.request requires
 
 export interface PermissionApi {
   request: (origins: string[]) => Promise<boolean>;
@@ -28,21 +24,12 @@ export interface SetReputationLookupOptions {
   endpoint?: string;
   permissionApi?: PermissionApi;
   setEnabled?: (enabled: boolean) => Promise<unknown>;
-  // graph/endpoint.ts's contribution endpoint lives on the same
-  // api.verdict.tools origin as this one, so they share one granted host
-  // permission. Releasing it here would silently break contribution if
-  // that toggle is still on, so turning reputation lookup off only
-  // releases the permission when this also reports false.
+  // contribution shares this origin, so the permission is only released when neither toggle needs it
   isGraphContributionStillEnabled?: () => Promise<boolean>;
 }
 
-// turning the toggle on requests the host permission first and only
-// persists the setting if it was granted; turning it off persists the
-// setting and releases the permission, the least privilege state for
-// someone who no longer wants this running, unless graph contribution
-// still needs the same origin. Returns the state that actually ended up
-// stored, since a denied request means "on" did not happen, which the
-// caller (the options page) needs to re-render.
+// on persists only if the permission was granted; off releases it unless contribution still needs it.
+// returns what was actually stored, since a denied request means the toggle did not turn on
 export async function setReputationLookupWithPermission(
   enabled: boolean,
   options: SetReputationLookupOptions = {},

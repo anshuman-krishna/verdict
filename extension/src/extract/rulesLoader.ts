@@ -7,12 +7,7 @@ import { sanitiseRulesDocument } from "./validateRules";
 // loader that verifies with it, wherever a caller looks for it
 export { canonicalJson };
 
-// SPEC.md section 9: "rules are fetched at most once a day, cached,
-// signed, and version pinned. a signature failure falls back to the
-// bundled copy and never blocks analysis." the signing scheme (ecdsa,
-// p-256, over a canonical json encoding of the rules document) is not
-// specified there, it is a build infrastructure choice, made for broad,
-// long standing support in both chrome's and firefox's webcrypto.
+// SPEC.md section 9. ecdsa p-256 is a build choice, for support in both browsers' webcrypto
 
 export interface SignedRulesEnvelope {
   rules: RulesDocument;
@@ -29,26 +24,21 @@ export interface RulesLoaderOptions {
   url: string;
   publicKeyJwk: JsonWebKey;
   bundledDefault: RulesDocument;
+  // a field the loader had to drop is a fix that silently did not apply, so it is said out loud
+  // rather than computed and discarded
+  onProblems?: (problems: readonly string[]) => void;
   cacheKey: string;
   cacheTtlMs?: number;
   fetchImpl?: typeof fetch;
   now?: () => number;
-  // amazon.content.ts awaits loadRules before it renders anything: a
-  // fetch with no cap at all would mean a slow or hung endpoint could
-  // stall every single product page open, not just today's, since the
-  // ttl means this rarely runs again once it succeeds. a build
-  // infrastructure choice, not a ratified number; short because
-  // the payload is a small json file, not because anything downstream
-  // needs it to be.
+  // content scripts await this, so an uncapped fetch would stall every product page open
   fetchTimeoutMs?: number;
 }
 
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 
-// the .slice() copies into a plain ArrayBuffer, since some typescript lib
-// versions type Uint8Array.from's backing buffer as ArrayBufferLike, which
-// webcrypto's BufferSource does not accept
+// .slice() copies into a plain ArrayBuffer, which webcrypto's BufferSource requires
 function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)).slice();
 }
@@ -74,9 +64,12 @@ async function verifySignature(
   }
 }
 
-// never throws. any failure, network, a bad response, a signature that
-// does not verify, or a fetched version older than one already trusted,
-// falls back to the bundled default rather than blocking analysis.
+// never throws: every failure falls back to the bundled default rather than blocking analysis
+function reportProblems(options: RulesLoaderOptions, problems: readonly string[]): void {
+  const report = options.onProblems ?? ((lines) => console.warn("verdict rules:", ...lines));
+  report(problems);
+}
+
 export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocument> {
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -94,27 +87,23 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
       return options.bundledDefault;
     }
     const envelope = (await response.json()) as SignedRulesEnvelope;
-    // the signature is verified against the document exactly as sent, so
-    // this happens before any sanitising: checking a document we already
-    // edited would be checking something nobody signed.
+    // before any sanitising: checking a document we already edited checks something nobody signed
     const verified = await verifySignature(envelope.rules, envelope.signature, options.publicKeyJwk);
     if (!verified) {
       return options.bundledDefault;
     }
 
-    // a signature says who wrote this, not that it is a rules document.
-    // validateRules.ts drops the fields this build cannot use and refuses a
-    // document with none left, so a correctly signed but broken file falls
-    // back rather than quietly extracting nothing.
+    // a signature says who wrote this, not that it is a rules document
     const sanitised = sanitiseRulesDocument(envelope.rules);
     if (sanitised === null) {
+      reportProblems(options, ["the fetched document is not a rules document this build can use"]);
       return options.bundledDefault;
     }
+    if (sanitised.problems.length > 0) {
+      reportProblems(options, sanitised.problems);
+    }
 
-    // version pinned: never accept a document older than whatever this
-    // extension already trusts, whether that is a previous fetch or the
-    // bundled default, so a compromised or stale mirror cannot roll back
-    // a fix that a newer rules version made.
+    // so a compromised or stale mirror cannot roll back a fix a newer version made
     const trustedVersion = cached?.rules.version ?? options.bundledDefault.version;
     if (sanitised.rules.version < trustedVersion) {
       return options.bundledDefault;

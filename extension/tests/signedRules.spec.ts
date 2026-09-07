@@ -8,14 +8,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { BUNDLED_AMAZON_RULES } from "../src/extract/bundledRules";
 import { loadRules, type SignedRulesEnvelope } from "../src/extract/rulesLoader";
 
-// the whole SPEC.md section 9 path, end to end: a document signed by the
-// real scripts/sign-rules.mjs and verified by the extension that has to
-// trust it. The two halves share one canonical encoding and one validator,
-// and this is what proves they agree rather than merely intending to.
+// the whole SPEC.md section 9 path, end to end: a document signed by the real scripts/sign-
+// rules.mjs and verified by the extension that has to trust it. The two halves share one canonical
+// encoding and one validator, and this is what proves they agree rather than merely intending to.
 //
-// The keypair is generated here and thrown away with the temp directory. A
-// private key in a repository is a private key that has leaked, so there is
-// no committed fixture for this and there should not be.
+// the keypair is generated here and thrown away with the temp directory. A private key in a
+// repository is a private key that has leaked, so there is no committed fixture for this and there
+// should not be.
 
 const SCRIPT = resolve(import.meta.dirname, "..", "scripts", "sign-rules.mjs");
 
@@ -123,9 +122,8 @@ describe("what the publishing script refuses to sign", () => {
     expect(refusal({ ...RULES, fields: {} })).toMatch(/refusing to sign/);
   });
 
-  // the loader drops an unusable field so the rest of a document still
-  // delivers its fixes. A publisher signing one would be shipping a fix
-  // that silently does not apply.
+  // the loader drops an unusable field so the rest of a document still delivers its fixes. A
+  // publisher signing one would be shipping a fix that silently does not apply.
   it("refuses a field the extension would discard on arrival", () => {
     const rules = { ...RULES, fields: { ...RULES.fields, extra: { strategy: "from-the-future" } } };
     expect(refusal(rules)).toMatch(/would discard extra/);

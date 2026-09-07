@@ -1,22 +1,13 @@
 #!/usr/bin/env node
-// Deployment tooling for SPEC.md section 9's signed remote rules, the other
-// half of extract/rulesLoader.ts's verifySignature. Nothing in this
-// repository runs this automatically: PLAN.md week 7 calls the real remote
-// rules infrastructure a deployment decision, which starts with a real
-// keypair whose private half lives in a secrets store, never here. This is
-// what someone runs by hand, once that keypair exists.
+// the other half of rulesLoader.ts's verifySignature. run by hand, once a real keypair exists whose
+// private half lives in a secrets store rather than here.
 //
-// Usage:
+// usage:
 //   just sign-rules --key path/to/private-key.jwk.json
 //   node scripts/sign-rules.mjs --key <path> [--rules <path>] [--out <path>]
 //
-// --rules defaults to the document the extension bundles, so signing
-// publishes exactly what the next build would ship, and --out defaults to
-// the path the site serves it from (extract/remoteRules.ts's
-// REMOTE_RULES_URL).
-//
-// --key must be a JSON Web Key for a P-256 ECDSA private key, the same
-// curve rulesLoader.ts verifies against. To make a keypair:
+// --rules defaults to the document the extension bundles, --out to the path the site serves.
+// --key must be a p-256 ecdsa private jwk, the curve rulesLoader.ts verifies against. to make one:
 //   node -e "
 //     const { webcrypto } = require('crypto');
 //     webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])

@@ -8,10 +8,9 @@ import {
   listDueContributions,
 } from "./queue";
 
-// tests in this file share one fake IndexedDB for the whole file (the
-// same convention storage/history.test.ts uses), so each test that needs
-// a known starting state clears whatever earlier tests left behind
-// first, rather than assuming isolation it does not have.
+// tests in this file share one fake IndexedDB for the whole file (the same convention
+// storage/history.test.ts uses), so each test that needs a known starting state clears whatever
+// earlier tests left behind first, rather than assuming isolation it does not have.
 const FAR_FUTURE = 10_000_000_000_000;
 
 async function clearQueue(): Promise<void> {

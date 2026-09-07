@@ -7,15 +7,13 @@ import { buildReport } from "../src/score/buildReport";
 import { meetsMinimumDataThresholds } from "../src/score/featureVector";
 import { PLACEHOLDER_PRIORS } from "../src/score/priors";
 
-// SPEC.md section 14's first acceptance criterion covers four locales.
-// Before extract/normalise.ts, three of them could not reach a score at
-// all: score/featureVector.ts's dayIndex needs an iso date, and a page
-// saying "Commenté en France le 3 janvier 2026" or "8.043" produced either
-// a timezone dependent day or a rating of 4 instead of 4.6.
+// SPEC.md section 14's first acceptance criterion covers four locales. Before extract/normalise.ts,
+// three of them could not reach a score at all: score/featureVector.ts's dayIndex needs an iso
+// date, and a page saying "Commenté en France le 3 janvier 2026" or "8.043" produced either a
+// timezone dependent day or a rating of 4 instead of 4.6.
 //
-// The pages below are synthetic, and none of them is a fixture: they carry
-// no expectation about any real listing, only the number and date shapes
-// each storefront writes.
+// the pages below are synthetic, and none of them is a fixture: they carry no expectation about any
+// real listing, only the number and date shapes each storefront writes.
 
 const RULES: RulesDocument = {
   version: 1,
@@ -112,9 +110,8 @@ describe.each(SHAPES)("extraction on amazon.$locale", (shape) => {
     expect(reviews.every((review) => /^\d{4}-\d{2}-\d{2}$/.test(review.date ?? ""))).toBe(true);
   });
 
-  // the whole point: before normalisation the dates parsed to NaN or to a
-  // local midnight, the history span came out NaN, and every one of these
-  // pages reported "not enough data" forever.
+  // the whole point: before normalisation the dates parsed to NaN or to a local midnight, the
+  // history span came out NaN, and every one of these pages reported "not enough data" forever.
   it("clears the section 6 minimum data thresholds", () => {
     expect(meetsMinimumDataThresholds(extractReviews(document, RULES, shape.locale))).toBe(true);
   });

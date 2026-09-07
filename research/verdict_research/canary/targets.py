@@ -4,18 +4,9 @@ from typing import Any
 
 from verdict_research.canary.check import CanaryTarget
 
-# which listings the canary watches is a data choice, not a code one: they
-# are long lived pages the maintainer picked, one or more per locale, with a
-# floor read off what extraction has reliably found there before. So they
-# live in a json file rather than in this module, and nothing here supplies
-# a default target, a default floor, or a guess at either.
-#
-# Every parse failure is loud, for the same reason the fixture corpus
-# reader's are (extension/src/fixtures/expectation.ts): a target silently
-# skipped is a locale nobody is watching, reported as a locale with no
-# problems.
-#
-# The file is a json array. canary-targets.example.json shows the shape:
+# which listings to watch is a data choice, so targets live in a json file and nothing here supplies
+# a default. every parse failure is loud: a target skipped quietly is a locale nobody is watching,
+# reported as a locale with no problems. canary-targets.example.json shows the shape:
 #
 #   site                    the storefront, matching rules.json's "site"
 #   locale                  the suffix, so com, fr, de or co.uk

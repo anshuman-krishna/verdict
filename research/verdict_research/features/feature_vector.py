@@ -35,17 +35,15 @@ _ISO_DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _HAS_EXPLICIT_ZONE = re.compile(r"Z$|[+-]\d{2}:\d{2}$")
 
 
-# a zone-less datetime string ("2024-03-15T10:00:00") is ambiguous about
-# which timezone it means, while a date-only string ("2024-03-15") is not,
-# by convention utc midnight. rather than let that ambiguity make this
-# function's output depend on the machine's timezone, a datetime with a time
+# a zone-less datetime string ("2024-03-15T10:00:00") is ambiguous about which timezone it means,
+# while a date-only string ("2024-03-15") is not, by convention utc midnight. rather than let that
+# ambiguity make this function's output depend on the machine's timezone, a datetime with a time
 # component must carry an explicit "Z" or offset, and anything else raises.
 def day_index(iso: str) -> int:
     if "T" not in iso:
-        # the same shape check extension/src/score/featureVector.ts makes.
-        # Without it a page's own date string ("3 janvier 2026") reaches the
-        # int() calls below and raises a slicing error that says nothing
-        # about what was actually wrong.
+        # the same shape check extension/src/score/featureVector.ts makes. Without it a page's own
+        # date string ("3 janvier 2026") reaches the int() calls below and raises a slicing error
+        # that says nothing about what was actually wrong.
         if not _ISO_DATE_ONLY.fullmatch(iso):
             raise ValueError(f"day_index requires an iso date with no ambiguous zone: {iso}")
         year, month, day = int(iso[0:4]), int(iso[5:7]), int(iso[8:10])
@@ -114,9 +112,8 @@ def derive_inside_burst(reviews: list[Review], min_day: int, bursts: list[Burst]
 
 @dataclass
 class FeatureVectorInputs:
-    # per SPEC.md 5.1, estimated per product category from the negative
-    # corpus, which does not exist yet. supplied by the caller rather than
-    # computed here.
+    # per SPEC.md 5.1, estimated per product category from the negative corpus, which does not exist
+    # yet. supplied by the caller rather than computed here.
     organic_prior: list[float]
     injection_kernel: list[float]
     window_days: int = 28

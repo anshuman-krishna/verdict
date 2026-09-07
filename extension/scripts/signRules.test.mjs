@@ -67,11 +67,9 @@ describe("publishProblems", () => {
   });
 });
 
-// the encoding a signature is computed over. This is the same function
-// rulesLoader.ts verifies with, imported rather than copied, because a
-// drift between two copies would not fail anything: every published
-// document would just stop verifying and every extension would fall back,
-// silently.
+// the encoding a signature is computed over. This is the same function rulesLoader.ts verifies
+// with, imported rather than copied, because a drift between two copies would not fail anything:
+// every published document would just stop verifying and every extension would fall back, silently.
 describe("canonicalJson", () => {
   it("is the loader's own encoding, not a second implementation", async () => {
     const loader = await import("../src/extract/canonicalJson.ts");

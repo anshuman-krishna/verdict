@@ -62,10 +62,9 @@ describe("buildReportVocabulary", () => {
   });
 });
 
-// the guard that makes any of this worth doing. A band colour is DESIGN.md
-// section 4's and what a band means is anshuman's; changing one and
-// forgetting to regenerate would leave the panel showing the new colour and
-// the website the old one, for the same report, with nothing saying so.
+// the guard that makes any of this worth doing. A band colour is DESIGN.md section 4's and what a
+// band means is anshuman's; changing one and forgetting to regenerate would leave the panel showing
+// the new colour and the website the old one, for the same report, with nothing saying so.
 describe("the committed vocabulary the site reads", () => {
   it("is what the extension currently defines", () => {
     expect(readFileSync(COMMITTED, "utf8")).toBe(

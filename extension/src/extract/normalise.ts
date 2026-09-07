@@ -1,23 +1,7 @@
-// SPEC.md section 14 wants correct extraction across at least four locales,
-// and score/featureVector.ts's dayIndex requires an ISO date. A page does
-// not carry either: amazon writes "8,043 global ratings" on .com, "8.043
-// Sternebewertungen" on .de, and dates as "3 janvier 2026" or "Reviewed in
-// the United States on January 3, 2026".
-//
-// Passing those straight through is worse than failing on them. parseFloat
-// reads "8,043" as 8 and "4,6" as 4, and Date.parse accepts "3 janvier
-// 2026" on v8 as a favour, returning local midnight, so the same review
-// lands on different days depending on the reader's timezone and a burst
-// boundary moves with it. Both are silent.
-//
-// So this module turns what a page says into what the scorer requires, and
-// returns null for anything it cannot read rather than a number that looks
-// fine. Nothing here guesses: the locale decides which separator is which,
-// and an unrecognised locale normalises nothing at all.
-//
-// Kept in code rather than in rules.json, unlike the selectors beside it.
-// SPEC.md section 9's reason for rules being data is that selectors change
-// constantly. Month names and decimal separators do not.
+// parseFloat reads "8,043" as 8 and "4,6" as 4, and v8's Date.parse reads "3 janvier 2026" as local
+// midnight, so the same review lands on a different day per timezone. both fail silently.
+// null rather than a guess for anything a locale cannot read. an unknown locale normalises nothing.
+// in code, not rules.json: selectors change constantly, month names and separators do not.
 
 export interface LocaleFormat {
   groupSeparators: readonly string[];
@@ -83,8 +67,7 @@ const GERMAN_MONTHS = monthTable([
   ["dezember", "dez"],
 ]);
 
-// the space forms are the ones amazon actually emits in fr and de group
-// separators: a plain space, a no break space, and a narrow no break space.
+// plain, no break, and narrow no break: the three amazon emits as fr and de group separators
 const SPACES = [" ", " ", " "] as const;
 
 export const LOCALE_FORMATS: Readonly<Record<string, LocaleFormat>> = {
@@ -120,18 +103,11 @@ export function localeFormat(locale: string): LocaleFormat | null {
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// the first number in the string, read with this locale's separators. Null
-// when the locale is unknown or nothing in the string is a number, never a
-// partial read: "8,043" resolving to 8 is exactly the failure this exists
-// to remove.
 function escapeClass(characters: readonly string[]): string {
   return characters.map((character) => character.replace(/[\\\]^-]/g, "\\$&")).join("");
 }
 
-// a group separator only counts when three digits follow it, so french
-// "4.6" is four, not forty six: a page writing four point six in french
-// writes "4,6". Anything that is not a well formed group is where the
-// number ends.
+// a group separator counts only with three digits after it, so french "4.6" is four, not forty six
 function numberPattern(format: LocaleFormat): RegExp {
   const group = escapeClass(format.groupSeparators);
   const decimal = escapeClass([format.decimalSeparator]);
@@ -140,10 +116,7 @@ function numberPattern(format: LocaleFormat): RegExp {
   );
 }
 
-// the first number in the string, read with this locale's separators. Null
-// when the locale is unknown or nothing in the string is a number, never a
-// partial read: "8,043" resolving to 8 is exactly the failure this exists
-// to remove.
+// null rather than a partial read: "8,043" resolving to 8 is the failure this exists to remove
 export function normaliseNumber(raw: string, locale: string): number | null {
   const format = localeFormat(locale);
   if (format === null) {
@@ -175,10 +148,7 @@ function tokenise(raw: string): Token[] {
   return tokens;
 }
 
-// "YYYY-MM-DD", or null. Reads an already ISO date unchanged, a date
-// written with a month name in this locale's language, or a date written
-// only in digits, in this locale's order. Everything else is null: a date
-// the scorer cannot place is better than one placed in the wrong month.
+// a date the scorer cannot place beats one placed in the wrong month, so anything unreadable is null
 export function normaliseDate(raw: string, locale: string): string | null {
   const trimmed = raw.trim();
   const iso = ISO_DATE.exec(trimmed);
@@ -202,9 +172,7 @@ function fromMonthName(raw: string, format: LocaleFormat): string | null {
   }
   const month = format.months.get((tokens[monthIndex] as Token).text) as number;
 
-  // nearest outward from the month, so a stray number elsewhere in the
-  // sentence ("5 out of 5 stars, reviewed on 3 January 2026") does not win
-  // over the one actually beside it.
+  // nearest to the month, so "5 out of 5 stars, reviewed on 3 January 2026" does not read as the 5th
   const yearIndex = nearestNumber(tokens, monthIndex, (text) => text.length === 4);
   if (yearIndex === null) {
     return null;
@@ -261,15 +229,12 @@ function fromDigits(raw: string, format: LocaleFormat): string | null {
   return buildDate(year, month, day);
 }
 
-// a two digit year is read as this century. Amazon does not write them, so
-// this only ever fires on a page shape nobody has seen; reading 26 as 1926
-// would be a stranger guess than reading it as 2026.
+// amazon does not write two digit years; if one appears, this century is the less strange guess
 function expandYear(year: number, digits: number): number {
   return digits === 2 ? 2000 + year : year;
 }
 
-// round trips through Date.UTC so an impossible date (31 february, month
-// 13) comes back null rather than rolling silently into the next month.
+// round trips through Date.UTC so 31 february comes back null instead of rolling into march
 function buildDate(year: number, month: number, day: number): string | null {
   if (!Number.isInteger(year) || year < 1000 || year > 9999) {
     return null;

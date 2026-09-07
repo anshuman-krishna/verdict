@@ -136,10 +136,9 @@ describe("mountResult", () => {
     }
   });
 
-  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms
-  // without showing partial results underneath." A review fetch is spaced
-  // at least 800ms per page, so the busy notice has to carry something
-  // from the moment it appears, and has to keep it current as pages land.
+  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms without showing partial
+  // results underneath." A review fetch is spaced at least 800ms per page, so the busy notice has
+  // to carry something from the moment it appears, and has to keep it current as pages land.
   it("shows partial results under the busy notice from the moment checking starts", async () => {
     const reviews = Array.from({ length: 4 }, (_, i) => ({
       rating: 5,
@@ -205,9 +204,8 @@ describe("mountResult", () => {
       `Reading up to ${DEFAULT_MAX_PAGES} more pages of reviews.`,
     );
 
-    // every page came back empty, so the run ends back on a fresh notice.
-    // waited on rather than left running, so the chain cannot settle into
-    // a later test's document.
+    // every page came back empty, so the run ends back on a fresh notice. waited on rather than
+    // left running, so the chain cannot settle into a later test's document.
     await vi.waitFor(() => {
       expect(document.body.querySelector("verdict-notice")).not.toBe(notice);
     });

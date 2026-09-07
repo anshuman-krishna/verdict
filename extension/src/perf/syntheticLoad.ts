@@ -1,13 +1,11 @@
 import type { Review } from "../extract/types";
 
-// load for the timing harness, not data. Nothing here is a fixture and
-// nothing here carries a label: the corpus in extension/fixtures and the
-// labelled corpus in research/ are both hand built (SPEC.md section 12).
-// What this has to be realistic about is only the shape that costs time:
-// how many reviews, how much text each carries, how many of them are near
-// duplicates of each other, and how far apart their dates are, since those
-// four are what the minhash, the burst detector, and the bootstrap all
-// scale on.
+// load for the timing harness, not data. Nothing here is a fixture and nothing here carries a
+// label: the corpus in extension/fixtures and the labelled corpus in research/ are both hand built
+// (SPEC.md section 12). What this has to be realistic about is only the shape that costs time: how
+// many reviews, how much text each carries, how many of them are near duplicates of each other, and
+// how far apart their dates are, since those four are what the minhash, the burst detector, and the
+// bootstrap all scale on.
 
 const WORDS = [
   "arrived", "quickly", "quality", "feels", "solid", "battery", "lasts", "about",
@@ -72,9 +70,8 @@ function sentence(random: () => number, words: number): string {
   return parts.join(" ");
 }
 
-// the same reviews as an embedded json block, so the timing run goes
-// through the real extraction path rather than starting from objects the
-// extractor never had to find.
+// the same reviews as an embedded json block, so the timing run goes through the real extraction
+// path rather than starting from objects the extractor never had to find.
 export function syntheticProductPageHtml(reviews: readonly Review[], title: string): string {
   const payload = JSON.stringify({
     title,

@@ -82,10 +82,9 @@ describe("lookupFlaggedReviewers", () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ matches: {} }) });
     });
 
-    // a constant random source makes buildLookupRequest's padding loop
-    // spin forever, since randomHexPrefix keeps producing the same
-    // prefix and the padded set never reaches BUCKET_COUNT; it has to
-    // vary, same as the "posts a request" test above.
+    // a constant random source makes buildLookupRequest's padding loop spin forever, since
+    // randomHexPrefix keeps producing the same prefix and the padded set never reaches
+    // BUCKET_COUNT; it has to vary, same as the "posts a request" test above.
     let counter = 0;
     const varyingRandom = () => {
       counter += 1;

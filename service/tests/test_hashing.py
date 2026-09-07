@@ -25,7 +25,6 @@ class TestReviewerHash:
         assert reviewer_hash("alice", "salt-a") != reviewer_hash("alice", "salt-b")
 
     def test_concatenates_id_and_salt_directly_with_no_separator(self):
-        # this must match extension/src/reputation/lookup.ts's
-        # `${reviewerId}${salt}` exactly, so "ab" + "cd" and "a" + "bcd"
-        # collide the same way on both sides rather than diverging.
+        # this must match extension/src/reputation/lookup.ts's `${reviewerId}${salt}` exactly, so
+        # "ab" + "cd" and "a" + "bcd" collide the same way on both sides rather than diverging.
         assert reviewer_hash("ab", "cd") == reviewer_hash("a", "bcd")

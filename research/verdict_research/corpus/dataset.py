@@ -2,19 +2,9 @@ import json
 import random
 from dataclasses import dataclass, field
 
-# the label corpus and its methodology are anshuman's (SPEC.md section 12):
-# what counts as a positive label, how solicitation groups were read, what
-# goes in the negative set. None of that is decided here. This is the
-# mechanical layer underneath it: a record shape, JSONL read and write,
-# and a deterministic split, the same kind of plumbing PLAN.md week one
-# built for reviews before any signal existed to score them.
-#
-# SPEC.md section 12: "a held out test set is created once, never looked
-# at during development, and used only for the final report." Nothing in
-# this file enforces that discipline, a function cannot, but train_test_
-# split's docstring says so because calling it twice on the same real
-# corpus with different seeds is exactly how that rule gets broken by
-# accident.
+# the mechanical layer under the corpus: a record shape, jsonl io, and a deterministic split. what
+# counts as a label is anshuman's. no function can enforce SPEC.md section 12's "created once, never
+# looked at", but calling this twice with different seeds is how that rule gets broken by accident
 
 
 @dataclass
@@ -60,14 +50,8 @@ def save_jsonl(examples: list[LabeledExample], path: str) -> None:
             handle.write("\n")
 
 
-# a deterministic shuffle and split, seeded so the same corpus and seed
-# always produce the same two sets. Meant for iterating during
-# development on a scratch or synthetic corpus. The real held out set
-# SPEC.md section 12 describes is a one time act, not a repeatable
-# function call: whoever runs this against the actual labelled corpus to
-# create that set should run it exactly once, record the seed and the
-# resulting example ids somewhere durable, and then stop calling it again
-# on that corpus.
+# for iterating on a scratch corpus. the real held out set is a one time act: run this once against
+# the labelled corpus, record the seed and the resulting ids, then stop calling it on that corpus
 def train_test_split(
     examples: list[LabeledExample], test_fraction: float = 0.2, seed: int = 0
 ) -> tuple[list[LabeledExample], list[LabeledExample]]:

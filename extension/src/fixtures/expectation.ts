@@ -1,42 +1,29 @@
-// PLAN.md week 1 task 2 defines the corpus and reserves it for anshuman:
-// the expectation files are ground truth and are written by hand. This
-// module is the reader for that format, never a writer, and it has no
-// default for any expected value.
-//
-// Every parse failure here is loud. A malformed expectation that got
-// skipped quietly would shrink the denominator the pass rate in report.ts
-// is computed against, so a corpus with half its files broken would
-// report a better number than a corpus with none, which is the exact
-// failure PLAN.md's "what to watch for" section is about.
+// a reader, never a writer: expectation files are ground truth and written by hand.
+// every parse failure is loud. one skipped quietly would shrink the pass rate's denominator, so a
+// corpus with half its files broken would score better than a corpus with none
 
 export type Layout = "modern" | "legacy";
 
 const LAYOUTS: readonly string[] = ["modern", "legacy"];
 
 export interface FixtureExpectation {
-  // the page this html was saved from. The harness parses site and locale
-  // back out of it rather than asking for them twice and risking a pair
-  // that disagrees.
+  // the page this html was saved from. The harness parses site and locale back out of it rather
+  // than asking for them twice and risking a pair that disagrees.
   url: string;
   layout: Layout;
   // what the listing claims, read off the page by eye, not the number of
   // reviews the page happens to carry markup for
   reviewCount: number | null;
   claimedRating: number | null;
-  // optional, and checked only when present, because a long amazon title
-  // retyped by hand is a likelier source of a false failure than the
-  // extractor is
+  // optional, and checked only when present, because a long amazon title retyped by hand is a
+  // likelier source of a false failure than the extractor is
   title?: string;
   category?: string;
   // a floor, not an equality: nobody is asked to count review blocks by
   // hand. Absent means the extracted count is reported and not judged.
   minimumExtractedReviews?: number;
-  // PLAN.md week 1 task 7 ends at "38 of 40 or better. Document the two
-  // that fail and why". This is that documentation, in the file the failure
-  // belongs to: a fixture carrying a reason is still counted in the pass
-  // rate SPEC.md section 14 gates on, but it does not fail the per commit
-  // run, so a known gap stays visible instead of being deleted to keep the
-  // suite green.
+  // a documented failure still counts against the pass rate but does not fail the per commit run,
+  // so a known gap stays visible instead of being deleted to keep the suite green
   knownFailure?: string;
   notes?: string;
 }

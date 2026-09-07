@@ -12,20 +12,18 @@ from verdict_research.model.train import (
     predict_probability,
 )
 
-# PLAN.md week 5, "model trained, calibrated, exported, evaluated", as one
-# ordered run rather than four functions a caller has to sequence correctly.
-# The order is the part that is easy to get wrong: SPEC.md section 6 wants
-# the calibration curve fitted on a slice the coefficients never saw, and
-# SPEC.md section 12 wants the test set untouched until the final report.
-# Both are structural, so they live here instead of in a docstring.
+# PLAN.md week 5, "model trained, calibrated, exported, evaluated", as one ordered run rather than
+# four functions a caller has to sequence correctly. The order is the part that is easy to get
+# wrong: SPEC.md section 6 wants the calibration curve fitted on a slice the coefficients never saw,
+# and SPEC.md section 12 wants the test set untouched until the final report. Both are structural,
+# so they live here instead of in a docstring.
 #
-# Which features belong in the model is the calibration target's other half
-# and is anshuman's, so feature_names is required and has no default. This
-# module fits what it is given and reports what it measured.
+# which features belong in the model is the calibration target's other half and is anshuman's, so
+# feature_names is required and has no default. This module fits what it is given and reports what
+# it measured.
 
-# SPEC.md section 14's acceptance criteria for version 0.1, verbatim:
-# "held out precision above 0.80 at recall above 0.50 on the manipulated
-# class" and "expected calibration error below 0.05".
+# SPEC.md section 14's acceptance criteria for version 0.1, verbatim: "held out precision above 0.80
+# at recall above 0.50 on the manipulated class" and "expected calibration error below 0.05".
 MINIMUM_PRECISION = 0.80
 MINIMUM_RECALL = 0.50
 MAXIMUM_EXPECTED_CALIBRATION_ERROR = 0.05
@@ -38,10 +36,9 @@ class OperatingPoint:
     recall: float
 
 
-# section 14 names a point on the curve, not a fixed cutoff: the strongest
-# precision among the thresholds that still clear the recall floor. None
-# when no threshold reaches that floor at all, which is a real answer and
-# not a zero.
+# section 14 names a point on the curve, not a fixed cutoff: the strongest precision among the
+# thresholds that still clear the recall floor. None when no threshold reaches that floor at all,
+# which is a real answer and not a zero.
 def best_operating_point(
     curve: list[ThresholdPoint], minimum_recall: float = MINIMUM_RECALL
 ) -> OperatingPoint | None:
@@ -62,9 +59,8 @@ class SplitSizes:
     train: int
     calibration: int
     test: int
-    # rows dropped because a chosen feature was null on them. Never imputed:
-    # filling a missing signal with a mean is a modelling decision and this
-    # module does not make those.
+    # rows dropped because a chosen feature was null on them. Never imputed: filling a missing
+    # signal with a mean is a modelling decision and this module does not make those.
     dropped_incomplete: int
 
 

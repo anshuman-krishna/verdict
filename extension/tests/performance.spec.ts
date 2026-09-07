@@ -12,24 +12,22 @@ import { PLACEHOLDER_PRIORS } from "../src/score/priors";
 // 1.5 seconds on a mid range laptop, excluding page fetches". This runs the
 // whole user time path: parse the url, interpret the rules over the page,
 // score, and bootstrap the confidence band, which is the expensive half.
-// Page fetches are excluded, as that criterion says; SPEC.md section 9
+// page fetches are excluded, as that criterion says; SPEC.md section 9
 // paces them at 800ms each on purpose, so including them would measure the
 // pacing rather than the work.
 //
-// The load is synthetic (src/perf/syntheticLoad.ts). Timing needs size and
+// the load is synthetic (src/perf/syntheticLoad.ts). Timing needs size and
 // shape, not labels, and nothing here is a fixture or a corpus.
 
-// SPEC.md section 9 fetches five pages by default, which is where the
-// common case comes from. The hard case is several times that, since a
-// budget only measured on the easy path is not a budget.
+// SPEC.md section 9 fetches five pages by default, which is where the common case comes from. The
+// hard case is several times that, since a budget only measured on the easy path is not a budget.
 const DEFAULT_PATH_REVIEWS = 60;
 const HARD_CASE_REVIEWS = 300;
 const RUNS = 5;
 
-// the ratio a linear path would produce is 300/60, or 5. Quadratic would be
-// 25. This is the assertion that actually catches a regression: on a fast
-// machine an accidental O(n squared) still fits inside 1500ms, and only the
-// shape of the growth gives it away.
+// the ratio a linear path would produce is 300/60, or 5. Quadratic would be 25. This is the
+// assertion that actually catches a regression: on a fast machine an accidental O(n squared) still
+// fits inside 1500ms, and only the shape of the growth gives it away.
 const MAXIMUM_GROWTH_RATIO = 10;
 
 const RULES: RulesDocument = {

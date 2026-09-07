@@ -29,10 +29,9 @@ describe("dayIndex", () => {
     expect(() => dayIndex("2024-03-15T10:00:00")).toThrow(/ambiguous zone/);
   });
 
-  // v8 parses all of these and returns local midnight, so before this check
-  // the same review landed on different days for readers in different
-  // timezones. extract/normalise.ts converts them to iso or to null, and
-  // this is what keeps anything else from reaching the burst detector.
+  // v8 parses all of these and returns local midnight, so before this check the same review landed
+  // on different days for readers in different timezones. extract/normalise.ts converts them to iso
+  // or to null, and this is what keeps anything else from reaching the burst detector.
   it.each([
     "3 janvier 2026",
     "3. Januar 2026",

@@ -19,18 +19,9 @@ export const MINIMUM_HISTORY_DAYS = 21;
 
 const MS_PER_DAY = 86_400_000;
 
-// a zone-less datetime string ("2024-03-15T10:00:00") parses as local time
-// per the date spec, while a date-only string ("2024-03-15") parses as utc
-// midnight. that split would make this function's output depend on the
-// machine's timezone, so a datetime with a time component must carry an
-// explicit "Z" or offset, and anything else is rejected rather than guessed.
-//
-// The shape check is the same rule applied to everything else. v8 accepts
-// "3 janvier 2026" as a favour and returns local midnight, so a page's own
-// date string used to land on different days for readers in different
-// timezones, silently. extract/normalise.ts turns those into iso or into
-// null before they ever reach here, which makes this throw unreachable
-// through extraction and leaves it as the guard that keeps it that way.
+// a zoneless datetime parses as local time and a date only string as utc, so the output would depend
+// on the reader's timezone. extract/normalise.ts makes this throw unreachable; it is the guard that
+// keeps it that way
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/;
 
@@ -55,9 +46,7 @@ export function meetsMinimumDataThresholds(reviews: readonly Review[]): boolean 
   return span >= MINIMUM_HISTORY_DAYS;
 }
 
-// buckets star ratings 1 through 5 into proportions, matching the five bin
-// convention ratingDeconvolution's organicPrior and injectionKernel use.
-// null when no review carries a rating at all.
+// five bins, matching ratingDeconvolution's organicPrior and injectionKernel
 export function buildRatingHistogram(reviews: readonly Review[]): number[] | null {
   const rated = reviews.filter((review): review is Review & { rating: number } =>
     review.rating !== null
@@ -114,17 +103,12 @@ export function deriveInsideBurst(
 }
 
 export interface FeatureVectorInputs {
-  // per SPEC.md 5.1, estimated per product category from the negative
-  // corpus, which does not exist yet. supplied by the caller rather than
-  // computed here.
+  // SPEC.md 5.1 estimates these from the negative corpus, which does not exist yet
   organicPrior: readonly number[];
   injectionKernel: readonly number[];
   windowDays?: number;
   percentile?: number;
-  // performance only, see textNearDuplication.ts's signatureCache: a
-  // caller that builds many feature vectors from overlapping review sets
-  // (buildReport.ts's bootstrap, specifically) can share one cache across
-  // all of them. Omitted, behaviour is unchanged.
+  // shared across the bootstrap's resamples; see textNearDuplication.ts's signatureCache
   textNearDuplicationSignatureCache?: TextNearDuplicationOptions["signatureCache"];
 }
 
@@ -136,9 +120,7 @@ export interface FeatureVector {
   textNearDuplication: TextNearDuplicationResult;
 }
 
-// wires the four implemented signals against raw extracted reviews. the
-// combiner that turns this into a probability and a band does not exist
-// yet, that is SPEC.md section 6 and it waits on ground truth.
+// the four implemented signals; the combiner over them waits on ground truth
 export function buildFeatureVector(
   reviews: readonly Review[],
   inputs: FeatureVectorInputs,
@@ -167,10 +149,7 @@ export function buildFeatureVector(
     );
   }
 
-  // passed directly, not wrapped in a fresh { text } object per call: a
-  // stable object reference is what lets textNearDuplicationSignatureCache
-  // recognise the same review across repeated calls. Review already
-  // structurally satisfies ReviewForNearDuplication.
+  // passed by reference, not rewrapped: object identity is what the signature cache keys on
   const duplicationResult = textNearDuplication(reviews, {
     signatureCache: inputs.textNearDuplicationSignatureCache,
   });

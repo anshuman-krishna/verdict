@@ -6,17 +6,15 @@ from pathlib import Path
 
 from verdict_research.canary.check import ExtractionOutcome
 
-# check.py explains why extraction is injected rather than reimplemented
-# here: a second, parallel python copy of the rules interpreter would put
-# two versions of the thing being watched in the repository, one of which
-# nobody ships. This is the adapter that closes that gap by driving the real
-# one.
+# check.py explains why extraction is injected rather than reimplemented here: a second, parallel
+# python copy of the rules interpreter would put two versions of the thing being watched in the
+# repository, one of which nobody ships. This is the adapter that closes that gap by driving the
+# real one.
 #
-# extension/src/canary/cli.ts is bundled to extension/.output/canary/extract.mjs
-# by `just canary-extractor`. It reads html on stdin and writes one json
-# object on stdout. One process per page: a canary run is a handful of urls
-# already spaced 800ms apart, so the spawn cost is invisible next to the
-# fetch it follows.
+# extension/src/canary/cli.ts is bundled to extension/.output/canary/extract.mjs by `just canary-
+# extractor`. It reads html on stdin and writes one json object on stdout. One process per page: a
+# canary run is a handful of urls already spaced 800ms apart, so the spawn cost is invisible next to
+# the fetch it follows.
 
 EXTRACTOR = Path(__file__).resolve().parents[3] / "extension" / ".output" / "canary" / "extract.mjs"
 

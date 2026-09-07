@@ -4,7 +4,7 @@
 // this is generated rather than copied by hand into each page that needs
 // it.
 //
-// Usage:
+// usage:
 //   just export-vocabulary
 //
 // `just check` fails when the committed file no longer matches what the

@@ -1,24 +1,12 @@
 import type { FieldRule, RulesDocument } from "./rules";
 
-// rulesLoader.ts verifies who signed a rules document. Nothing verified
-// that it was a rules document: the fetched json was cast and handed
-// straight to the interpreter. A signature answers "did we write this", not
-// "is this well formed", and a bug in whatever publishes the file would
-// produce something correctly signed and structurally wrong.
-//
-// The failure mode this removes is silent. The interpreter is defensive
-// about selectors, so a malformed rule mostly degrades to zero matches, and
-// zero matches is indistinguishable from a page that changed. Extraction
-// would look broken for a reason no canary could explain.
-//
-// An unusable field is dropped rather than invalidating the document, so a
-// future rules version using a strategy this build predates still delivers
-// every other fix in it. A document with no usable field at all is refused,
-// since that is not a fix, it is an outage.
+// a signature says who wrote a document, not that it is well formed. a malformed rule degrades to
+// zero matches, which is indistinguishable from a page that changed.
+// an unusable field is dropped so the rest of a document still delivers its fixes; a document with
+// none left is refused, since that is an outage rather than a fix
 
-// fallback chains are a handful deep in practice. The cap is here so a
-// pathological document cannot make validation walk as far as the file is
-// long.
+// fallback chains are a handful deep in practice. The cap is here so a pathological document cannot
+// make validation walk as far as the file is long.
 const MAX_FALLBACK_DEPTH = 10;
 
 export interface SanitisedRules {
@@ -122,9 +110,8 @@ function compositeProblem(rule: Record<string, unknown>): string | null {
     return "fields is empty, so every container would yield an empty record";
   }
   for (const [name, sub] of entries) {
-    // a composite's own fields start a fresh chain: they are resolved
-    // against a container, not against the page, so their depth is not
-    // the outer chain's depth.
+    // a composite's own fields start a fresh chain: they are resolved against a container, not
+    // against the page, so their depth is not the outer chain's depth.
     const problem = fieldProblem(sub, 0);
     if (problem !== null) {
       return `field ${name} ${problem}`;

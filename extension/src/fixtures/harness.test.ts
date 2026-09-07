@@ -4,10 +4,9 @@ import type { RulesDocument } from "../extract/rules";
 import type { FixtureExpectation } from "./expectation";
 import { FixtureError, runFixture } from "./harness";
 
-// the html and the expectations below are synthetic and exist to check the
-// harness itself, not extraction. Nothing here is a fixture: the corpus in
-// extension/fixtures is saved real pages with hand written expectations,
-// and this file never touches it.
+// the html and the expectations below are synthetic and exist to check the harness itself, not
+// extraction. Nothing here is a fixture: the corpus in extension/fixtures is saved real pages with
+// hand written expectations, and this file never touches it.
 
 const RULES: RulesDocument = {
   version: 1,

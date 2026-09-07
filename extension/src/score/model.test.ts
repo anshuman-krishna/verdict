@@ -76,9 +76,8 @@ describe("parseModelArtifact", () => {
 });
 
 describe("the committed model.json", () => {
-  // guards the file itself, not the parser: a malformed artifact would
-  // otherwise reach the bundle as a silent null and every report would say
-  // "no model" with nothing explaining why.
+  // guards the file itself, not the parser: a malformed artifact would otherwise reach the bundle
+  // as a silent null and every report would say "no model" with nothing explaining why.
   it("is either the stated absent form or a model that parses", () => {
     const record = committed as Record<string, unknown>;
     expect(record.artifactVersion).toBe(ARTIFACT_VERSION);

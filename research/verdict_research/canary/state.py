@@ -4,14 +4,12 @@ from typing import Any
 
 from verdict_research.canary.check import CanaryResult
 
-# summarize() in check.py takes a run history, not a single run, because the
-# median review count across recent checks is an early warning that a
-# dropping page gives before it outright fails. That history has to survive
-# between runs, so this is where it lives.
+# summarize() in check.py takes a run history, not a single run, because the median review count
+# across recent checks is an early warning that a dropping page gives before it outright fails. That
+# history has to survive between runs, so this is where it lives.
 #
-# Bounded on purpose. A file that grows forever is a file somebody
-# eventually deletes, and losing the whole history to reclaim disk is worse
-# than never having kept more than a month of it.
+# bounded on purpose. A file that grows forever is a file somebody eventually deletes, and losing
+# the whole history to reclaim disk is worse than never having kept more than a month of it.
 
 RUN_HISTORY_VERSION = 1
 DEFAULT_RETAINED_CHECKS = 30
@@ -55,9 +53,8 @@ def write_run_history(path: str | Path, results: list[CanaryResult]) -> None:
     Path(path).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-# keeps the most recent checks per site and locale rather than the most
-# recent checks overall, so adding a locale does not push every other
-# locale's history out.
+# keeps the most recent checks per site and locale rather than the most recent checks overall, so
+# adding a locale does not push every other locale's history out.
 def prune(
     results: list[CanaryResult], retained: int = DEFAULT_RETAINED_CHECKS
 ) -> list[CanaryResult]:

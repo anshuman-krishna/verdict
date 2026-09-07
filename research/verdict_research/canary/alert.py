@@ -4,22 +4,18 @@ from typing import Literal
 
 from verdict_research.canary.check import CanarySummary, Health
 
-# SPEC.md section 13's failure table, the row that has no code behind it:
-# "selectors broken: silent fallback chain, then [not enough data], plus a
-# canary alert to the maintainer." check.py already classifies health per
-# site and locale; this decides which of those classifications are worth
+# SPEC.md section 13's failure table, the row that has no code behind it: "selectors broken: silent
+# fallback chain, then [not enough data], plus a canary alert to the maintainer." check.py already
+# classifies health per site and locale; this decides which of those classifications are worth
 # waking somebody for.
 #
-# Only transitions alert. A locale that has been failing for a week is
-# already known, and re-sending it every run is how a canary becomes
-# something its maintainer filters out of their inbox, which is worse than
-# not having one. Recoveries are sent too, for the same reason in reverse:
-# whoever was told it broke should not have to poll the status page to find
-# out it stopped.
+# only transitions alert. A locale that has been failing for a week is already known, and re-sending
+# it every run is how a canary becomes something its maintainer filters out of their inbox, which is
+# worse than not having one. Recoveries are sent too, for the same reason in reverse: whoever was
+# told it broke should not have to poll the status page to find out it stopped.
 #
-# Transport is injected. Where an alert goes (email, a webhook, a phone) is
-# a deployment decision, and one that needs credentials this repository does
-# not hold.
+# transport is injected. Where an alert goes (email, a webhook, a phone) is a deployment decision,
+# and one that needs credentials this repository does not hold.
 
 Direction = Literal["broke", "worsened", "recovered", "appeared"]
 
@@ -51,10 +47,9 @@ def _direction(previous: Health | None, current: Health) -> Direction | None:
     return "worsened" if current == "failed" else None
 
 
-# compares the run that just finished against the last one, by site and
-# locale. A target present in the previous run and absent from this one is
-# not alerted on: that means somebody removed it from the target list, which
-# is a deliberate act, not a fault.
+# compares the run that just finished against the last one, by site and locale. A target present in
+# the previous run and absent from this one is not alerted on: that means somebody removed it from
+# the target list, which is a deliberate act, not a fault.
 def decide_alerts(previous: list[CanarySummary], current: list[CanarySummary]) -> list[CanaryAlert]:
     previous_by_target = {(row.site, row.locale): row for row in previous}
     alerts = []

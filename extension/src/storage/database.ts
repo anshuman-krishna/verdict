@@ -1,15 +1,7 @@
 const DATABASE_NAME = "verdict";
-// bumped from 1 to 2 to add graphContributionQueue, then from 2 to 3 to
-// clear reviews_cache. onupgradeneeded's own "if not exists, create" guards
-// mean a browser at any earlier version runs the same handler and only the
-// missing stores are added; nothing about history or prefs changes.
-//
-// Version 3 exists because records written before it hold review text, and
-// PRIVACY.md section 2 says that text is never persisted
-// (storage/reviewsCache.ts). Leaving them to expire on their own ttl would
-// leave text on disk for up to seven more days after an update that
-// promises it is not there, so the store is emptied on upgrade instead. The
-// cost is one cold cache after updating, which is a re-fetch, not a loss.
+// 2 added graphContributionQueue; 3 clears reviews_cache, whose older records hold review text.
+// letting those expire on their own ttl would leave text on disk for a week after an update saying
+// it is not there. the cost is one cold cache, which is a re-fetch
 const DATABASE_VERSION = 3;
 
 export const STORE_NAMES = {
@@ -44,10 +36,7 @@ export function openDatabase(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAMES.prefs, { keyPath: "key" });
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.graphContributionQueue)) {
-        // PRIVACY.md section 5: edges wait here for a randomised interval
-        // before being sent, so "readyAt" is indexed to let
-        // graph/queue.ts ask for exactly the ones due without a full
-        // table scan.
+        // indexed so the queue can ask for exactly the edges whose hold has elapsed
         const queue = db.createObjectStore(STORE_NAMES.graphContributionQueue, {
           keyPath: "id",
           autoIncrement: true,
@@ -63,9 +52,8 @@ export function openDatabase(): Promise<IDBDatabase> {
 
 export type WriteResult = { ok: true } | { ok: false; reason: "quota-exceeded" };
 
-// wraps a store.put call so a QuotaExceededError degrades to a typed result
-// instead of an unhandled rejection, matching the project's rule that storage
-// failures never block analysis.
+// wraps a store.put call so a QuotaExceededError degrades to a typed result instead of an unhandled
+// rejection, matching the project's rule that storage failures never block analysis.
 export function put(store: IDBObjectStore, value: unknown): Promise<WriteResult> {
   return new Promise((resolve, reject) => {
     let request: IDBRequest;

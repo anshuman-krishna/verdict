@@ -73,12 +73,10 @@ describe("buildContributionEdge", () => {
   });
 
   it("hashes with whatever salt it is given, since agreeing with reputation lookup's hash is the caller's job, not this function's", async () => {
-    // entrypoints/amazon.content.ts passes REPUTATION_SALT here on
-    // purpose (see that constant's own comment): a community this
-    // protocol's data eventually gets used to flag is only ever
-    // findable through reputation/lookup.ts's reviewerHash if both sides
-    // hashed the same reviewer id under the same salt. This function
-    // does not enforce that; it just uses whatever salt it is handed.
+    // entrypoints/amazon.content.ts passes REPUTATION_SALT here on purpose (see that constant's own
+    // comment): a community this protocol's data eventually gets used to flag is only ever findable
+    // through reputation/lookup.ts's reviewerHash if both sides hashed the same reviewer id under
+    // the same salt. This function does not enforce that; it just uses whatever salt it is handed.
     const a = await buildContributionEdge(review(), "B0", "salt-one");
     const b = await buildContributionEdge(review(), "B0", "salt-one");
     expect(a?.reviewerHash).toBe(b?.reviewerHash);

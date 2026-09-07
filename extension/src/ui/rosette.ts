@@ -6,13 +6,11 @@ import {
   MIN_AMPLITUDE,
 } from "./rosetteConstants";
 
-// DESIGN.md section 7: "every report draws a guilloche rosette generated
-// from the feature vector itself. two harmonics whose frequency ratio comes
-// from the burst and duplication scores, an amplitude from the estimated
-// inorganic share, and a stroke colour from the band." the exact mapping
-// from those three inputs to harmonic numbers and amplitude is not spelled
-// out there, so the constants below are a proposal, not a ratified
-// spec line.
+// DESIGN.md section 7: "every report draws a guilloche rosette generated from the feature vector
+// itself. two harmonics whose frequency ratio comes from the burst and duplication scores, an
+// amplitude from the estimated inorganic share, and a stroke colour from the band." the exact
+// mapping from those three inputs to harmonic numbers and amplitude is not spelled out there, so
+// the constants below are a proposal, not a ratified spec line.
 
 export interface RosetteInput {
   burstShare: number;

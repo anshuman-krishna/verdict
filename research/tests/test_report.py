@@ -90,9 +90,8 @@ class TestEvaluateModel:
         assert report.curve == []
 
     def test_a_custom_decision_threshold_changes_the_headline_confusion_counts(self):
-        # sigmoid(0.4) ~= 0.599: a single actual positive predicted
-        # positive at the lenient default threshold, predicted negative
-        # once the threshold is raised above it.
+        # sigmoid(0.4) ~= 0.599: a single actual positive predicted positive at the lenient default
+        # threshold, predicted negative once the threshold is raised above it.
         examples = [LabeledExample(example_id="a", features={"x": 0.1}, label=1)]
 
         lenient = evaluate_model(MODEL, examples, decision_threshold=0.5)

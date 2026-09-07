@@ -3,22 +3,8 @@ from dataclasses import dataclass
 from statistics import median
 from typing import Literal
 
-# PLAN.md week 7: "reliability, canaries, remote rules, size budget". The
-# site's /status page already names this module and says plainly that
-# nothing behind it exists yet; this is that job's core, not yet wired to
-# a scheduler or a real fetch.
-#
-# The actual extraction rules interpreter lives in extension/src/extract/
-# (TypeScript), and PLAN.md never asks for a second, parallel Python
-# implementation of it, only a Python job that watches whether the real
-# one still works against live pages. Re-implementing selector and
-# embedded-json extraction here would be exactly the "plausible wrong
-# code" PLAN.md warns about for that module, doubled. So fetch_html and
-# extract are both injected: this file owns the scheduling, the health
-# classification, and the aggregation the status page needs, and stays
-# agnostic about how a page becomes a review count. Wiring extract to the
-# real interpreter (most plausibly by shelling out to a small node script
-# that imports it) is future work, not a decision this module makes.
+# fetch_html and extract are injected so this owns scheduling, health and aggregation only. a second
+# python copy of the rules interpreter would be the thing being watched, written twice
 
 Health = Literal["healthy", "degraded", "failed"]
 
@@ -28,10 +14,7 @@ class CanaryTarget:
     site: str
     locale: str
     url: str
-    # a floor specific to this one canary page, set by whoever adds it,
-    # from what extraction has reliably found there before. Not a signal
-    # threshold and not a claim about any other listing, just "this page
-    # dropping below this is itself the anomaly worth a look."
+    # a floor for this page alone, from what extraction has found there. not a signal threshold
     minimum_expected_reviews: int
 
 
@@ -61,9 +44,7 @@ def _classify(outcome: ExtractionOutcome, target: CanaryTarget) -> Health:
     return "healthy"
 
 
-# runs every target once. Never raises: a fetch or extract failure on one
-# target becomes that target's "failed" result rather than aborting the
-# rest of the run, so one broken locale does not hide the others.
+# never raises: one target failing becomes its own result, so a broken locale cannot hide the others
 def run_canary(
     targets: list[CanaryTarget],
     fetch_html: Callable[[str], str],
@@ -107,9 +88,7 @@ def run_canary(
 
 @dataclass(frozen=True)
 class CanarySummary:
-    # the status page's table, one row per site and locale: SITE.md's
-    # columns are last verified, extraction health, rules version, and
-    # median reviews extracted, in that order.
+    # SITE.md's /status columns, in order
     site: str
     locale: str
     last_verified: float
@@ -118,11 +97,7 @@ class CanarySummary:
     median_reviews_extracted: float | None
 
 
-# groups a run history by (site, locale) and reduces it to one row per
-# group: the most recent check's status and rules version, and the median
-# review count across every recorded check, healthy or not, since a
-# dropping median is itself an early warning even before a run outright
-# fails.
+# the median spans every recorded check: a dropping median warns before a run outright fails
 def summarize(results: list[CanaryResult]) -> list[CanarySummary]:
     groups: dict[tuple[str, str], list[CanaryResult]] = {}
     for result in results:

@@ -163,10 +163,9 @@ describe("textNearDuplication", () => {
       const signatureAfterFirstCall = cache.get(shared);
       expect(signatureAfterFirstCall).toBeDefined();
 
-      // mutating the cached entry proves the second call reads it back
-      // rather than recomputing: a freshly computed signature would never
-      // match this corrupted value. It keeps the real permutation count,
-      // since a signature of the wrong length is deliberately not trusted.
+      // mutating the cached entry proves the second call reads it back rather than recomputing: a
+      // freshly computed signature would never match this corrupted value. It keeps the real
+      // permutation count, since a signature of the wrong length is deliberately not trusted.
       const corrupted = Array.from({ length: DEFAULT_NUM_PERMUTATIONS }, () => 999999n);
       cache.set(shared, corrupted);
       const result = textNearDuplication([shared, review("a third, different review text")], {

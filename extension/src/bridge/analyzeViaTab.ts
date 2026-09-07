@@ -1,19 +1,15 @@
 import type { ReportOutcome } from "../score/buildReport";
 
-// SPEC.md section 11: "the site can request an analysis of a pasted
-// product url, and the extension performs the fetch in the user's own
-// session and returns the report." The one place in the codebase that
-// already knows how to do exactly that is amazon.content.ts, which runs
-// on every amazon page load with the user's real session. Rather than a
-// second, parallel extraction path in the background service worker
-// (which has no DOM, so no DOMParser, so no way to run
-// extract/reviewExtraction.ts's selectors or embedded-json lookups at
-// all), this opens the url in a background tab, lets that content script
-// run exactly as it always does, and relays its result back over
-// contentScript/internalMessages.ts. createTab and removeTab need no
-// manifest permission: chrome.tabs.create/remove work unconditionally,
-// only reading a tab's own url or title back out needs "tabs" or a host
-// permission, and this only ever reads the created tab's id.
+// SPEC.md section 11: "the site can request an analysis of a pasted product url, and the extension
+// performs the fetch in the user's own session and returns the report." The one place in the
+// codebase that already knows how to do exactly that is amazon.content.ts, which runs on every
+// amazon page load with the user's real session. Rather than a second, parallel extraction path in
+// the background service worker (which has no DOM, so no DOMParser, so no way to run
+// extract/reviewExtraction.ts's selectors or embedded-json lookups at all), this opens the url in a
+// background tab, lets that content script run exactly as it always does, and relays its result
+// back over contentScript/internalMessages.ts. createTab and removeTab need no manifest permission:
+// chrome.tabs.create/remove work unconditionally, only reading a tab's own url or title back out
+// needs "tabs" or a host permission, and this only ever reads the created tab's id.
 
 export type TabRelayOutcome =
   | ReportOutcome
@@ -31,9 +27,8 @@ export interface TabRelayDeps {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-// adapters, not setTimeout/clearTimeout directly: the two disagree on
-// the handle type across DOM and node's lib typings, and TabRelayDeps
-// deliberately does not care which runtime it is either.
+// adapters, not setTimeout/clearTimeout directly: the two disagree on the handle type across DOM
+// and node's lib typings, and TabRelayDeps deliberately does not care which runtime it is either.
 function defaultSetTimeout(handler: () => void, ms: number): unknown {
   return setTimeout(handler, ms);
 }

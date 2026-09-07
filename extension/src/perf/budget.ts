@@ -1,8 +1,7 @@
-// SPEC.md section 14: "full analysis under 1.5 seconds on a mid range
-// laptop, excluding page fetches". The excluding clause is why this
-// measures extraction plus scoring and nothing else: the fetches in
-// SPEC.md section 9 are paced at 800ms per page by design, and folding
-// them in would measure the pacing rather than the work.
+// SPEC.md section 14: "full analysis under 1.5 seconds on a mid range laptop, excluding page
+// fetches". The excluding clause is why this measures extraction plus scoring and nothing else: the
+// fetches in SPEC.md section 9 are paced at 800ms per page by design, and folding them in would
+// measure the pacing rather than the work.
 export const ANALYSIS_BUDGET_MS = 1500;
 
 export interface Measurement {
@@ -17,9 +16,8 @@ export interface BudgetVerdict {
   medianMs: number;
   worstMs: number;
   budgetMs: number;
-  // the median is what the verdict rests on: a single run on a shared
-  // machine picks up whatever else that machine was doing, and one
-  // unlucky sample is not evidence that analysis got slower.
+  // the median is what the verdict rests on: a single run on a shared machine picks up whatever
+  // else that machine was doing, and one unlucky sample is not evidence that analysis got slower.
   withinBudget: boolean;
   headroomMs: number;
 }

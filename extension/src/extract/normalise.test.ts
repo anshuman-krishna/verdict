@@ -133,10 +133,9 @@ describe("normaliseDate", () => {
   });
 });
 
-// score/featureVector.ts's dayIndex divides Date.parse by a day. Date.parse
-// accepts "3 janvier 2026" on v8 as a favour and returns local midnight, so
-// before normalisation the same review landed on different days for readers
-// in different timezones and a burst boundary moved with them.
+// score/featureVector.ts's dayIndex divides Date.parse by a day. Date.parse accepts "3 janvier
+// 2026" on v8 as a favour and returns local midnight, so before normalisation the same review
+// landed on different days for readers in different timezones and a burst boundary moved with them.
 describe("what normalising a date fixes", () => {
   it("produces a date whose day index does not depend on the reader's timezone", () => {
     const normalised = normaliseDate("Commenté en France le 3 janvier 2026", "fr") as string;

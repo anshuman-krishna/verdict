@@ -11,10 +11,9 @@ from verdict_research.corpus.labeling import (
     weak_labels,
 )
 
-# the functions here are deliberately meaningless: they read a made up
-# field and vote on it. What a real labelling function says about a listing
-# is anshuman's to decide, and these exist only to drive the
-# mechanics.
+# the functions here are deliberately meaningless: they read a made up field and vote on it. What a
+# real labelling function says about a listing is anshuman's to decide, and these exist only to
+# drive the mechanics.
 
 
 def votes_on(key: str, threshold: float) -> LabelingFunction:
@@ -110,9 +109,8 @@ class TestMajorityVote:
         assert majority_vote([POSITIVE, POSITIVE, NEGATIVE]).label == POSITIVE
         assert majority_vote([NEGATIVE, NEGATIVE, POSITIVE]).label == NEGATIVE
 
-    # SPEC.md section 6's rule: an example the functions disagree evenly
-    # about is not a training example, and a tiebreak here would encode a
-    # preference nothing measured.
+    # SPEC.md section 6's rule: an example the functions disagree evenly about is not a training
+    # example, and a tiebreak here would encode a preference nothing measured.
     def test_abstains_on_a_tie(self):
         assert majority_vote([POSITIVE, NEGATIVE]).label == ABSTAIN
 

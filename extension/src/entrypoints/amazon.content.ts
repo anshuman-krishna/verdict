@@ -33,12 +33,7 @@ export default defineContentScript({
   ],
   runAt: "document_idle",
   async main() {
-    // SPEC.md section 9: fetched at most once a day, cached, signed, and
-    // version pinned, with a bundled copy as the floor. loadRules never
-    // throws and never blocks on a hung network: any failure, including
-    // nothing being deployed at REMOTE_RULES_URL yet, resolves to
-    // BUNDLED_AMAZON_RULES, the same rules this page would have used
-    // before this call existed.
+    // never throws: nothing deployed yet resolves to the bundled rules, same as before this existed
     const rules = await loadRules({
       url: REMOTE_RULES_URL,
       publicKeyJwk: REMOTE_RULES_PUBLIC_KEY_JWK,
@@ -48,31 +43,20 @@ export default defineContentScript({
 
     const deps: OrchestratorDeps = {
       rules,
-      // both null until PLAN.md weeks 4 and 5 land the ground truth corpus
-      // and a trained model.json. Until then every product page here
-      // resolves to "no-model" and mountResult below renders nothing,
-      // which is the honest behaviour, not a bug: SPEC.md non negotiable
-      // 5, never confident on thin data, applies to "no model" exactly as
-      // much as it does to too few reviews.
+      // null until a corpus and a trained model exist, so every page resolves to no-model and renders
+      // nothing. honest, not a bug
       model: BUNDLED_MODEL,
       priors: PLACEHOLDER_PRIORS,
       isHistoryEnabled: getHistoryEnabled,
       saveHistory: (entry) => addHistoryEntry(entry),
-      // SPEC.md section 4: opt in, off by default (getReputationLookupEnabled's
-      // own default). Checked fresh per analysis, not baked in here, so
-      // the options page toggle takes effect on the next check.
+      // opt in, off by default, read per analysis so the toggle takes effect on the next check
       reputation: {
         isEnabled: getReputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,
         salt: REPUTATION_SALT,
       },
-      // PRIVACY.md section 5: opt in, off by default, and a separate
-      // switch from reputation lookup above. enqueue only ever queues
-      // locally; entrypoints/background.ts's alarm is what actually
-      // submits a batch once its randomised hold elapses. Same
-      // REPUTATION_SALT as the lookup above, deliberately: see that
-      // constant's own comment for why the two protocols have to share
-      // it rather than each getting their own.
+      // a separate opt in from reputation above. enqueue only queues; the background alarm submits.
+      // the shared salt is deliberate, see REPUTATION_SALT
       graphContribution: {
         isEnabled: getGraphContributionEnabled,
         salt: REPUTATION_SALT,
@@ -84,12 +68,8 @@ export default defineContentScript({
     // could not even find a title for, both render nothing at all.
     const result = await analyzePage(document, location.href, deps);
 
-    // bridge/analyzeViaTab.ts opens a background tab for a url pasted on
-    // the website's /check page and waits for exactly this message,
-    // correlated by tab id, to answer it (SPEC.md section 11). Sent
-    // unconditionally, on every page this content script ever runs on,
-    // not only ones opened by that relay: nothing is listening for it the
-    // rest of the time, so it is a harmless no-op then.
+    // what bridge/analyzeViaTab.ts waits for, correlated by tab id. sent from every page: a no-op
+    // when nothing is listening
     const message: AnalysisResultMessage = {
       type: "verdict:analysis-result",
       outcome: result?.outcome ?? null,

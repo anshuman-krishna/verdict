@@ -5,28 +5,25 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 
-# PLAN.md week 7's canary fetches a handful of listing urls that the
-# maintainer chose and watches whether extraction still works on them.
+# PLAN.md week 7's canary fetches a handful of listing urls that the maintainer chose and watches
+# whether extraction still works on them.
 #
-# This is not the server side page fetching PRIVACY.md section 9 rules out.
-# That rule is about fetching a page on a user's behalf, which would mean a
-# user telling a server what they are looking at. Nothing here involves a
-# user: the urls are fixed, published in the targets file, and identical on
-# every run, so the fetch carries no information about anybody.
+# this is not the server side page fetching PRIVACY.md section 9 rules out. That rule is about
+# fetching a page on a user's behalf, which would mean a user telling a server what they are looking
+# at. Nothing here involves a user: the urls are fixed, published in the targets file, and identical
+# on every run, so the fetch carries no information about anybody.
 #
-# The pacing mirrors SPEC.md section 9's own review page fetching: at least
-# 800ms between requests with jitter. A monitoring job has no reason to be
-# faster than the product is, and being slower than the product costs
-# nothing.
+# the pacing mirrors SPEC.md section 9's own review page fetching: at least 800ms between requests
+# with jitter. A monitoring job has no reason to be faster than the product is, and being slower
+# than the product costs nothing.
 
 MIN_SPACING_SECONDS = 0.8
 JITTER_SECONDS = 0.4
 DEFAULT_TIMEOUT_SECONDS = 20.0
 
-# stated plainly rather than disguised as a browser. A canary that has to
-# lie about who it is to keep working is measuring something other than
-# what a real browser sees, and the moment that stops being true is worth
-# knowing rather than papering over.
+# stated plainly rather than disguised as a browser. A canary that has to lie about who it is to
+# keep working is measuring something other than what a real browser sees, and the moment that stops
+# being true is worth knowing rather than papering over.
 USER_AGENT = "verdict-canary/0.1 (+https://verdict.tools/status)"
 
 

@@ -3,13 +3,12 @@ from dataclasses import dataclass, field
 
 from verdict_research.features.feature_vector import FeatureVector
 
-# SPEC.md section 6: logistic regression on the feature vector, calibrated
-# by isotonic regression on a held out slice. this module applies a model,
-# it does not fit one. fitting needs ground truth (PLAN.md week 4) and its
-# output artefact, model.json, is what training/calibration/export produce
-# elsewhere in this package once that corpus exists. nothing here invents
-# coefficients, a calibration curve, or which features matter, since
-# choosing those is the calibration target SPEC.md section 6 leaves to anshuman.
+# SPEC.md section 6: logistic regression on the feature vector, calibrated by isotonic regression on
+# a held out slice. this module applies a model, it does not fit one. fitting needs ground truth
+# (PLAN.md week 4) and its output artefact, model.json, is what training/calibration/export produce
+# elsewhere in this package once that corpus exists. nothing here invents coefficients, a
+# calibration curve, or which features matter, since choosing those is the calibration target
+# SPEC.md section 6 leaves to anshuman.
 
 FlatFeatures = dict[str, float | None]
 

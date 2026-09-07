@@ -9,11 +9,10 @@ from verdict_service.deploy_config import (
     read_proxy_guarantees,
 )
 
-# PRIVACY.md section 4: "the reverse proxy is configured with IP logging
-# disabled, and that configuration file is in the public repository. If we
-# ever cannot demonstrate this, the feature comes out." These assert the
-# published file, not a copy of it, so the demonstration cannot drift away
-# from what is deployed.
+# PRIVACY.md section 4: "the reverse proxy is configured with IP logging disabled, and that
+# configuration file is in the public repository. If we ever cannot demonstrate this, the feature
+# comes out." These assert the published file, not a copy of it, so the demonstration cannot drift
+# away from what is deployed.
 
 
 def test_the_published_configuration_exists():
@@ -40,9 +39,8 @@ def test_no_client_address_header_reaches_the_application(header):
 
 
 def test_only_the_two_documented_endpoints_are_reachable():
-    # SPEC.md section 8's lookup and PRIVACY.md section 5's contribution.
-    # A third path appearing here is a new thing the internet can reach and
-    # is a deliberate act, not a refactor.
+    # SPEC.md section 8's lookup and PRIVACY.md section 5's contribution. A third path appearing
+    # here is a new thing the internet can reach and is a deliberate act, not a refactor.
     assert read_proxy_guarantees().allowed_paths == {
         "/v1/reputation/lookup",
         "/v1/graph/contribute",

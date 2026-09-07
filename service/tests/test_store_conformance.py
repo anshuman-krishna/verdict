@@ -12,10 +12,9 @@ from verdict_service.graph.sqlite_store import (
     connect,
 )
 
-# every test in this repository runs against the in memory stores and every
-# deployment runs against the sqlite ones. That is exactly the arrangement
-# where the two quietly stop agreeing, and where the difference is only ever
-# observed in production. So the behaviour both are relied on for is
+# every test in this repository runs against the in memory stores and every deployment runs against
+# the sqlite ones. That is exactly the arrangement where the two quietly stop agreeing, and where
+# the difference is only ever observed in production. So the behaviour both are relied on for is
 # asserted against both, from one set of assertions.
 
 

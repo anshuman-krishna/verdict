@@ -55,11 +55,10 @@ export function renderPopup(
   });
 }
 
-// entry.title and entry.thumbnailUrl are read straight off the Amazon
-// page (orchestrator.ts's product.title/thumbnailUrl), so they are a
-// seller's content, not this extension's, by the time they reach here.
-// escaped the same way site/src/pages/history/index.astro already
-// escapes the same fields on the website side of this same register.
+// entry.title and entry.thumbnailUrl are read straight off the Amazon page (orchestrator.ts's
+// product.title/thumbnailUrl), so they are a seller's content, not this extension's, by the time
+// they reach here. escaped the same way site/src/pages/history/index.astro already escapes the same
+// fields on the website side of this same register.
 function escapeHtml(value: string): string {
   const div = document.createElement("div");
   div.textContent = value;

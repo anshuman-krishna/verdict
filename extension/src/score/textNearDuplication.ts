@@ -1,8 +1,6 @@
 import coefficients from "../../../schema/minhash-coefficients.json";
 
-// a mersenne prime, large enough that fnv1a64 hashes reduce into it with
-// negligible bias, small enough that a*h stays inside a 64 bit range times a
-// 61 bit range, which bigint handles exactly either way
+// a mersenne prime: negligible reduction bias, and a*h stays exact in bigint
 const MODULUS = (1n << 61n) - 1n;
 
 const FNV_OFFSET_BASIS = 14695981039346656037n;
@@ -31,26 +29,9 @@ export interface TextNearDuplicationOptions {
   bands?: number;
   rows?: number;
   jaccardThreshold?: number;
-  // performance only, never changes the result: a review's minhash
-  // signature depends only on its own text, not on which other reviews
-  // are in this call, so it is safe to compute once per review object
-  // and reuse across repeated calls that share it by reference.
-  // buildReport.ts's bootstrap resamples with replacement from the same
-  // source array (bootstrap.ts's resample()), so the same review object
-  // commonly reappears across many of its 200 resamples; measured,
-  // recomputing every signature from scratch on every resample is what
-  // makes buildReport.ts take seconds instead of milliseconds. Omitted,
-  // behaviour is identical to before this option existed. Caller's
-  // responsibility: a single cache instance must only ever be shared
-  // across calls that use the same shingleSize and numPermutations, since
-  // a cached signature does not know which parameters produced it.
-  //
-  // PRIVACY.md section 2 gives this a second, load bearing job: "review
-  // text is never persisted... the MinHash signature and the embedding
-  // centroid are kept, and neither can reconstruct the text". A review
-  // restored from the reviews cache therefore arrives with text null and
-  // its signature seeded here, and scores exactly as it would have with
-  // the text present.
+  // keyed by object identity, so bootstrap resamples reuse a signature instead of recomputing it.
+  // caller's job to share a cache only across calls with the same shingleSize and numPermutations.
+  // also how a cached review scores without its text (PRIVACY.md section 2)
   signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
 }
 
@@ -65,9 +46,7 @@ export function fnv1a64(input: string): bigint {
   return hash;
 }
 
-// character n-grams over lowercased, whitespace collapsed text. text shorter
-// than the shingle size becomes its own single shingle rather than producing
-// no shingles at all.
+// text shorter than the shingle size becomes one shingle rather than none
 export function shingle(text: string, shingleSize: number): Set<string> {
   const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
   if (normalized.length <= shingleSize) {
@@ -163,10 +142,7 @@ class UnionFind {
   }
 }
 
-// SPEC.md 5.4: minhash with 128 permutations over character 5 grams, banded
-// lsh, cluster reviews above 0.7 jaccard similarity. bands and rows and the
-// output shape are not specified there; this is a proposal, not a ratified
-// spec line.
+// SPEC.md 5.5's minhash and threshold; the band and row split is a proposal, not a ratified line
 export function textNearDuplication(
   reviews: readonly ReviewForNearDuplication[],
   options: TextNearDuplicationOptions = {},
@@ -177,12 +153,7 @@ export function textNearDuplication(
   const rows = options.rows ?? DEFAULT_ROWS;
   const threshold = options.jaccardThreshold ?? DEFAULT_JACCARD_THRESHOLD;
 
-  // a seeded signature of the wrong length cannot be compared against one
-  // computed here (estimateJaccard walks them position by position), so it
-  // counts only when this call asks for the permutation count that
-  // produced it. A review with text falls back to recomputing; a review
-  // without text has nothing to fall back to and is not eligible, the same
-  // as a review that never had text.
+  // estimateJaccard compares position by position, so a signature of the wrong length is not trusted
   const seeded = (review: ReviewForNearDuplication): bigint[] | undefined => {
     const cached = options.signatureCache?.get(review);
     return cached !== undefined && cached.length === numPermutations ? cached : undefined;

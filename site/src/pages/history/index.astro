@@ -24,12 +24,8 @@ import Layout from "../../layouts/Layout.astro";
   <div id="app" hidden></div>
 
   <script>
-    // SPEC.md section 11, the website bridge. this island is one of the
-    // two SITE.md's build notes name as an exception to the no client
-    // javascript rule. extension/src/entrypoints/presence.content.ts sets
-    // data-verdict-installed and data-verdict-extension-id on <html> at
-    // document_start, before this script runs, so there is no polling
-    // and no hardcoded extension id.
+    // one of the two islands SITE.md allows. the presence content script sets the dataset attributes
+    // at document_start, so there is no polling and no hardcoded extension id
 
     // DESIGN.md section 4, provisional band scale, mirrored from
     // extension/src/score/report.ts so the two never quietly disagree.
@@ -51,7 +47,7 @@ import Layout from "../../layouts/Layout.astro";
     const root = document.documentElement;
     let allEntries: HistorySummaryEntry[] = [];
 
-    function sendToExtension(type: string): Promise<any> {
+    function sendToExtension(type: string, extra: Record<string, unknown> = {}): Promise<any> {
       return new Promise((resolve, reject) => {
         const extensionId = root.dataset.verdictExtensionId;
         const runtime = (window as any).chrome?.runtime;
@@ -59,7 +55,7 @@ import Layout from "../../layouts/Layout.astro";
           reject(new Error("no cross extension messaging available in this browser"));
           return;
         }
-        runtime.sendMessage(extensionId, { type }, (response: unknown) => {
+        runtime.sendMessage(extensionId, { type, ...extra }, (response: unknown) => {
           if (runtime.lastError) {
             reject(new Error(runtime.lastError.message));
             return;
@@ -83,15 +79,8 @@ import Layout from "../../layouts/Layout.astro";
       return div.innerHTML;
     }
 
-    // a simplified stand in for extension/src/ui/rosette.ts's rosetteParams:
-    // that function's harmonics also depend on a report's burst and
-    // duplicate shares, which HistorySummaryEntry does not carry (SITE.md
-    // only asks for a thumbnail here, not a full report), so this fixes
-    // the harmonics and varies only the amplitude, from
-    // estimatedInorganicShare, and the stroke colour, from the band. The
-    // amplitude range comes from the same generated vocabulary the panel
-    // draws with, so a thumbnail here and a rosette there cannot end up
-    // shaped differently for the same share.
+    // simplified: a history entry carries no burst or duplicate share, so the harmonics are fixed and
+    // only the amplitude and colour vary. the amplitude range is the panel's, from the vocabulary
 
     function rosetteThumbnail(band: string | null, share: number | null): string {
       const color = band !== null ? (BAND_COLORS[band] ?? UNKNOWN_BAND_COLOR) : UNKNOWN_BAND_COLOR;
@@ -110,6 +99,24 @@ import Layout from "../../layouts/Layout.astro";
       return `<svg class="rosette-thumb" viewBox="-16 -16 32 32" role="presentation">
         <polygon points="${points.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5" />
       </svg>`;
+    }
+
+    // the extension serialises it, not this page: the file downloaded here is the same bytes the
+    // options page writes, and the csv format lives in one place.
+    async function download(format: "json" | "csv"): Promise<void> {
+      const response = await sendToExtension("verdict:history:export", { format });
+      if (typeof response?.content !== "string") {
+        return;
+      }
+      const blob = new Blob([response.content], {
+        type: format === "json" ? "application/json" : "text/csv",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = response.filename ?? `verdict-history.${format}`;
+      link.click();
+      URL.revokeObjectURL(url);
     }
 
     function renderFigures(container: HTMLElement, entries: HistorySummaryEntry[]): void {
@@ -246,10 +253,16 @@ import Layout from "../../layouts/Layout.astro";
           </select>
         </div>
         <div id="history-table"></div>
-        <p><button type="button" id="clear-history" class="button-secondary">Delete everything</button></p>
+        <p class="history-actions">
+          <button type="button" id="export-json" class="button-secondary">Export as JSON</button>
+          <button type="button" id="export-csv" class="button-secondary">Export as CSV</button>
+          <button type="button" id="clear-history" class="button-secondary">Delete everything</button>
+        </p>
       `;
       renderFigures(app.querySelector("#history-figures") as HTMLElement, entries);
       renderControlsAndTable(app);
+      document.getElementById("export-json")?.addEventListener("click", () => download("json"));
+      document.getElementById("export-csv")?.addEventListener("click", () => download("csv"));
       document.getElementById("clear-history")?.addEventListener("click", async () => {
         await sendToExtension("verdict:history:clear");
         renderEntries(app, []);
@@ -280,6 +293,12 @@ import Layout from "../../layouts/Layout.astro";
 </Layout>
 
 <style>
+  .history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .table-scroll {
     overflow-x: auto;
   }

@@ -9,10 +9,9 @@ import type {
 
 const DEFAULT_EMBEDDED_JSON_SELECTOR = 'script[type="application/ld+json"]';
 
-// one entry per strategy actually attempted, in the order they ran. PLAN.md
-// week 1 task 6 asks the fixture harness to report "the field and the
-// strategy that ran" on a failure, which is impossible from an empty array
-// alone: a field that found nothing and a field with no rule at all look
+// one entry per strategy actually attempted, in the order they ran. PLAN.md week 1 task 6 asks the
+// fixture harness to report "the field and the strategy that ran" on a failure, which is impossible
+// from an empty array alone: a field that found nothing and a field with no rule at all look
 // identical from outside.
 export interface StrategyTrace {
   strategy: FieldRule["strategy"];
@@ -83,11 +82,10 @@ function runStrategy(root: ParentNode, rule: FieldRule): unknown[] {
   }
 }
 
-// one record per matched container, each field resolved against that
-// container rather than against the page, so two review blocks cannot
-// borrow each other's fields. A container that yields nothing for any field
-// is dropped: an empty record is not a review, and keeping it would inflate
-// the count SPEC.md section 6's minimum thresholds are measured against.
+// one record per matched container, each field resolved against that container rather than against
+// the page, so two review blocks cannot borrow each other's fields. A container that yields nothing
+// for any field is dropped: an empty record is not a review, and keeping it would inflate the count
+// SPEC.md section 6's minimum thresholds are measured against.
 function runComposite(root: ParentNode, rule: CompositeStrategy): unknown[] {
   let containers: Element[];
   try {

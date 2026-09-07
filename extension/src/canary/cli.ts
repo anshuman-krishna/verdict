@@ -2,14 +2,13 @@ import { Window } from "happy-dom";
 import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
 import { extractOnce } from "./extractOnce";
 
-// reads a page's html on stdin and writes one json object on stdout, so the
-// python canary job (research/verdict_research/canary/) can ask the shipped
-// extractor what it finds without owning a second copy of it.
+// reads a page's html on stdin and writes one json object on stdout, so the python canary job
+// (research/verdict_research/canary/) can ask the shipped extractor what it finds without owning a
+// second copy of it.
 //
-// Nothing here fetches. The url is passed in only so the extractor can
-// place the page's site and locale, exactly as the content script does from
-// location.href. Keeping the fetch on the python side keeps every network
-// decision, the pacing and the user agent, in one place.
+// nothing here fetches. The url is passed in only so the extractor can place the page's site and
+// locale, exactly as the content script does from location.href. Keeping the fetch on the python
+// side keeps every network decision, the pacing and the user agent, in one place.
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];

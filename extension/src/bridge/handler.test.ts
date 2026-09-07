@@ -1,7 +1,12 @@
 import "fake-indexeddb/auto";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RulesDocument } from "../extract/rules";
-import { addHistoryEntry, deleteAllHistory } from "../storage/history";
+import {
+  addHistoryEntry,
+  deleteAllHistory,
+  exportHistoryAsCsv,
+  exportHistoryAsJson,
+} from "../storage/history";
 import { deriveAllowedHostnames, handleBridgeMessage, type BridgeHandlerOptions } from "./handler";
 import { isBridgeRequest } from "./messages";
 import { BridgeRateLimiter, RATE_LIMITS } from "./rateLimit";
@@ -13,9 +18,8 @@ const RULES: RulesDocument = {
   fields: {},
 };
 
-// most tests here never exercise the analyze path; this fails loudly if
-// one of them unexpectedly does, rather than silently reporting an
-// unrelated status.
+// most tests here never exercise the analyze path; this fails loudly if one of them unexpectedly
+// does, rather than silently reporting an unrelated status.
 function options(overrides: Partial<BridgeHandlerOptions> = {}): BridgeHandlerOptions {
   return {
     bundledRules: RULES,
@@ -220,5 +224,68 @@ describe("rate limiting", () => {
     expect(
       await handleBridgeMessage(request, options(limiter, "https://verdict.tools")),
     ).not.toEqual({ error: "rate limited" });
+  });
+});
+
+// SITE.md's /history copy promises "export it as json or csv" and the page had only a delete. the
+// strings come from storage/history.ts, so a file downloaded from the website is byte identical to
+// one from the options page.
+describe("history export", () => {
+  function options(): BridgeHandlerOptions {
+    return {
+      bundledRules: RULES,
+      analyzeUrl: async () => ({ status: "not-a-product-page" }) as const,
+    };
+  }
+
+  beforeEach(async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: { band: "clean" } });
+  });
+
+  it("returns the same json the options page writes", async () => {
+    const response = await handleBridgeMessage(
+      { type: "verdict:history:export", format: "json" },
+      options(),
+    );
+    expect((response as { content: string }).content).toBe(await exportHistoryAsJson());
+  });
+
+  it("returns the same csv the options page writes", async () => {
+    const response = await handleBridgeMessage(
+      { type: "verdict:history:export", format: "csv" },
+      options(),
+    );
+    expect((response as { content: string }).content).toBe(await exportHistoryAsCsv());
+  });
+
+  it("names the file so two exports do not overwrite each other", async () => {
+    const response = (await handleBridgeMessage(
+      { type: "verdict:history:export", format: "csv" },
+      options(),
+    )) as { filename: string; format: string };
+    expect(response.filename).toMatch(/^verdict-history-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(response.format).toBe("csv");
+  });
+
+  it("rejects a format it does not produce", async () => {
+    expect(
+      await handleBridgeMessage({ type: "verdict:history:export", format: "pdf" }, options()),
+    ).toEqual({ error: "unrecognised message" });
+  });
+
+  it("rejects a request with no format at all", async () => {
+    expect(await handleBridgeMessage({ type: "verdict:history:export" }, options())).toEqual({
+      error: "unrecognised message",
+    });
+  });
+
+  // PRIVACY.md section 7: the bridge never returns raw review text to the page.
+  it("returns nothing that could be review text", async () => {
+    const response = (await handleBridgeMessage(
+      { type: "verdict:history:export", format: "json" },
+      options(),
+    )) as { content: string };
+    expect(response.content).not.toContain("reviews");
   });
 });

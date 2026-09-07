@@ -2,16 +2,14 @@ import { parseAmazonProductUrl } from "../extract/productPage";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import type { RulesDocument } from "../extract/rules";
 
-// PLAN.md week 7's canary needs one number from a live page: how many
-// reviews the shipped extractor finds on it today. The extractor is this
-// package's own, and re-implementing it in python to answer that would put
-// two versions of the thing being watched in the repository, one of which
+// PLAN.md week 7's canary needs one number from a live page: how many reviews the shipped extractor
+// finds on it today. The extractor is this package's own, and re-implementing it in python to
+// answer that would put two versions of the thing being watched in the repository, one of which
 // nobody uses. So the python job drives this instead.
 //
-// Everything here runs the same two functions the content script runs. It
-// deliberately adds no fallback, no retry, and no leniency: a canary that
-// is more forgiving than the product reports health the product does not
-// have.
+// everything here runs the same two functions the content script runs. It deliberately adds no
+// fallback, no retry, and no leniency: a canary that is more forgiving than the product reports
+// health the product does not have.
 
 export interface CanaryExtraction {
   url: string;

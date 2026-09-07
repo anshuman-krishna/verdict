@@ -1,21 +1,14 @@
 #!/usr/bin/env node
-// Writes release-manifest.json from a build already sitting in .output/,
-// and checks a build against one that was written earlier. SITE.md's
-// /install page and the README both promise that "every release lists the
-// commit it was built from and the SHA256 of the zip, so you can check
-// that what is in the store matches what is in the repository." This is
-// what produces that list, and what CI runs to enforce SPEC.md section
-// 14's 8 MB cap.
+// writes release-manifest.json from a build in .output, and checks a build against an earlier one.
+// what backs /install's promise that a release lists its commit and the sha256 of its zip.
 //
-// Usage:
+// usage:
 //   just ext zip                                build and zip both targets first
 //   node scripts/release-manifest.mjs           write .output/release-manifest.json
 //   node scripts/release-manifest.mjs --verify  check .output against that document
 //   node scripts/release-manifest.mjs --verify --manifest path/to/release-manifest.json
 //
-// --verify never writes. It is the check to run on a rebuild of the same
-// commit, and the one someone who downloaded a release and its manifest
-// can run by hand against the zips in their own .output.
+// --verify never writes: for a rebuild of the same commit, or for anyone checking a download
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -26,10 +19,7 @@ import { buildReleaseManifest, verifyReleaseManifest } from "./releaseManifest.m
 
 const extensionDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir = join(extensionDir, ".output");
-// a build artifact, written beside the zips it describes and published
-// with them, never committed: it names the commit it was built from, so a
-// copy in the tree would always be describing an earlier commit than the
-// one containing it. .output is already ignored.
+// never committed: it names the commit it was built from, so a copy in the tree is always stale
 const DEFAULT_MANIFEST_PATH = join(outputDir, "release-manifest.json");
 
 function sha256OfFile(path) {
@@ -45,14 +35,9 @@ function directoryBytes(path) {
   return total;
 }
 
-// wxt writes one directory per target (chrome-mv3, firefox-mv3) and one zip
-// per target beside them, named from wxt.config.ts's zip.name. The
-// directory is what the browser installs and so what the budget measures;
-// the zip is what gets uploaded and so what gets hashed.
-// a stale zip left in .output by an earlier version or an earlier zip name
-// would otherwise be picked silently and put a hash in the manifest that
-// belongs to a different build, which is precisely the mistake this whole
-// document exists to make impossible. So an ambiguous .output is refused.
+// the directory is what the browser installs, so it is what the budget measures; the zip is what is
+// uploaded, so it is what is hashed. an ambiguous .output is refused: a stale zip picked silently
+// would put a hash in the manifest belonging to a different build
 function exactlyOneZip(zips, suffix, target) {
   const matches = zips.filter((entry) => entry.name.endsWith(suffix));
   if (matches.length === 0) {
@@ -82,9 +67,8 @@ function collectArtifacts() {
     });
   }
 
-  // the sources zip addons.mozilla.org asks for alongside a minified
-  // firefox build: a release artifact worth hashing, never an installed
-  // bundle, hence no unpacked size and no budget.
+  // the sources zip addons.mozilla.org asks for alongside a minified firefox build: a release
+  // artifact worth hashing, never an installed bundle, hence no unpacked size and no budget.
   const sources = zips.some((entry) => entry.name.endsWith("-sources.zip"))
     ? exactlyOneZip(zips, "-sources.zip", "sources")
     : undefined;

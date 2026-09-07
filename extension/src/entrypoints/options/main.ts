@@ -34,20 +34,17 @@ async function refresh(): Promise<void> {
         await setHistoryEnabled(enabled);
       },
       onToggleReputationLookup: async (enabled) => {
-        // turning it on can be denied by the browser's permission prompt,
-        // turning it off releases the permission; either way the actually
-        // persisted state may differ from what the checkbox now shows, so
-        // this re-renders from the real stored value rather than trusting
-        // the click.
+        // turning it on can be denied by the browser's permission prompt, turning it off releases
+        // the permission; either way the actually persisted state may differ from what the checkbox
+        // now shows, so this re-renders from the real stored value rather than trusting the click.
         await setReputationLookupWithPermission(enabled);
         await refresh();
       },
       onToggleGraphContribution: async (enabled) => {
-        // optionsPage.ts already gated this behind PRIVACY.md section 5's
-        // disclosure and an explicit Confirm click before this ever
-        // fires with enabled === true; requesting the host permission
-        // and persisting the setting are what is left, same shape as
-        // reputation lookup above, since they share one origin.
+        // optionsPage.ts already gated this behind PRIVACY.md section 5's disclosure and an
+        // explicit Confirm click before this ever fires with enabled === true; requesting the host
+        // permission and persisting the setting are what is left, same shape as reputation lookup
+        // above, since they share one origin.
         await setGraphContributionWithPermission(enabled);
         await refresh();
       },

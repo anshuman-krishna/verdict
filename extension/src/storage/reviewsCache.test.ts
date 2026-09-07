@@ -89,10 +89,9 @@ describe("reviews cache", () => {
   });
 });
 
-// PRIVACY.md section 2: "review text is never persisted. It is parsed,
-// hashed for the duplication signal, embedded for the drift signal, and
-// dropped. The MinHash signature and the embedding centroid are kept, and
-// neither can reconstruct the text."
+// PRIVACY.md section 2: "review text is never persisted. It is parsed, hashed for the duplication
+// signal, embedded for the drift signal, and dropped. The MinHash signature and the embedding
+// centroid are kept, and neither can reconstruct the text."
 describe("what the cache is allowed to persist", () => {
   async function storedRecord(productId: string): Promise<Record<string, unknown>> {
     const key = await cacheKey(productId, "amazon");

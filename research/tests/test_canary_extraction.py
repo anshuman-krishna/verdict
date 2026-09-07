@@ -21,9 +21,8 @@ class TestParseExtractorOutput:
         assert outcome.review_count == 42
         assert outcome.rules_version == 41
 
-    # check.py reads a review count of zero as "extraction broke on a live
-    # page", which is a claim about amazon. A broken extractor must not be
-    # able to make it.
+    # check.py reads a review count of zero as "extraction broke on a live page", which is a claim
+    # about amazon. A broken extractor must not be able to make it.
     def test_empty_output_is_an_error_not_zero_reviews(self):
         with pytest.raises(ExtractorError, match="wrote nothing"):
             parse_extractor_output("   \n")

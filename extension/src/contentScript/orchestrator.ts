@@ -11,20 +11,14 @@ import type { FeatureVectorInputs } from "../score/featureVector";
 import type { Report } from "../score/report";
 import { reviewerGraphEvidenceRow } from "../score/reviewerGraphEvidence";
 
-// SPEC.md section 4: the reviewer graph service is opt in and off by
-// default. isEnabled is checked fresh on every analysis (rather than baked
-// in at wiring time) so flipping the options page toggle takes effect on
-// the very next check, not after a reload.
+// isEnabled is read per analysis so the options toggle takes effect on the next check, not a reload
 export interface ReputationLookupDeps {
   isEnabled: () => Promise<boolean>;
   endpoint: string;
   salt: string;
   fetchImpl?: typeof fetch;
   random?: () => number;
-  // reputation/client.ts's own default (a real setTimeout, PRIVACY.md
-  // section 4's random request delay) is what production uses; exposed
-  // here only so a test can swap in an instant no-op instead of actually
-  // waiting up to MAX_DELAY_MS.
+  // exposed only so a test can skip PRIVACY.md section 4's random request delay
   delay?: (ms: number) => Promise<void>;
 }
 
@@ -45,10 +39,7 @@ export interface OrchestratorDeps {
   graphContribution?: GraphContributionDeps;
 }
 
-// PRIVACY.md section 5: a second, separate opt in from reputation lookup
-// above. isEnabled is checked fresh per analysis for the same reason
-// reputation's is: the options page toggle should take effect on the
-// very next check.
+// PRIVACY.md section 5: a second, separate opt in, read per analysis like reputation above
 export interface GraphContributionDeps {
   isEnabled: () => Promise<boolean>;
   salt: string;
@@ -62,9 +53,7 @@ export interface AnalysisResult {
   outcome: ReportOutcome;
 }
 
-// the single entry point a content script calls on load. Every early exit
-// here is a documented SPEC.md section 13 row: not a supported page, or a
-// product page whose title could not be found at all, both render nothing.
+// every early exit here is a SPEC.md section 13 row: render nothing at all
 export async function analyzePage(
   document: ParentNode,
   url: string,
@@ -90,9 +79,7 @@ async function scoreAndMaybeSave(
   deps: OrchestratorDeps,
   signatureCache?: WeakMap<Review, bigint[]>,
 ): Promise<ReportOutcome> {
-  // the claimed rating is one of the two figures the certificate block
-  // shows side by side (DESIGN.md section 6); a report with no claimed
-  // rating to adjust against is not a report SPEC.md section 2 promises.
+  // nothing to adjust against, so not a report SPEC.md section 2 promises
   if (product.claimedRating === null) {
     return { status: "not-enough-data" };
   }
@@ -131,12 +118,7 @@ async function scoreAndMaybeSave(
   return outcome;
 }
 
-// PRIVACY.md section 5: builds one edge per review this page's reviews
-// contain enough to place (buildContributionEdge already returns null for
-// the rest) and hands the batch to the queue, which is what actually
-// applies the randomised hold before anything is sent. Best effort: a
-// review whose edge cannot be built is simply not contributed, never a
-// reason to fail the analysis that surfaced it.
+// best effort: an edge that cannot be built is not contributed, never a reason to fail the analysis
 async function queueGraphContribution(
   page: ParsedProductPage,
   reviews: readonly Review[],
@@ -151,14 +133,7 @@ async function queueGraphContribution(
   }
 }
 
-// SPEC.md 5.6 and section 8: looks up whether any of this review set's
-// reviewer ids fall in a flagged bucket, entirely through the k anonymous
-// protocol in reputation/lookup.ts and reputation/client.ts, and appends
-// one evidence row with the result. Community scoring itself, what makes
-// a bucket flagged in the first place, happens server side and is not
-// this function's concern; if the lookup fails or the service is
-// unreachable, lookupFlaggedReviewers already resolves to an empty set,
-// so this degrades to the same "none flagged" row rather than an error.
+// an unreachable service degrades to the same "none flagged" row, never an error
 async function withReviewerGraphEvidence(
   report: Report,
   reviews: readonly Review[],
@@ -178,12 +153,7 @@ async function withReviewerGraphEvidence(
   return { ...report, evidence: [...report.evidence, row] };
 }
 
-// merges reviews already visible on the product page with a freshly
-// fetched batch, deduping on reviewerId plus date where both are known
-// (amazon does not expose a stable per-review id anywhere this project has
-// a rule for). a review missing either field cannot be matched against
-// anything, so it is always kept, which only risks a rare double count,
-// never a silent drop.
+// dedupes on reviewerId plus date; a review missing either is kept, risking a double count over a drop
 export function mergeReviews(existing: readonly Review[], fetched: readonly Review[]): Review[] {
   const seen = new Set(
     existing
@@ -216,11 +186,7 @@ export interface CheckMoreDeeplyOptions {
   onProgress?: (progress: FetchProgress) => void;
 }
 
-// SPEC.md section 9: fetching additional review pages happens only on
-// explicit user action, never on page load, which is why this is a
-// separate exported function rather than something analyzePage calls
-// itself. Re-scores and, if history is enabled, re-saves against the
-// enlarged review set.
+// SPEC.md section 9: user action only, never on page load, hence separate from analyzePage
 export async function checkMoreDeeply(
   page: ParsedProductPage,
   product: ProductSnapshot,

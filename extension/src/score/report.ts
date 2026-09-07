@@ -1,8 +1,5 @@
-// the band slugs, labels, and colours below are transcribed from DESIGN.md
-// section 4's band scale. SPEC.md section 16 still lists "band boundaries
-// and their names" as an open question for anshuman, so nothing here decides
-// where a feature vector crosses from one band into another. this file only
-// shapes the report once a band has already been assigned elsewhere.
+// DESIGN.md section 4's band scale. where a vector crosses between bands is anshuman's, not decided
+// here: this only shapes a report once a band is assigned
 
 export type Band = "clean" | "mostly-clean" | "mixed" | "doubtful" | "heavily-manipulated";
 
@@ -55,20 +52,12 @@ export interface ReportSummary {
   band: Band | null;
   claimedRating: number | null;
   adjustedRating: number | null;
-  // SITE.md's /history spec: a rosette thumbnail per register row.
-  // estimatedInorganicShare is the one Report field that alone still
-  // says something about a report's shape (rosette.ts's amplitude), so
-  // site/src/pages/history/index.astro can draw a simplified thumbnail
-  // (band colour plus this) without the site needing to parse evidence
-  // rows out of an arbitrary, unknown report object.
+  // enough for /history to draw a thumbnail without parsing evidence rows out of an unknown report
   estimatedInorganicShare: number | null;
 }
 
-// history entries predate this type and store their report as unknown, so
-// this is a system boundary: a legacy or malformed report is summarized as
-// all nulls rather than thrown away or left to crash a caller. shared by
-// the popup and the website bridge, so the two surfaces never disagree on
-// what counts as a valid report.
+// a legacy or malformed report summarises to all nulls rather than crashing a caller. shared by the
+// popup and the bridge so the two never disagree on what counts as valid
 export function summarizeReport(report: unknown): ReportSummary {
   if (typeof report !== "object" || report === null) {
     return { band: null, claimedRating: null, adjustedRating: null, estimatedInorganicShare: null };
@@ -86,11 +75,7 @@ export function summarizeReport(report: unknown): ReportSummary {
 
 const SERIAL_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-// a stable, citable serial per DESIGN.md section 3: "a serial on each
-// report, certificate numbering, makes a report citable". derived from a
-// seed (the product url is the natural choice) plus the generation time, so
-// re-checking the same product produces a different serial each time, the
-// same way a real certificate is renumbered on reissue.
+// seed plus generation time, so re-checking renumbers the way a reissued certificate does
 export function generateSerial(seed: string, generatedAt: number): string {
   const hash = fnv1a32(`${seed}:${generatedAt}`);
   const digits = toBase(hash, SERIAL_ALPHABET, 8);

@@ -11,13 +11,8 @@ import {
   type OrchestratorDeps,
 } from "./orchestrator";
 
-// DESIGN.md section 6 mocks the panel "injected below the star rating".
-// Locating that element needs a real amazon selector, which needs the
-// fixture corpus (PLAN.md week 1 task 2, not built yet) to verify against
-// rather than guess at. A fixed corner overlay is a safe, honest
-// placeholder that does not depend on guessing amazon's DOM, and is meant
-// to be replaced once that selector exists. Shared by the panel and the
-// notice so both anchor to the same spot.
+// DESIGN.md wants this below the star rating, which needs a selector the fixture corpus has not
+// verified yet. a corner overlay until then, rather than a guess at amazon's dom
 function pinToCorner(element: HTMLElement): void {
   element.style.position = "fixed";
   element.style.bottom = "16px";
@@ -29,12 +24,7 @@ function defaultOpenTab(url: string): void {
   window.open(url, "_blank");
 }
 
-// popup.html already renders the full history register (ui/historyList.ts),
-// and the report this button was clicked from was just saved into that
-// same history (contentScript/orchestrator.ts's scoreAndMaybeSave), so it
-// is the most recent entry there. There is no separate per-report page:
-// PRIVACY.md's design keeps every report local to this browser, with
-// nothing for a server to key a report page on.
+// the popup's history holds this report already; there is no per-report page for a server to key on
 function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
   const panel = document.createElement("verdict-panel") as VerdictPanelElement;
   pinToCorner(panel);
@@ -46,10 +36,7 @@ function mountPanel(document: Document, report: Report, openTab: (url: string) =
   });
 }
 
-// SPEC.md section 13: "extraction yields under 30 reviews: 'not enough
-// data to judge', no score, no error styling." The one action available
-// from here is SPEC.md section 9's explicit, user triggered review fetch,
-// which is the only thing that can actually resolve this state.
+// SPEC.md section 13. the one action offered is the only thing that can resolve this state
 function mountNotEnoughDataNotice(
   document: Document,
   result: AnalysisResult,
@@ -90,9 +77,7 @@ function mountNotEnoughDataNotice(
       notice.remove();
       mountResult(document, next, deps, checkOptions, openTab);
     } catch {
-      // SPEC.md section 13's pattern throughout: a failure degrades
-      // silently rather than surfacing an error state, so the user is
-      // simply left with the action still available to retry.
+      // degrades silently, leaving the action available to retry
       renderIdle();
     }
   };
@@ -100,9 +85,7 @@ function mountNotEnoughDataNotice(
   renderIdle();
 }
 
-// SPEC.md section 13's spinner rule. The first page carries no spacing
-// delay before it, so a real count replaces this line as soon as that page
-// lands, well before the 800ms gap lets a second one start.
+// replaced by a real count as soon as the first page lands, before the 800ms gap allows a second
 function startingProgressLine(maxPages: number): string {
   return `Reading up to ${maxPages} more pages of reviews.`;
 }
@@ -112,12 +95,8 @@ function progressLine(progress: FetchProgress): string {
   return `${progress.pagesFetched} of ${progress.maxPages} pages read, ${reviews} so far.`;
 }
 
-// the one place that turns a ReportOutcome into something on the page.
-// missing-features and no-model render nothing: SPEC.md section 13 does
-// not specify copy for either (a production model.json, once one exists,
-// is not expected to ever be missing a feature it was trained needing;
-// no-model cannot happen once a model is bundled), so this stays silent
-// rather than inventing user facing wording that is not ours to write.
+// missing-features and no-model render nothing: SPEC.md specifies no copy for either, and the
+// wording is not ours to invent
 export function mountResult(
   document: Document,
   result: AnalysisResult,

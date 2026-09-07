@@ -4,20 +4,17 @@ import { extractProductSnapshot, extractReviews } from "../extract/reviewExtract
 import type { RulesDocument } from "../extract/rules";
 import type { FixtureExpectation, Layout } from "./expectation";
 
-// PLAN.md week 1 task 6: "a test that loads every fixture, runs extraction,
-// and compares against the hand written expectations. Report per fixture,
-// with failures naming the field and the strategy that ran", and its verify
-// line: "a deliberately broken selector shows up as a failure rather than
-// as a silent empty result".
+// PLAN.md week 1 task 6: "a test that loads every fixture, runs extraction, and compares against
+// the hand written expectations. Report per fixture, with failures naming the field and the
+// strategy that ran", and its verify line: "a deliberately broken selector shows up as a failure
+// rather than as a silent empty result".
 //
-// So this runs the production path (extractProductSnapshot and
-// extractReviews, the same two functions the content script calls) for the
-// values, and re-walks the rule only for a field that failed, to say which
-// strategy produced the wrong answer or which one found nothing.
+// so this runs the production path (extractProductSnapshot and extractReviews, the same two
+// functions the content script calls) for the values, and re-walks the rule only for a field that
+// failed, to say which strategy produced the wrong answer or which one found nothing.
 
-// claimed ratings are one decimal place on the page and arrive here through
-// parseFloat, so this is float noise tolerance, not a judgement about how
-// close is close enough.
+// claimed ratings are one decimal place on the page and arrive here through parseFloat, so this is
+// float noise tolerance, not a judgement about how close is close enough.
 const RATING_TOLERANCE = 1e-6;
 
 export interface FieldCheck {
@@ -128,10 +125,9 @@ function failedCheck(
   return { field, expected, actual, ok: false, strategies: traceOf(document, rules, field) };
 }
 
-// an empty trace means the rules document has no rule for this field at
-// all, which report.ts renders differently from "every strategy ran and
-// matched nothing". Conflating the two is how a missing rule reads as a
-// broken page.
+// an empty trace means the rules document has no rule for this field at all, which report.ts
+// renders differently from "every strategy ran and matched nothing". Conflating the two is how a
+// missing rule reads as a broken page.
 function traceOf(document: ParentNode, rules: RulesDocument, field: string): StrategyTrace[] {
   const rule = rules.fields[field];
   if (rule === undefined) {

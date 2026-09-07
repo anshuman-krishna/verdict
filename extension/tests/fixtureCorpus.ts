@@ -2,9 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseExpectation, type FixtureExpectation } from "../src/fixtures/expectation";
 
-// the only part of the fixture machinery that touches the filesystem, kept
-// out of src/ so nothing importable by an entrypoint can pull node:fs into
-// a bundle.
+// the only part of the fixture machinery that touches the filesystem, kept out of src/ so nothing
+// importable by an entrypoint can pull node:fs into a bundle.
 
 export const FIXTURE_DIR = join(import.meta.dirname, "..", "fixtures");
 

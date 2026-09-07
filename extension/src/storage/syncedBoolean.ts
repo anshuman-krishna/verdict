@@ -1,20 +1,9 @@
 import { browser } from "wxt/browser";
 import { getPref, setPref } from "./prefs";
 
-// SPEC.md section 10: "prefs mirrored to chrome.storage.sync where it
-// makes sense." IndexedDB (prefs.ts) stays the source of truth this
-// device actually acts on; chrome.storage.sync is a best effort mirror
-// so a preference set on one signed in browser shows up as the starting
-// point on another, rather than every new device defaulting cold.
-//
-// Deliberately not used for reputationLookupEnabled or
-// graphContributionEnabled (settings.ts): both require a granted host
-// permission on the device that turns them on (reputation/permission.ts,
-// graph/permission.ts), and adopting a synced "true" here would show a
-// checkbox as on without that device ever having granted anything,
-// which would look enabled while silently doing nothing. historyEnabled
-// has no such coupling, which is what makes it "where it makes sense"
-// and the other two not.
+// indexeddb stays the source of truth; sync is a best effort seed for a new device.
+// not used for the two opt ins: each needs a host permission granted on this device, so a synced
+// "true" would show a checkbox as on while doing nothing
 
 export interface SyncStore {
   get: (key: string) => Promise<Record<string, unknown>>;
@@ -26,10 +15,7 @@ const realSyncStore: SyncStore = {
   set: (items) => browser.storage.sync.set(items),
 };
 
-// local always wins when it exists: this device's own choice, made here,
-// should never be silently overwritten by a value from elsewhere just
-// because a sync round happens to land. Sync is only ever consulted to
-// seed a device that has never set this preference at all.
+// local always wins: sync only ever seeds a device that never set this preference
 export async function getSyncedBoolean(
   key: string,
   defaultValue: boolean,
