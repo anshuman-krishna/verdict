@@ -1,6 +1,11 @@
 import { getPref, setPref } from "../storage/prefs";
+import { canonicalJson } from "./canonicalJson";
 import type { RulesDocument } from "./rules";
 import { sanitiseRulesDocument } from "./validateRules";
+
+// re-exported so the signature's encoding still reads as belonging to the
+// loader that verifies with it, wherever a caller looks for it
+export { canonicalJson };
 
 // SPEC.md section 9: "rules are fetched at most once a day, cached,
 // signed, and version pinned. a signature failure falls back to the
@@ -40,27 +45,6 @@ export interface RulesLoaderOptions {
 
 const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
-
-// a stable encoding independent of key insertion order, so a signature
-// verifies the same way regardless of how the document happened to be
-// constructed. arrays keep their order, since order is meaningful there.
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortKeysDeep(value));
-}
-
-function sortKeysDeep(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortKeysDeep);
-  }
-  if (value !== null && typeof value === "object") {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-    }
-    return sorted;
-  }
-  return value;
-}
 
 // the .slice() copies into a plain ArrayBuffer, since some typescript lib
 // versions type Uint8Array.from's backing buffer as ArrayBufferLike, which

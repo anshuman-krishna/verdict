@@ -104,6 +104,19 @@ canary targets *args: canary-extractor
     set -euo pipefail
     uv --directory research run python -m verdict_research.canary.cli "{{targets}}" {{args}}
 
+# SPEC.md section 9's remote rules, the path that makes a broken selector a
+# same day fix instead of a store review. Signs the document the extension
+# also bundles and writes the envelope the site serves. Refuses to sign
+# anything the extension would reject or discard on arrival.
+#   just sign-rules --key path/to/private-key.jwk.json
+# The key never lives in this repository.
+#
+# sign the extraction rules for publishing
+sign-rules *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && node scripts/sign-rules.mjs {{args}}
+
 parity:
     #!/usr/bin/env bash
     set -euo pipefail

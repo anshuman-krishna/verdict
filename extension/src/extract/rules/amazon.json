@@ -1,0 +1,6 @@
+{
+  "version": 0,
+  "site": "amazon",
+  "locales": ["com", "fr", "de", "co.uk"],
+  "fields": {}
+}

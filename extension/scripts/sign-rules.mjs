@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-// Deployment tooling for SPEC.md section 9's signed remote rules, the
-// other half of extract/rulesLoader.ts's verifySignature. Nothing in
-// this repository runs this automatically: PLAN.md week 7 calls the real
-// remote rules infrastructure a deployment decision, which starts with a
-// real keypair whose private half lives in a secrets store, never in
-// this repository. This script is what someone runs by hand, once that
-// keypair exists, to turn a rules.json into the envelope
-// extract/remoteRules.ts's REMOTE_RULES_URL is expected to serve.
+// Deployment tooling for SPEC.md section 9's signed remote rules, the other
+// half of extract/rulesLoader.ts's verifySignature. Nothing in this
+// repository runs this automatically: PLAN.md week 7 calls the real remote
+// rules infrastructure a deployment decision, which starts with a real
+// keypair whose private half lives in a secrets store, never here. This is
+// what someone runs by hand, once that keypair exists.
 //
 // Usage:
-//   node scripts/sign-rules.mjs --rules path/to/rules.json --key path/to/private-key.jwk.json --out path/to/amazon.json
+//   just sign-rules --key path/to/private-key.jwk.json
+//   node scripts/sign-rules.mjs --key <path> [--rules <path>] [--out <path>]
 //
-// --key must be a JSON Web Key for a P-256 ECDSA private key (the same
-// curve rulesLoader.ts verifies against), for example one generated with:
+// --rules defaults to the document the extension bundles, so signing
+// publishes exactly what the next build would ship, and --out defaults to
+// the path the site serves it from (extract/remoteRules.ts's
+// REMOTE_RULES_URL).
+//
+// --key must be a JSON Web Key for a P-256 ECDSA private key, the same
+// curve rulesLoader.ts verifies against. To make a keypair:
 //   node -e "
 //     const { webcrypto } = require('crypto');
 //     webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
@@ -25,7 +29,13 @@
 // REMOTE_RULES_PUBLIC_KEY_JWK in extract/remoteRules.ts needs updating to.
 
 import { webcrypto } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { buildEnvelope, canonicalJson, publishProblems } from "./signRules.mjs";
+
+const HERE = import.meta.dirname;
+const DEFAULT_RULES = resolve(HERE, "..", "src", "extract", "rules", "amazon.json");
+const DEFAULT_OUT = resolve(HERE, "..", "..", "site", "public", "rules", "amazon.json");
 
 function parseArgs(argv) {
   const args = {};
@@ -33,37 +43,23 @@ function parseArgs(argv) {
     const key = argv[i]?.replace(/^--/, "");
     const value = argv[i + 1];
     if (key === undefined || value === undefined) {
-      throw new Error("usage: sign-rules.mjs --rules <path> --key <path> --out <path>");
+      throw new Error("usage: sign-rules.mjs --key <path> [--rules <path>] [--out <path>]");
     }
     args[key] = value;
   }
-  for (const required of ["rules", "key", "out"]) {
-    if (args[required] === undefined) {
-      throw new Error(`missing required --${required}`);
-    }
+  if (args.key === undefined) {
+    throw new Error("missing required --key");
   }
   return args;
 }
 
-// mirrors extract/rulesLoader.ts's canonicalJson exactly: a signature
-// produced any other way will not verify against what the extension
-// computes when it checks one.
-function canonicalJson(value) {
-  return JSON.stringify(sortKeysDeep(value));
-}
-
-function sortKeysDeep(value) {
-  if (Array.isArray(value)) {
-    return value.map(sortKeysDeep);
+// null on a first publish, when nothing is served yet.
+function publishedVersion(outPath) {
+  try {
+    return JSON.parse(readFileSync(outPath, "utf8")).rules.version ?? null;
+  } catch {
+    return null;
   }
-  if (value !== null && typeof value === "object") {
-    const sorted = {};
-    for (const key of Object.keys(value).sort()) {
-      sorted[key] = sortKeysDeep(value[key]);
-    }
-    return sorted;
-  }
-  return value;
 }
 
 function bytesToBase64(bytes) {
@@ -72,24 +68,39 @@ function bytesToBase64(bytes) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const rulesPath = args.rules ?? DEFAULT_RULES;
+  const outPath = args.out ?? DEFAULT_OUT;
 
-  const rules = JSON.parse(readFileSync(args.rules, "utf8"));
-  const privateKeyJwk = JSON.parse(readFileSync(args.key, "utf8"));
+  const document = JSON.parse(readFileSync(rulesPath, "utf8"));
+  const problems = publishProblems(document, publishedVersion(outPath));
+  if (problems.length > 0) {
+    for (const problem of problems) {
+      console.error(`refusing to sign: ${problem}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
 
   const privateKey = await webcrypto.subtle.importKey(
     "jwk",
-    privateKeyJwk,
+    JSON.parse(readFileSync(args.key, "utf8")),
     { name: "ECDSA", namedCurve: "P-256" },
     false,
     ["sign"],
   );
+  const data = new TextEncoder().encode(canonicalJson(document));
+  const signatureBytes = await webcrypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    data,
+  );
 
-  const data = new TextEncoder().encode(canonicalJson(rules));
-  const signatureBytes = await webcrypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, data);
-
-  const envelope = { rules, signature: bytesToBase64(new Uint8Array(signatureBytes)) };
-  writeFileSync(args.out, JSON.stringify(envelope, null, 2));
-  console.log(`wrote signed envelope for rules version ${rules.version} to ${args.out}`);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(
+    outPath,
+    `${JSON.stringify(buildEnvelope(document, bytesToBase64(new Uint8Array(signatureBytes))), null, 2)}\n`,
+  );
+  console.log(`wrote signed envelope for rules version ${document.version} to ${outPath}`);
 }
 
 main().catch((error) => {
