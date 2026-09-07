@@ -47,6 +47,39 @@ _py-lint:
         (cd "$dir" && uv run ruff check . && uv run ruff format --check .)
     done
 
+# SPEC.md section 14: "correct extraction on 95 percent of the fixture
+# corpus across at least four locales". Held out of `just check` on purpose,
+# because the corpus is hand built and an unfinished one would block every
+# commit until it is complete.
+#
+# judge the fixture corpus against section 14
+fixtures:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && VERDICT_FIXTURE_GATE=1 npx vitest run tests/fixtures.spec.ts
+
+# PLAN.md week 5 as one command: fit, calibrate on a held out slice,
+# evaluate on the untouched test set, and write extension/src/score/model.json
+# only if SPEC.md section 14's precision, recall, and calibration criteria
+# are met. Which features the model uses is not a default, so pass them:
+#   just train path/to/corpus.jsonl --features a,b,c
+# `just train corpus.jsonl --list-features` prints what the corpus carries.
+#
+# train, calibrate, evaluate, and export model.json
+train corpus *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd research && uv run python -m verdict_research.model.cli "{{corpus}}" {{args}}
+
+# every report path already handles the absent form as "no score can be
+# computed yet".
+#
+# restore model.json to its stated absent form
+clear-model *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd research && uv run python -c "from verdict_research.model.cli import clear; raise SystemExit(clear())" {{args}}
+
 parity:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,6 +90,8 @@ parity:
 # SITE.md's /install page and the README both promise a release lists, and
 # refuses a build over the 8 mb bundle cap. The document lands in
 # extension/.output beside the zips it describes, to be published with them.
+#
+# build the zips and write the release manifest
 release: (ext "zip")
     #!/usr/bin/env bash
     set -euo pipefail
