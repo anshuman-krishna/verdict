@@ -102,3 +102,63 @@ def test_clear_restores_the_stated_absent_form(tmp_path):
     artifact = json.loads(output.read_text(encoding="utf-8"))
     assert artifact["present"] is False
     assert artifact["reason"] == "retired"
+
+
+# the /method page publishes these numbers, so they come from the same run that produced the model:
+# a second command to remember is a page that eventually describes a different model.
+def test_training_writes_the_method_document_beside_the_model(tmp_path):
+    model = tmp_path / "model.json"
+    method = tmp_path / "methodEvaluation.json"
+    code = main(
+        [
+            corpus_file(tmp_path),
+            "--features",
+            "signal",
+            "--output",
+            str(model),
+            "--method-output",
+            str(method),
+        ]
+    )
+    assert code == 0
+    document = json.loads(method.read_text(encoding="utf-8"))
+    assert document["published"] is True
+    assert document["coefficients"] == json.loads(model.read_text(encoding="utf-8"))["coefficients"]
+
+
+def test_a_refused_model_publishes_no_method_document(tmp_path):
+    method = tmp_path / "methodEvaluation.json"
+    code = main(
+        [
+            corpus_file(tmp_path, separable=False),
+            "--features",
+            "signal",
+            "--output",
+            str(tmp_path / "model.json"),
+            "--method-output",
+            str(method),
+        ]
+    )
+    assert code == 1
+    assert not method.exists()
+
+
+def test_clear_restores_both_documents(tmp_path):
+    model = tmp_path / "model.json"
+    method = tmp_path / "methodEvaluation.json"
+    main(
+        [
+            corpus_file(tmp_path),
+            "--features",
+            "signal",
+            "--output",
+            str(model),
+            "--method-output",
+            str(method),
+        ]
+    )
+    assert (
+        clear(["--output", str(model), "--method-output", str(method), "--reason", "retired"]) == 0
+    )
+    assert json.loads(method.read_text(encoding="utf-8"))["published"] is False
+    assert json.loads(model.read_text(encoding="utf-8"))["present"] is False

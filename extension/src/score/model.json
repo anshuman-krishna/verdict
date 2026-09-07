@@ -1,5 +1,5 @@
 {
   "artifactVersion": 1,
   "present": false,
-  "reason": "no model has been trained yet"
+  "reason": "no labelled corpus exists yet, so no evaluation has been run"
 }

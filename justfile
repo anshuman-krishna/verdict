@@ -77,10 +77,14 @@ train corpus *args:
 # computed yet".
 #
 # restore model.json to its stated absent form
-clear-model *args:
+# a named parameter, not *args: just joins *args into one unquoted string, so a multi word reason
+# was being split into separate arguments and rejected
+clear-model reason="no model has been trained yet":
     #!/usr/bin/env bash
     set -euo pipefail
-    uv --directory research run python -c "from verdict_research.model.cli import clear; raise SystemExit(clear())" {{args}}
+    uv --directory research run python -c \
+      "import sys; from verdict_research.model.cli import clear; raise SystemExit(clear(sys.argv[1:]))" \
+      --reason "{{reason}}"
 
 # PLAN.md week 7. Builds the shipped extractor into something node can run,
 # so the python canary job drives the real interpreter rather than a second

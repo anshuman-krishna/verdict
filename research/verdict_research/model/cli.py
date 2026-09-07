@@ -5,6 +5,11 @@ import time
 from pathlib import Path
 
 from verdict_research.corpus.dataset import LabeledExample, load_jsonl
+from verdict_research.eval.method_document import (
+    absent_method_document,
+    build_method_document,
+    write_method_document_file,
+)
 from verdict_research.model.artifact import (
     absent_model_artifact,
     build_model_artifact,
@@ -26,6 +31,11 @@ from verdict_research.model.pipeline import (
 # made from what the corpus actually carries rather than from memory.
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2].parent / "extension/src/score/model.json"
+# written from the same run, because a second command to remember is a /method page that eventually
+# publishes numbers from a different model than the one that shipped
+DEFAULT_METHOD_OUTPUT = (
+    Path(__file__).resolve().parents[2].parent / "site/src/data/methodEvaluation.json"
+)
 
 
 def _feature_names(examples: list[LabeledExample]) -> list[str]:
@@ -68,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--eval-output", help="write the full evaluation report as json")
+    parser.add_argument("--method-output", default=str(DEFAULT_METHOD_OUTPUT))
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--test-fraction", type=float, default=0.2)
     parser.add_argument("--calibration-fraction", type=float, default=0.25)
@@ -132,11 +143,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    trained_at = time.time()
     write_model_artifact_file(
         args.output,
-        build_model_artifact(run.model, trained_at=time.time(), acceptance=acceptance_summary(run)),
+        build_model_artifact(run.model, trained_at=trained_at, acceptance=acceptance_summary(run)),
     )
+    write_method_document_file(build_method_document(run, trained_at), args.method_output)
     print(f"wrote {args.output}")
+    print(f"wrote {args.method_output}")
     return 0
 
 
@@ -145,10 +159,13 @@ def clear(argv: list[str] | None = None) -> int:
         prog="clear-model", description="restore the absent model.json"
     )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
+    parser.add_argument("--method-output", default=str(DEFAULT_METHOD_OUTPUT))
     parser.add_argument("--reason", default="no model has been trained yet")
     args = parser.parse_args(argv)
     write_model_artifact_file(args.output, absent_model_artifact(args.reason))
+    write_method_document_file(absent_method_document(args.reason), args.method_output)
     print(f"wrote {args.output}")
+    print(f"wrote {args.method_output}")
     return 0
 
 

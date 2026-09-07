@@ -1,5 +1,18 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import evaluation from "../../data/methodEvaluation.json";
+
+// the numbers below are generated from the evaluation run that produced the shipped model
+// (research/verdict_research/eval/method_document.py), never typed here: a published accuracy claim
+// that nothing checks against the model is how a page ends up describing last month's model.
+const published = evaluation.published === true;
+const accuracy = (evaluation as Record<string, any>).accuracy;
+const criteria = (evaluation as Record<string, any>).criteria;
+const coefficients: Record<string, number> = (evaluation as Record<string, any>).coefficients ?? {};
+
+function percent(value: number | null): string {
+  return value === null ? "unknown" : `${(value * 100).toFixed(1)} percent`;
+}
 ---
 
 <Layout
@@ -106,17 +119,100 @@ import Layout from "../../layouts/Layout.astro";
     regression coefficient is explainable and exports to a few kilobytes of JSON. Isotonic
     regression calibrates the raw output into a probability on a held out slice.
   </p>
-  <p>
-    Nothing is trained yet. This section will publish the actual coefficients once a labelled
-    corpus exists to train and calibrate against.
-  </p>
+  {
+    published ? (
+      <>
+        <p>
+          Every coefficient of the model currently shipped, so the sentence above is checkable
+          rather than a claim. A positive coefficient raises the estimate, a negative one lowers it.
+        </p>
+        <div class="table-scroll">
+          <table class="register">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Coefficient</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>intercept</td>
+                <td class="data">{(evaluation as Record<string, any>).intercept.toFixed(4)}</td>
+              </tr>
+              {Object.entries(coefficients).map(([name, value]) => (
+                <tr>
+                  <td>{name}</td>
+                  <td class="data">{value.toFixed(4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
+    ) : (
+      <p>
+        Nothing is trained yet. This section will publish the actual coefficients once a labelled
+        corpus exists to train and calibrate against.
+      </p>
+    )
+  }
 
   <h2>How well it works</h2>
-  <p>
-    Not published yet. This section will carry precision, recall, and a calibration curve
-    against a held out set that is never touched during development, as absolute numbers, not
-    adjectives, once that evaluation has been run.
-  </p>
+  {
+    published ? (
+      <>
+        <p>
+          Measured on a held out set that was never touched during development, at the decision
+          threshold Verdict actually ships with.
+        </p>
+        <div class="table-scroll">
+          <table class="register">
+            <thead>
+              <tr>
+                <th>Figure</th>
+                <th>Measured</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Precision on the manipulated class</td>
+                <td class="data">{percent(accuracy.precision)}</td>
+                <td class="data">above {percent(criteria.minimumPrecision)}</td>
+              </tr>
+              <tr>
+                <td>Recall on the manipulated class</td>
+                <td class="data">{percent(accuracy.recall)}</td>
+                <td class="data">above {percent(criteria.minimumRecall)}</td>
+              </tr>
+              <tr>
+                <td>Expected calibration error</td>
+                <td class="data">{accuracy.expectedCalibrationError.toFixed(4)}</td>
+                <td class="data">below {criteria.maximumExpectedCalibrationError}</td>
+              </tr>
+              <tr>
+                <td>Listings in the held out set</td>
+                <td class="data">{accuracy.heldOutCount}</td>
+                <td>n/a</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {criteria.met ? null : (
+          <p class="unmet">
+            This model does not meet every target above. It is published here anyway, because
+            hiding the run that missed would make the ones that pass worth less.
+          </p>
+        )}
+      </>
+    ) : (
+      <p>
+        Not published yet. This section will carry precision, recall, and a calibration curve
+        against a held out set that is never touched during development, as absolute numbers, not
+        adjectives, once that evaluation has been run.
+      </p>
+    )
+  }
 
   <h2>Where it fails</h2>
   <p>Written before anyone asks, because these are the honest edges of what this method can do.</p>
@@ -136,6 +232,14 @@ import Layout from "../../layouts/Layout.astro";
 </Layout>
 
 <style>
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .unmet {
+    color: var(--cancel);
+  }
+
   .worked-example {
     background: var(--paper-sunk);
     padding: 12px 16px;
