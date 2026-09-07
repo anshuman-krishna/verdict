@@ -2,7 +2,8 @@ import time
 from collections.abc import Callable
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
 
 from verdict_service.graph.contribution_store import ContributionEdge, ContributionEdgeStore
 
@@ -23,7 +24,18 @@ MAX_MINHASH_LENGTH = 128
 MAX_EDGES_PER_BATCH = 500
 
 
+# the wire format is camelCase, because the sender is javascript and every
+# other json this project exchanges is camelCase too (the canary status
+# document, the release manifest, model.json). Without this the fields below
+# were only reachable by their python names, so every batch the extension
+# actually sent was rejected as malformed while every test here passed:
+# the tests wrote snake_case because the model did.
+#
+# tests/contract/contributionEdge.json is the shape both sides now read, so
+# the two cannot drift apart again without one of them failing.
 class ContributionEdgeIn(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     reviewer_hash: str
     product_hash: str
     star_rating: int = Field(ge=1, le=5)

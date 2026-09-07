@@ -1,4 +1,10 @@
 import { BAND_COLORS, type Band } from "../score/report";
+import {
+  BASE_HARMONIC,
+  MAX_AMPLITUDE,
+  MAX_HARMONIC_SPREAD,
+  MIN_AMPLITUDE,
+} from "./rosetteConstants";
 
 // DESIGN.md section 7: "every report draws a guilloche rosette generated
 // from the feature vector itself. two harmonics whose frequency ratio comes
@@ -22,10 +28,6 @@ export interface RosetteParams {
   strokeColor: string;
 }
 
-const BASE_HARMONIC = 3;
-const MAX_HARMONIC_SPREAD = 4;
-const MIN_AMPLITUDE = 0.15;
-const MAX_AMPLITUDE = 0.8;
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));

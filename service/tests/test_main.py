@@ -82,3 +82,44 @@ def test_a_contributed_batch_becomes_a_flagged_lookup_result_once_recomputed():
     for reviewer in tight_group:
         assert full_hash(reviewer) in matches[full_hash(reviewer)[:4]]
     assert full_hash("g1") not in [h for hashes in matches.values() for h in hashes]
+
+
+# the two stores are chosen at import time from an environment variable, so
+# this reloads the module rather than reaching into it: what is being
+# checked is what a deployment actually gets.
+class TestStoreSelection:
+    @staticmethod
+    def _load(monkeypatch, path):
+        import importlib
+
+        import verdict_service.main as main
+
+        if path is None:
+            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+        else:
+            monkeypatch.setenv("VERDICT_DATABASE_PATH", str(path))
+        return importlib.reload(main)
+
+    def test_defaults_to_memory_so_nothing_writes_a_file_unasked(self, monkeypatch):
+        main = self._load(monkeypatch, None)
+        assert type(main.flagged_hash_store).__name__ == "InMemoryFlaggedHashStore"
+        assert type(main.contribution_edge_store).__name__ == "InMemoryContributionEdgeStore"
+
+    def test_persists_when_a_path_is_configured(self, monkeypatch, tmp_path):
+        database = tmp_path / "verdict.db"
+        main = self._load(monkeypatch, database)
+        try:
+            assert type(main.flagged_hash_store).__name__ == "SqliteFlaggedHashStore"
+            assert type(main.contribution_edge_store).__name__ == "SqliteContributionEdgeStore"
+            assert database.exists()
+        finally:
+            self._load(monkeypatch, None)
+
+    def test_both_stores_share_one_file(self, monkeypatch, tmp_path):
+        main = self._load(monkeypatch, tmp_path / "verdict.db")
+        try:
+            main.flagged_hash_store.add("abcd1111")
+            main.contribution_edge_store.prune_older_than(0.0)
+            assert main.flagged_hash_store.matches("abcd") == ["abcd1111"]
+        finally:
+            self._load(monkeypatch, None)

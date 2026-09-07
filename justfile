@@ -104,6 +104,33 @@ canary targets *args: canary-extractor
     set -euo pipefail
     uv --directory research run python -m verdict_research.canary.cli "{{targets}}" {{args}}
 
+# The band scale and the rosette's shape constants live in the extension
+# and the website draws with them too. This writes them to
+# site/src/data/reportVocabulary.json rather than leaving each page with its
+# own copy. `just check` fails when the committed file is out of date, so
+# changing a band colour and forgetting this is a failing build rather than
+# a website rendering last month's palette.
+#
+# regenerate the band scale the website reads
+export-vocabulary:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && node scripts/export-vocabulary.mjs
+
+# Store removal is this project's main operational risk, not lawsuits.
+# Reads the built bundle and refuses it if it names a host the
+# manifest never declared, carries remote code, asks for a permission
+# nothing justifies, or grants more of the web than it needs. Runs on the
+# output, since the bundle is what gets reviewed.
+#
+# check the built bundle against what gets extensions removed
+preflight: (ext "build")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension
+    node scripts/store-preflight.mjs --target chrome-mv3
+    node scripts/store-preflight.mjs --target firefox-mv3
+
 # SPEC.md section 9's remote rules, the path that makes a broken selector a
 # same day fix instead of a store review. Signs the document the extension
 # also bundles and writes the envelope the site serves. Refuses to sign

@@ -14,6 +14,15 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
+# unset means the two graph stores live in memory and a restart forgets
+# every contributed edge, which is right for a throwaway run and useless for
+# a deployment: PRIVACY.md section 8 retains raw edges for ninety days, and
+# a process that forgets them hourly never accumulates ninety of anything.
+# Point this at a mounted volume to persist. graph/sqlite_store.py explains
+# why that is one sqlite file rather than a database server.
+ENV VERDICT_DATABASE_PATH=/data/verdict.db
+VOLUME ["/data"]
+
 # PRIVACY.md section 3 and the /privacy page's own claim: "our servers do
 # not log IP addresses." verdict_service/logging_config.py disables
 # uvicorn's access logger in application code, so this process writes no

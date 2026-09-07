@@ -33,7 +33,14 @@ import Layout from "../../layouts/Layout.astro";
   </form>
 
   <script>
-    import { rosettePath, type RosetteParams } from "../../lib/rosette";
+    import {
+      BAND_COLORS,
+      BAND_LABELS,
+      ROSETTE,
+      UNKNOWN_BAND_COLOR,
+      rosettePath,
+      type RosetteParams,
+    } from "../../lib/rosette";
 
     // SPEC.md section 11, the other of the two islands SITE.md names.
     // extension/src/entrypoints/presence.content.ts sets
@@ -50,20 +57,6 @@ import Layout from "../../layouts/Layout.astro";
 
     // DESIGN.md section 4, provisional band scale, mirrored from
     // extension/src/score/report.ts so the two never quietly disagree.
-    const BAND_LABELS: Record<string, string> = {
-      clean: "clean",
-      "mostly-clean": "mostly clean",
-      mixed: "mixed",
-      doubtful: "doubtful",
-      "heavily-manipulated": "heavily manipulated",
-    };
-    const BAND_COLORS: Record<string, string> = {
-      clean: "#2E6B4E",
-      "mostly-clean": "#6E8A3C",
-      mixed: "#B08128",
-      doubtful: "#A75A2B",
-      "heavily-manipulated": "#9C382F",
-    };
 
     const root = document.documentElement;
 
@@ -124,8 +117,6 @@ import Layout from "../../layouts/Layout.astro";
     // extension/src/ui/rosetteInputFromReport.ts does.
     const BASE_HARMONIC = 3;
     const MAX_HARMONIC_SPREAD = 4;
-    const MIN_AMPLITUDE = 0.15;
-    const MAX_AMPLITUDE = 0.8;
 
     function rosetteParamsFromReport(report: Report): RosetteParams {
       const burstShare = report.evidence.find((r) => r.signal === "arrival timing")?.value ?? 0;
@@ -134,12 +125,12 @@ import Layout from "../../layouts/Layout.astro";
       const harmonicA = BASE_HARMONIC + Math.round(clamp01(burstShare) * MAX_HARMONIC_SPREAD);
       const harmonicB = harmonicA + 1 + Math.round(clamp01(duplicateShare) * MAX_HARMONIC_SPREAD);
       const amplitude =
-        MIN_AMPLITUDE + (MAX_AMPLITUDE - MIN_AMPLITUDE) * clamp01(report.estimatedInorganicShare);
+        ROSETTE.minAmplitude + (ROSETTE.maxAmplitude - ROSETTE.minAmplitude) * clamp01(report.estimatedInorganicShare);
       return {
         harmonicA,
         harmonicB,
         amplitude,
-        strokeColor: BAND_COLORS[report.band] ?? "#4C5C52",
+        strokeColor: BAND_COLORS[report.band] ?? UNKNOWN_BAND_COLOR,
       };
     }
 

@@ -1,0 +1,36 @@
+{
+  "vocabularyVersion": 1,
+  "bands": [
+    {
+      "slug": "clean",
+      "label": "clean",
+      "color": "#2E6B4E"
+    },
+    {
+      "slug": "mostly-clean",
+      "label": "mostly clean",
+      "color": "#6E8A3C"
+    },
+    {
+      "slug": "mixed",
+      "label": "mixed",
+      "color": "#B08128"
+    },
+    {
+      "slug": "doubtful",
+      "label": "doubtful",
+      "color": "#A75A2B"
+    },
+    {
+      "slug": "heavily-manipulated",
+      "label": "heavily manipulated",
+      "color": "#9C382F"
+    }
+  ],
+  "rosette": {
+    "baseHarmonic": 3,
+    "maxHarmonicSpread": 4,
+    "minAmplitude": 0.15,
+    "maxAmplitude": 0.8
+  }
+}

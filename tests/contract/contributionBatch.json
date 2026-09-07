@@ -1,0 +1,20 @@
+{
+  "edges": [
+    {
+      "reviewerHash": "3b1f0e9c2a7d4b6851fe0a3c9d2b7e14f60a5c8d93e21b7460fa8d3c5e912b74",
+      "productHash": "8d2c74e10b9a63f52d81c407e93b6a1f5c40d827b93e16a05fd72c8e410b93a6",
+      "starRating": 5,
+      "weekBucket": 2900,
+      "verified": true,
+      "minhashSignature": ["1043", "77", "9182"]
+    },
+    {
+      "reviewerHash": "c40d827b93e16a05fd72c8e410b93a68d2c74e10b9a63f52d81c407e93b6a1f5",
+      "productHash": "8d2c74e10b9a63f52d81c407e93b6a1f5c40d827b93e16a05fd72c8e410b93a6",
+      "starRating": 4,
+      "weekBucket": 2901,
+      "verified": null,
+      "minhashSignature": []
+    }
+  ]
+}

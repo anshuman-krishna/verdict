@@ -97,11 +97,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO: once the fixture corpus and extraction harness exist
-      # (PLAN.md sessions 2, 5, 6, 7), run the harness here and fail on
-      # regression against the hand written expectations.
-      - name: run fixture corpus checks
-        run: echo "no fixture corpus yet, nothing to check"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      # the harness itself runs in the test job, where it fails on any
+      # fixture that broke without a documented reason. This job is
+      # SPEC.md section 14's gate: 95 percent across at least four
+      # locales. It cannot pass on an empty corpus, and the corpus is
+      # hand built (PLAN.md week 1 task 2), so it turns itself on when
+      # the first fixture lands rather than needing to be remembered.
+      - name: judge the corpus against section 14, once there is one
+        run: |
+          if ls extension/fixtures/*.html >/dev/null 2>&1; then
+            just fixtures
+          else
+            echo "no fixture corpus yet; the harness itself runs in the test job"
+          fi
+
+  # Store removal is this project's main operational risk. This reads
+  # the built bundle for the things that cause it: a host the manifest never
+  # declared, remote code, a permission nothing justifies, or a grant
+  # covering more of the web than any part of this needs.
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: check the built bundle against what gets extensions removed
+        run: just preflight
 
   no-network:
     runs-on: ubuntu-latest

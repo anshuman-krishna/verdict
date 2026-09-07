@@ -40,6 +40,12 @@ def recompute_flagged_hashes(
     cutoff = now() - retention_seconds
     edges = contribution_store.list_since(cutoff)
     flagged = compute_flagged_hashes_from_contributions(edges)
-    for full_hash in flagged:
-        flagged_store.add(full_hash)
+    # a persisted store commits per write, and a run over a real edge set
+    # flags many, so it is given the whole batch when it can take one.
+    add_many = getattr(flagged_store, "add_many", None)
+    if callable(add_many):
+        add_many(list(flagged))
+    else:
+        for full_hash in flagged:
+            flagged_store.add(full_hash)
     return len(flagged)
