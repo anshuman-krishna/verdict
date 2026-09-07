@@ -27,7 +27,7 @@ describe("extractReviews", () => {
       locales: ["com"],
       fields: { reviews: { strategy: "embedded-json", path: "$.reviewsData.reviews[*]" } },
     };
-    expect(extractReviews(root, rules)).toEqual([
+    expect(extractReviews(root, rules, "com")).toEqual([
       { rating: 5, text: "great", date: "2024-01-01", verified: true, reviewerId: "r1" },
       { rating: 1, text: "bad", date: null, verified: null, reviewerId: null },
     ]);
@@ -35,7 +35,7 @@ describe("extractReviews", () => {
 
   it("returns an empty array when the rules document has no reviews field", () => {
     const rules: RulesDocument = { version: 1, site: "amazon", locales: ["com"], fields: {} };
-    expect(extractReviews(parse(""), rules)).toEqual([]);
+    expect(extractReviews(parse(""), rules, "com")).toEqual([]);
   });
 
   it("drops matches that are not objects, such as a selector fallback's plain strings", () => {
@@ -52,7 +52,7 @@ describe("extractReviews", () => {
         },
       },
     };
-    expect(extractReviews(root, rules)).toEqual([]);
+    expect(extractReviews(root, rules, "com")).toEqual([]);
   });
 });
 

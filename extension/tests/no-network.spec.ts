@@ -77,9 +77,9 @@ describe("the default analysis path makes no network requests", () => {
   });
 
   it("reads and writes the local caches without touching the network", async () => {
-    await setCachedReviews("no-network-product", "amazon", [review], product);
+    await setCachedReviews("no-network-product", "amazon", [review]);
     const cached = await getCachedReviews("no-network-product", "amazon");
-    expect(cached?.reviews).toEqual([review]);
+    expect(cached?.reviews).toEqual([{ ...review, text: null }]);
 
     await setPref("historyEnabled", true);
     await expect(getPref<boolean>("historyEnabled")).resolves.toBe(true);
@@ -88,15 +88,14 @@ describe("the default analysis path makes no network requests", () => {
   });
 
   it("runs fetchReviewPages driven only by an injected fetcher, never the real network", async () => {
-    const reviews = await fetchReviewPages({
+    const fetched = await fetchReviewPages({
       productId: "no-network-fetch",
       site: "amazon",
-      product,
       fetchPage: async () => [review],
       maxPages: 1,
       delay: async () => {},
     });
-    expect(reviews).toEqual([review]);
+    expect(fetched.reviews).toEqual([review]);
   });
 
   it("analyzePage, the content script's default entry point, never touches the network", async () => {

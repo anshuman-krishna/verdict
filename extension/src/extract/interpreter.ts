@@ -1,5 +1,11 @@
 import { queryJsonPath } from "./jsonpath";
-import type { EmbeddedJsonStrategy, FieldRule, SelectorStrategy } from "./rules";
+import type {
+  CompositeStrategy,
+  EmbeddedJsonStrategy,
+  FieldRule,
+  PresenceStrategy,
+  SelectorStrategy,
+} from "./rules";
 
 const DEFAULT_EMBEDDED_JSON_SELECTOR = 'script[type="application/ld+json"]';
 
@@ -54,14 +60,70 @@ export function resolveFieldTraced(root: ParentNode, rule: FieldRule): TracedFie
 }
 
 function strategyTarget(rule: FieldRule): string {
-  return rule.strategy === "embedded-json" ? rule.path : rule.value;
+  switch (rule.strategy) {
+    case "embedded-json":
+      return rule.path;
+    case "composite":
+      return rule.container;
+    default:
+      return rule.value;
+  }
 }
 
 function runStrategy(root: ParentNode, rule: FieldRule): unknown[] {
-  if (rule.strategy === "embedded-json") {
-    return runEmbeddedJson(root, rule);
+  switch (rule.strategy) {
+    case "embedded-json":
+      return runEmbeddedJson(root, rule);
+    case "composite":
+      return runComposite(root, rule);
+    case "presence":
+      return runPresence(root, rule);
+    default:
+      return runSelector(root, rule);
   }
-  return runSelector(root, rule);
+}
+
+// one record per matched container, each field resolved against that
+// container rather than against the page, so two review blocks cannot
+// borrow each other's fields. A container that yields nothing for any field
+// is dropped: an empty record is not a review, and keeping it would inflate
+// the count SPEC.md section 6's minimum thresholds are measured against.
+function runComposite(root: ParentNode, rule: CompositeStrategy): unknown[] {
+  let containers: Element[];
+  try {
+    containers = Array.from(root.querySelectorAll(rule.container));
+  } catch {
+    return [];
+  }
+  const records: Record<string, unknown>[] = [];
+  for (const container of containers) {
+    const record: Record<string, unknown> = {};
+    let populated = false;
+    for (const [name, fieldRule] of Object.entries(rule.fields)) {
+      const value = resolveField(container, fieldRule)[0];
+      if (value === undefined) {
+        continue;
+      }
+      record[name] = value;
+      // a presence rule always answers, including with false, so it is not
+      // by itself evidence that this container is a record
+      populated ||= fieldRule.strategy !== "presence" || value === true;
+    }
+    if (populated) {
+      records.push(record);
+    }
+  }
+  return records;
+}
+
+// always answers, so it never falls through to a fallback: "no badge here"
+// is the answer, not a failure to find one.
+function runPresence(root: ParentNode, rule: PresenceStrategy): unknown[] {
+  try {
+    return [root.querySelector(rule.value) !== null];
+  } catch {
+    return [false];
+  }
 }
 
 function runEmbeddedJson(root: ParentNode, rule: EmbeddedJsonStrategy): unknown[] {

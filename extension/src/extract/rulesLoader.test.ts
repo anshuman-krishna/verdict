@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalJson, loadRules, type SignedRulesEnvelope } from "./rulesLoader";
 import type { RulesDocument } from "./rules";
 
+const FIELDS = { title: { strategy: "selector", value: "h1" } } as const;
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) {
@@ -29,7 +31,7 @@ async function sign(rules: RulesDocument, privateKey: CryptoKey): Promise<string
 }
 
 function bundledDefault(): RulesDocument {
-  return { version: 1, site: "example", locales: ["com"], fields: {} };
+  return { version: 1, site: "example", locales: ["com"], fields: FIELDS };
 }
 
 let cacheKeyCounter = 0;
@@ -52,7 +54,7 @@ describe("loadRules", () => {
   it("returns the fetched rules when the signature verifies", async () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-    const rules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: {} };
+    const rules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: FIELDS };
     const envelope: SignedRulesEnvelope = { rules, signature: await sign(rules, keyPair.privateKey) };
 
     const fetchImpl = vi.fn().mockResolvedValue({
@@ -75,7 +77,7 @@ describe("loadRules", () => {
   it("caches a verified fetch and does not fetch again within the ttl", async () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-    const rules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: {} };
+    const rules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: FIELDS };
     const envelope: SignedRulesEnvelope = { rules, signature: await sign(rules, keyPair.privateKey) };
     const cacheKey = freshCacheKey();
 
@@ -109,7 +111,7 @@ describe("loadRules", () => {
   it("falls back to the bundled default when the signature does not verify", async () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-    const signedRules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: {} };
+    const signedRules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: FIELDS };
     const signature = await sign(signedRules, keyPair.privateKey);
     // tampered after signing: the version claimed in the envelope no longer
     // matches what was actually signed
@@ -197,7 +199,7 @@ describe("loadRules", () => {
     const cacheKey = freshCacheKey();
     let now = 1_000_000;
 
-    const newerRules: RulesDocument = { version: 5, site: "example", locales: ["com"], fields: {} };
+    const newerRules: RulesDocument = { version: 5, site: "example", locales: ["com"], fields: FIELDS };
     const newerEnvelope: SignedRulesEnvelope = {
       rules: newerRules,
       signature: await sign(newerRules, keyPair.privateKey),
@@ -214,7 +216,7 @@ describe("loadRules", () => {
     });
     now += 25 * 60 * 60 * 1000; // past the 24 hour ttl
 
-    const olderRules: RulesDocument = { version: 3, site: "example", locales: ["com"], fields: {} };
+    const olderRules: RulesDocument = { version: 3, site: "example", locales: ["com"], fields: FIELDS };
     const olderEnvelope: SignedRulesEnvelope = {
       rules: olderRules,
       signature: await sign(olderRules, keyPair.privateKey),
@@ -231,5 +233,105 @@ describe("loadRules", () => {
     });
 
     expect(result).toEqual(fallback);
+  });
+});
+
+// a signature says who wrote the document, not that it is a rules
+// document. A bug in whatever publishes the file would produce something
+// correctly signed and structurally wrong, and the interpreter is defensive
+// enough that it would degrade to zero matches, which looks exactly like a
+// page that changed.
+describe("loadRules against a signed but malformed document", () => {
+  async function envelopeFor(rules: unknown): Promise<{
+    envelope: SignedRulesEnvelope;
+    publicKeyJwk: JsonWebKey;
+  }> {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const signature = await sign(rules as RulesDocument, keyPair.privateKey);
+    return { envelope: { rules: rules as RulesDocument, signature }, publicKeyJwk };
+  }
+
+  it("falls back to the bundled rules rather than trusting the shape", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: "not an object",
+    });
+    const bundled = bundledDefault();
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundled,
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+    });
+    expect(result).toBe(bundled);
+  });
+
+  it("refuses a document that would extract nothing", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: {},
+    });
+    const bundled = bundledDefault();
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundled,
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+    });
+    expect(result).toBe(bundled);
+  });
+
+  it("caches nothing when the document is refused, so it is retried", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: {},
+    });
+    const fetchImpl = vi.fn(
+      async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+    );
+    const cacheKey = freshCacheKey();
+    const options = {
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl,
+    };
+
+    await loadRules(options);
+    await loadRules(options);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a document whose unusable field is only one of several", async () => {
+    const { envelope, publicKeyJwk } = await envelopeFor({
+      version: 9,
+      site: "example",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: "h1" },
+        reviews: { strategy: "unheard-of" },
+      },
+    });
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl: async () => ({ ok: true, json: async () => envelope }) as unknown as Response,
+    });
+    expect(Object.keys(result.fields)).toEqual(["title"]);
   });
 });

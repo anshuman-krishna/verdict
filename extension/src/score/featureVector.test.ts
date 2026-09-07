@@ -26,7 +26,21 @@ describe("dayIndex", () => {
   });
 
   it("rejects a datetime string with no explicit time zone", () => {
-    expect(() => dayIndex("2024-03-15T10:00:00")).toThrow(/explicit time zone/);
+    expect(() => dayIndex("2024-03-15T10:00:00")).toThrow(/ambiguous zone/);
+  });
+
+  // v8 parses all of these and returns local midnight, so before this check
+  // the same review landed on different days for readers in different
+  // timezones. extract/normalise.ts converts them to iso or to null, and
+  // this is what keeps anything else from reaching the burst detector.
+  it.each([
+    "3 janvier 2026",
+    "3. Januar 2026",
+    "Reviewed in the United States on January 3, 2026",
+    "January 3, 2026",
+    "03/01/2026",
+  ])("rejects %s rather than reading it as a local date", (raw) => {
+    expect(() => dayIndex(raw)).toThrow(/iso date/);
   });
 });
 

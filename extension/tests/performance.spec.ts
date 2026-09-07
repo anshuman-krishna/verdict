@@ -57,7 +57,7 @@ function timeAnalysis(count: number) {
 
   const measurement = measure(`full analysis, ${count} reviews`, RUNS, () => {
     const product = extractProductSnapshot(container, RULES, page, URL);
-    const extracted = extractReviews(container, RULES);
+    const extracted = extractReviews(container, RULES, page.locale);
     buildReport({
       reviews: extracted,
       seed: URL,

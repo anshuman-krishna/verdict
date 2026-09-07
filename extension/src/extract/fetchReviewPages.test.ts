@@ -1,18 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
-import type { ProductSnapshot, Review } from "./types";
+import type { Review } from "./types";
 import { fetchReviewPages, type FetchProgress } from "./fetchReviewPages";
-
-const product: ProductSnapshot = {
-  title: "a product",
-  category: "kitchen",
-  claimedRating: 4.6,
-  reviewCount: 100,
-  site: "amazon",
-  locale: "com",
-  url: "https://www.amazon.com/dp/B000EXAMPLE",
-  thumbnailUrl: null,
-};
 
 function review(text: string): Review {
   return { rating: 5, text, date: "2026-01-01", verified: true, reviewerId: "r-1" };
@@ -26,7 +15,6 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-lazy",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 1,
       delay: async () => {},
@@ -42,7 +30,6 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-progress",
       site: "amazon",
-      product,
       fetchPage: async (page) => [review(`page ${page} a`), review(`page ${page} b`)],
       maxPages: 3,
       delay: async () => {},
@@ -60,7 +47,6 @@ describe("fetchReviewPages", () => {
     const options = {
       productId: "p-cached-progress",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 1,
       delay: async () => {},
@@ -77,12 +63,11 @@ describe("fetchReviewPages", () => {
     const reviews = await fetchReviewPages({
       productId: "p-cap",
       site: "amazon",
-      product,
       fetchPage,
       delay: async () => {},
     });
     expect(fetchPage).toHaveBeenCalledTimes(5);
-    expect(reviews.map((r) => r.text)).toEqual([
+    expect(reviews.reviews.map((r) => r.text)).toEqual([
       "page 1",
       "page 2",
       "page 3",
@@ -96,7 +81,6 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-cap-2",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
@@ -110,7 +94,6 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-spacing",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 3,
       delay: async (ms) => {
@@ -131,7 +114,6 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-first",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 1,
       delay: async (ms) => {
@@ -146,7 +128,6 @@ describe("fetchReviewPages", () => {
     const first = await fetchReviewPages({
       productId: "p-cache",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
@@ -156,13 +137,94 @@ describe("fetchReviewPages", () => {
     const second = await fetchReviewPages({
       productId: "p-cache",
       site: "amazon",
-      product,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
     });
 
     expect(fetchPage.mock.calls.length).toBe(callsAfterFirstRun);
-    expect(second).toEqual(first);
+    expect(second.reviews).toHaveLength(first.reviews.length);
+    expect(second.reviews.map((r) => r.reviewerId)).toEqual(first.reviews.map((r) => r.reviewerId));
+  });
+
+  // PRIVACY.md section 2: "review text is never persisted... the MinHash
+  // signature and the embedding centroid are kept, and neither can
+  // reconstruct the text."
+  describe("what survives the cache", () => {
+    it("returns no review text at all on a cache hit", async () => {
+      const options = {
+        productId: "p-notext",
+        site: "amazon",
+        fetchPage: async (page: number) => [review(`page ${page} with real review text`)],
+        maxPages: 2,
+        delay: async () => {},
+      };
+      const fresh = await fetchReviewPages(options);
+      expect(fresh.reviews.every((r) => r.text !== null)).toBe(true);
+
+      const cached = await fetchReviewPages(options);
+      expect(cached.reviews.every((r) => r.text === null)).toBe(true);
+    });
+
+    it("keeps every other field, so nothing but the text is lost", async () => {
+      const options = {
+        productId: "p-fields",
+        site: "amazon",
+        fetchPage: async () => [
+          { rating: 4, text: "some text", date: "2026-02-03", verified: false, reviewerId: "r-9" },
+        ],
+        maxPages: 1,
+        delay: async () => {},
+      };
+      await fetchReviewPages(options);
+      const cached = await fetchReviewPages(options);
+      expect(cached.reviews[0]).toEqual({
+        rating: 4,
+        text: null,
+        date: "2026-02-03",
+        verified: false,
+        reviewerId: "r-9",
+      });
+    });
+
+    it("hands back a signature for each cached review that had text", async () => {
+      const options = {
+        productId: "p-signature",
+        site: "amazon",
+        fetchPage: async () => [review("a review with plenty of text to shingle over")],
+        maxPages: 1,
+        delay: async () => {},
+      };
+      await fetchReviewPages(options);
+      const cached = await fetchReviewPages(options);
+      const first = cached.reviews[0] as Review;
+      expect(cached.signatures.get(first)).toHaveLength(128);
+    });
+
+    it("hands back no signature for a review that never had text", async () => {
+      const options = {
+        productId: "p-notextever",
+        site: "amazon",
+        fetchPage: async () => [
+          { rating: 5, text: null, date: "2026-01-01", verified: true, reviewerId: "r-1" },
+        ],
+        maxPages: 1,
+        delay: async () => {},
+      };
+      await fetchReviewPages(options);
+      const cached = await fetchReviewPages(options);
+      expect(cached.signatures.get(cached.reviews[0] as Review)).toBeUndefined();
+    });
+
+    it("carries no signatures on a fresh fetch, where the text is still present", async () => {
+      const fresh = await fetchReviewPages({
+        productId: "p-fresh",
+        site: "amazon",
+        fetchPage: async () => [review("text is right here, no need for a signature")],
+        maxPages: 1,
+        delay: async () => {},
+      });
+      expect(fresh.signatures.get(fresh.reviews[0] as Review)).toBeUndefined();
+    });
   });
 });

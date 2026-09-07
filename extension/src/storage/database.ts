@@ -1,9 +1,16 @@
 const DATABASE_NAME = "verdict";
-// bumped from 1 to 2 to add graphContributionQueue below. onupgradeneeded's
-// own "if not exists, create" guards mean a browser already at version 1
-// runs the same handler and only the new store is added; nothing about
-// reviewsCache, history, or prefs changes.
-const DATABASE_VERSION = 2;
+// bumped from 1 to 2 to add graphContributionQueue, then from 2 to 3 to
+// clear reviews_cache. onupgradeneeded's own "if not exists, create" guards
+// mean a browser at any earlier version runs the same handler and only the
+// missing stores are added; nothing about history or prefs changes.
+//
+// Version 3 exists because records written before it hold review text, and
+// PRIVACY.md section 2 says that text is never persisted
+// (storage/reviewsCache.ts). Leaving them to expire on their own ttl would
+// leave text on disk for up to seven more days after an update that
+// promises it is not there, so the store is emptied on upgrade instead. The
+// cost is one cold cache after updating, which is a re-fetch, not a loss.
+const DATABASE_VERSION = 3;
 
 export const STORE_NAMES = {
   reviewsCache: "reviews_cache",
@@ -20,6 +27,8 @@ export function openDatabase(): Promise<IDBDatabase> {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAMES.reviewsCache)) {
         db.createObjectStore(STORE_NAMES.reviewsCache, { keyPath: "key" });
+      } else if (request.transaction !== null) {
+        request.transaction.objectStore(STORE_NAMES.reviewsCache).clear();
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.history)) {
         // autoIncrement avoids key collisions when two entries land in the

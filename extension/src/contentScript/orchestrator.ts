@@ -78,7 +78,7 @@ export async function analyzePage(
   if (product === null) {
     return null;
   }
-  const reviews = extractReviews(document, deps.rules);
+  const reviews = extractReviews(document, deps.rules, page.locale);
   const outcome = await scoreAndMaybeSave(page, product, reviews, deps);
   return { page, product, reviews, outcome };
 }
@@ -88,6 +88,7 @@ async function scoreAndMaybeSave(
   product: ProductSnapshot,
   reviews: readonly Review[],
   deps: OrchestratorDeps,
+  signatureCache?: WeakMap<Review, bigint[]>,
 ): Promise<ReportOutcome> {
   // the claimed rating is one of the two figures the certificate block
   // shows side by side (DESIGN.md section 6); a report with no claimed
@@ -105,6 +106,7 @@ async function scoreAndMaybeSave(
     now: deps.now,
     random: deps.random,
     bootstrapResamples: deps.bootstrapResamples,
+    signatureCache,
   });
 
   if (outcome.status === "ok" && deps.reputation && (await deps.reputation.isEnabled())) {
@@ -230,7 +232,6 @@ export async function checkMoreDeeply(
   const fetched = await fetchReviewPages({
     productId: page.productId,
     site: page.site,
-    product,
     maxPages: options.maxPages,
     delay: options.delay,
     random: options.random,
@@ -242,11 +243,11 @@ export async function checkMoreDeeply(
       }
       const html = await response.text();
       const parsed = new DOMParser().parseFromString(html, "text/html");
-      return extractReviews(parsed, deps.rules);
+      return extractReviews(parsed, deps.rules, page.locale);
     },
   });
 
-  const reviews = mergeReviews(existingReviews, fetched);
-  const outcome = await scoreAndMaybeSave(page, product, reviews, deps);
+  const reviews = mergeReviews(existingReviews, fetched.reviews);
+  const outcome = await scoreAndMaybeSave(page, product, reviews, deps, fetched.signatures);
   return { page, product, reviews, outcome };
 }

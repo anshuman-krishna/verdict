@@ -57,7 +57,7 @@ export function runFixture(
   }
 
   const snapshot = extractProductSnapshot(document, rules, page, expectation.url);
-  const reviews = extractReviews(document, rules);
+  const reviews = extractReviews(document, rules, page.locale);
   const base = {
     name,
     site: page.site,

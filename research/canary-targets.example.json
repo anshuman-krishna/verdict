@@ -1,0 +1,14 @@
+[
+  {
+    "site": "amazon",
+    "locale": "com",
+    "url": "https://www.amazon.com/dp/REPLACEMEXX",
+    "minimumExpectedReviews": 20
+  },
+  {
+    "site": "amazon",
+    "locale": "co.uk",
+    "url": "https://www.amazon.co.uk/dp/REPLACEMEXX",
+    "minimumExpectedReviews": 20
+  }
+]

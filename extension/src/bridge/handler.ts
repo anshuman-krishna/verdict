@@ -1,6 +1,7 @@
 import type { RulesDocument } from "../extract/rules";
 import { summarizeReport } from "../score/report";
 import { deleteAllHistory, listHistory } from "../storage/history";
+import type { BridgeRateLimiter } from "./rateLimit";
 import {
   type AnalyzeResponse,
   type BridgeRequest,
@@ -45,6 +46,14 @@ async function handleAnalyze(
 export interface BridgeHandlerOptions {
   bundledRules: RulesDocument;
   analyzeUrl: AnalyzeUrl;
+  // PRIVACY.md section 7's per origin rate limit. Optional so a caller that
+  // has not wired one is obvious in review rather than silently unlimited:
+  // an absent limiter is treated as an unknown sender below, not as a pass.
+  rateLimiter?: BridgeRateLimiter;
+  // the sender's origin, from browser.runtime.onMessageExternal. Absent
+  // means the runtime did not tell us who is asking, which is not a reason
+  // to answer anyway.
+  origin?: string;
 }
 
 // never accepts a message that is not one of the shapes messages.ts
@@ -56,6 +65,17 @@ export async function handleBridgeMessage(
 ): Promise<BridgeResponse | { error: string }> {
   if (!isBridgeRequest(message)) {
     return { error: "unrecognised message" };
+  }
+  // the shape check runs first so an unrecognised message never spends an
+  // allowance, and the limit runs before any storage read or tab open so a
+  // rejected request costs nothing but this comparison.
+  if (options.rateLimiter !== undefined) {
+    if (options.origin === undefined) {
+      return { error: "unknown origin" };
+    }
+    if (!options.rateLimiter.allow(options.origin, message.type)) {
+      return { error: "rate limited" };
+    }
   }
   return handleRequest(message, options);
 }

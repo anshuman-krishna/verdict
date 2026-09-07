@@ -7,6 +7,7 @@
     "postinstall": "wxt prepare",
     "dev": "wxt",
     "build": "wxt prepare && tsc --noEmit && wxt build && wxt build -b firefox",
+    "build:canary": "vite build --config vite.canary.config.ts",
     "test": "vitest run --passWithNoTests",
     "zip": "rm -rf .output && wxt zip && wxt zip -b firefox"
   },

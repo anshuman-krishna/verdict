@@ -83,6 +83,14 @@ export function renderOptions(
         <button type="button" class="export-csv">Export as CSV</button>
         <button type="button" class="delete-all">Delete everything</button>
       </div>
+      <!-- PRIVACY.md section 6: history is local, so uninstalling takes it
+           with it. That is worth one sentence next to the export buttons,
+           where somebody is already thinking about their data, as well as
+           on the page the uninstall itself opens. -->
+      <p class="hint">
+        History lives only in this browser. Uninstalling Verdict deletes it, so export first if
+        you want to keep it.
+      </p>
     </section>
   `;
 

@@ -15,9 +15,9 @@ RUN uv sync --frozen --no-dev
 EXPOSE 8000
 
 # PRIVACY.md section 3 and the /privacy page's own claim: "our servers do
-# not log IP addresses." verdict_service/logging_config.py already
-# disables uvicorn's access logger in application code, so this covers
-# only this process; a reverse proxy or load balancer placed in front of
-# it is the deploying operator's own responsibility to configure the same
-# way.
+# not log IP addresses." verdict_service/logging_config.py disables
+# uvicorn's access logger in application code, so this process writes no
+# request line. The reverse proxy in front of it is deploy/Caddyfile, which
+# PRIVACY.md section 4 commits to publishing and which
+# tests/test_deploy_config.py checks on every run.
 CMD ["uv", "run", "uvicorn", "verdict_service.main:app", "--host", "0.0.0.0", "--port", "8000"]

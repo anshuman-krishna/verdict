@@ -1,5 +1,5 @@
 import { getCachedReviews, setCachedReviews } from "../storage/reviewsCache";
-import type { ProductSnapshot, Review } from "./types";
+import type { Review } from "./types";
 
 export const DEFAULT_MAX_PAGES = 5;
 const MIN_SPACING_MS = 800;
@@ -18,10 +18,18 @@ export interface FetchProgress {
   reviewCount: number;
 }
 
+// PRIVACY.md section 2: a cache hit returns reviews with no text, so the
+// duplication signal is fed the stored minhash signature instead. A fresh
+// fetch carries its text and leaves this empty, which is the same thing
+// score/textNearDuplication.ts does when no cache is supplied at all.
+export interface FetchedReviews {
+  reviews: Review[];
+  signatures: WeakMap<Review, bigint[]>;
+}
+
 export interface FetchReviewPagesOptions {
   productId: string;
   site: string;
-  product: ProductSnapshot;
   fetchPage: (pageNumber: number) => Promise<Review[]>;
   maxPages?: number;
   delay?: (ms: number) => Promise<void>;
@@ -37,14 +45,16 @@ function defaultDelay(ms: number): Promise<void> {
 // least 800ms apart with jitter, and caches the combined result. only ever
 // runs when a caller explicitly invokes it: nothing here fetches on import
 // or on page load, per SPEC.md section 9.
-export async function fetchReviewPages(options: FetchReviewPagesOptions): Promise<Review[]> {
+export async function fetchReviewPages(
+  options: FetchReviewPagesOptions,
+): Promise<FetchedReviews> {
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   const delay = options.delay ?? defaultDelay;
   const random = options.random ?? Math.random;
 
   const cached = await getCachedReviews(options.productId, options.site);
   if (cached) {
-    return cached.reviews;
+    return { reviews: cached.reviews, signatures: cached.signatures };
   }
 
   const reviews: Review[] = [];
@@ -57,6 +67,6 @@ export async function fetchReviewPages(options: FetchReviewPagesOptions): Promis
     options.onProgress?.({ pagesFetched: page, maxPages, reviewCount: reviews.length });
   }
 
-  await setCachedReviews(options.productId, options.site, reviews, options.product);
-  return reviews;
+  await setCachedReviews(options.productId, options.site, reviews);
+  return { reviews, signatures: new WeakMap() };
 }

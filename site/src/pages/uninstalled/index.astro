@@ -1,0 +1,47 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+// PRIVACY.md section 6: "uninstalling the extension deletes it, and the
+// uninstall flow says so, since people lose data that way and it is
+// avoidable with one sentence." The browser opens this page when Verdict is
+// removed (chrome.runtime.setUninstallURL, wired in
+// extension/src/entrypoints/background.ts).
+//
+// The url the extension registers carries no query string and no
+// identifier, so the only thing reaching this page is a page view like any
+// other. Nothing on it asks a question, tracks an answer, or tries to talk
+// anybody out of leaving.
+---
+
+<Layout
+  title="Verdict is uninstalled"
+  description="What happened to your data when you removed Verdict."
+>
+  <h1>Verdict is uninstalled</h1>
+  <p>
+    It is gone from your browser, along with everything it stored. That was all of it: your
+    check history, the cached review data, and your preferences never lived anywhere else.
+  </p>
+
+  <h2>Your history is deleted</h2>
+  <p>
+    Verdict kept your history on your own machine and never had a copy. There is no account to
+    close and no server to write to, so removing the extension removed the data with it. If you
+    wanted to keep it, an export from the options page was the way, and that page is gone now
+    too.
+  </p>
+  <p>
+    If you reinstall, Verdict starts empty. You can import nothing, because there was never
+    anywhere to import from.
+  </p>
+
+  <h2>If something was wrong</h2>
+  <p>
+    Reports that looked wrong are worth telling us about, and so are pages Verdict read badly.
+    The <a href="/status">status page</a> shows whether extraction is currently working on each
+    site, which is often the answer.
+  </p>
+  <p>
+    You can <a href="/install">install it again</a> at any time.
+  </p>
+</Layout>

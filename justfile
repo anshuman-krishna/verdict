@@ -69,7 +69,9 @@ fixtures:
 train corpus *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd research && uv run python -m verdict_research.model.cli "{{corpus}}" {{args}}
+    # --directory rather than cd, so a relative corpus path is still
+    # relative to where the command was typed
+    uv --directory research run python -m verdict_research.model.cli "{{corpus}}" {{args}}
 
 # every report path already handles the absent form as "no score can be
 # computed yet".
@@ -78,7 +80,29 @@ train corpus *args:
 clear-model *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd research && uv run python -c "from verdict_research.model.cli import clear; raise SystemExit(clear())" {{args}}
+    uv --directory research run python -c "from verdict_research.model.cli import clear; raise SystemExit(clear())" {{args}}
+
+# PLAN.md week 7. Builds the shipped extractor into something node can run,
+# so the python canary job drives the real interpreter rather than a second
+# python copy of it. Lands in extension/.output, never in a release zip.
+#
+# build the extractor the canary job drives
+canary-extractor:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && npm run build:canary
+
+# fetches each target in the targets file, asks the shipped extractor what
+# it finds, alerts on what changed since the last run, and writes the
+# document SITE.md's /status page renders. Writes nothing without --write:
+#   just canary research/canary-targets.json --write
+# See research/canary-targets.example.json for the format.
+#
+# check live extraction health against the canary targets
+canary targets *args: canary-extractor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv --directory research run python -m verdict_research.canary.cli "{{targets}}" {{args}}
 
 parity:
     #!/usr/bin/env bash

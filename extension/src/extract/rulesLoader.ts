@@ -1,5 +1,6 @@
 import { getPref, setPref } from "../storage/prefs";
 import type { RulesDocument } from "./rules";
+import { sanitiseRulesDocument } from "./validateRules";
 
 // SPEC.md section 9: "rules are fetched at most once a day, cached,
 // signed, and version pinned. a signature failure falls back to the
@@ -109,8 +110,20 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
       return options.bundledDefault;
     }
     const envelope = (await response.json()) as SignedRulesEnvelope;
+    // the signature is verified against the document exactly as sent, so
+    // this happens before any sanitising: checking a document we already
+    // edited would be checking something nobody signed.
     const verified = await verifySignature(envelope.rules, envelope.signature, options.publicKeyJwk);
     if (!verified) {
+      return options.bundledDefault;
+    }
+
+    // a signature says who wrote this, not that it is a rules document.
+    // validateRules.ts drops the fields this build cannot use and refuses a
+    // document with none left, so a correctly signed but broken file falls
+    // back rather than quietly extracting nothing.
+    const sanitised = sanitiseRulesDocument(envelope.rules);
+    if (sanitised === null) {
       return options.bundledDefault;
     }
 
@@ -119,12 +132,12 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
     // bundled default, so a compromised or stale mirror cannot roll back
     // a fix that a newer rules version made.
     const trustedVersion = cached?.rules.version ?? options.bundledDefault.version;
-    if (envelope.rules.version < trustedVersion) {
+    if (sanitised.rules.version < trustedVersion) {
       return options.bundledDefault;
     }
 
-    await setPref(options.cacheKey, { rules: envelope.rules, fetchedAt: now() });
-    return envelope.rules;
+    await setPref(options.cacheKey, { rules: sanitised.rules, fetchedAt: now() });
+    return sanitised.rules;
   } catch {
     return options.bundledDefault;
   }

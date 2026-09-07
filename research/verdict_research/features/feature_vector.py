@@ -31,6 +31,7 @@ MINIMUM_HISTORY_DAYS = 21
 
 _EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
 _SECONDS_PER_DAY = 86_400
+_ISO_DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _HAS_EXPLICIT_ZONE = re.compile(r"Z$|[+-]\d{2}:\d{2}$")
 
 
@@ -41,6 +42,12 @@ _HAS_EXPLICIT_ZONE = re.compile(r"Z$|[+-]\d{2}:\d{2}$")
 # component must carry an explicit "Z" or offset, and anything else raises.
 def day_index(iso: str) -> int:
     if "T" not in iso:
+        # the same shape check extension/src/score/featureVector.ts makes.
+        # Without it a page's own date string ("3 janvier 2026") reaches the
+        # int() calls below and raises a slicing error that says nothing
+        # about what was actually wrong.
+        if not _ISO_DATE_ONLY.fullmatch(iso):
+            raise ValueError(f"day_index requires an iso date with no ambiguous zone: {iso}")
         year, month, day = int(iso[0:4]), int(iso[5:7]), int(iso[8:10])
         return date(year, month, day).toordinal() - _EPOCH_ORDINAL
     if not _HAS_EXPLICIT_ZONE.search(iso):

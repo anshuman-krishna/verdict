@@ -1,0 +1,74 @@
+# PRIVACY.md section 4, as a file rather than a promise: "the reverse proxy
+# is configured with IP logging disabled, and that configuration file is in
+# the public repository. If we ever cannot demonstrate this, the feature
+# comes out."
+#
+# This is that file. It is deliberately short, because its only job is to be
+# read and believed by someone who does not trust us, and a long config is
+# not auditable at a glance. service/tests/test_deploy_config.py asserts
+# every guarantee below, so an edit that quietly re-enables logging fails
+# the build rather than the audit.
+#
+# The application layer already disables uvicorn's access log
+# (verdict_service/logging_config.py). This is the layer in front of it, and
+# the two are independent: either one alone would still leave the client
+# address written down somewhere.
+
+{
+	# caddy's own admin api binds to localhost by default and is not needed
+	# in a deployment, so it is off rather than merely firewalled.
+	admin off
+	# the global log covers caddy's own process events (start, stop, tls
+	# renewal). It carries no request data, but it is set to ERROR so a
+	# future debug level cannot start including request detail by default.
+	log {
+		level ERROR
+	}
+}
+
+api.verdict.tools {
+	# the guarantee. Caddy logs every request by default, including the
+	# client address; this turns that off for this site entirely. Not a
+	# filtered or redacted log: no access log at all, because a redaction
+	# is a thing that can be misconfigured and an absent log is not.
+	log {
+		output discard
+	}
+
+	# the client address is not passed upstream either, so the application
+	# behind this cannot write it down even by accident, and a future
+	# handler that reaches for request.client gets nothing useful. This is
+	# the half that makes the guarantee survive a change in the app.
+	request_header -X-Forwarded-For
+	request_header -X-Forwarded-Host
+	request_header -X-Real-IP
+	# PRIVACY.md section 4: "no cookie, no session, no authentication, no
+	# Referer". Stripped here as well as omitted by the client, since only
+	# this side is under our control.
+	request_header -Referer
+	request_header -Cookie
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	# SPEC.md section 8 and PRIVACY.md section 5 are the only two endpoints
+	# this service exposes. Anything else is refused here rather than
+	# reaching the application, so a future route added by accident is not
+	# reachable from the internet until this file says so.
+	@allowed path /v1/reputation/lookup /v1/graph/contribute
+	handle @allowed {
+		reverse_proxy verdict-service:8000 {
+			header_up -X-Forwarded-For
+			header_up -X-Forwarded-Host
+			header_up -X-Real-IP
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

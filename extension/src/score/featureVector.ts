@@ -24,11 +24,19 @@ const MS_PER_DAY = 86_400_000;
 // midnight. that split would make this function's output depend on the
 // machine's timezone, so a datetime with a time component must carry an
 // explicit "Z" or offset, and anything else is rejected rather than guessed.
+//
+// The shape check is the same rule applied to everything else. v8 accepts
+// "3 janvier 2026" as a favour and returns local midnight, so a page's own
+// date string used to land on different days for readers in different
+// timezones, silently. extract/normalise.ts turns those into iso or into
+// null before they ever reach here, which makes this throw unreachable
+// through extraction and leaves it as the guard that keeps it that way.
+const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/;
+
 export function dayIndex(iso: string): number {
-  const hasTimeComponent = iso.includes("T");
-  const hasExplicitZone = /Z|[+-]\d{2}:\d{2}$/.test(iso);
-  if (hasTimeComponent && !hasExplicitZone) {
-    throw new Error(`dayIndex requires an explicit time zone on a datetime string: ${iso}`);
+  if (!ISO_DATE_ONLY.test(iso) && !ISO_DATETIME_WITH_ZONE.test(iso)) {
+    throw new Error(`dayIndex requires an iso date with no ambiguous zone: ${iso}`);
   }
   return Math.floor(Date.parse(iso) / MS_PER_DAY);
 }

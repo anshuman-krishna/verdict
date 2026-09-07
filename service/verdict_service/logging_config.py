@@ -9,10 +9,12 @@ import logging
 # eventually starts it: a flag can be forgotten by a process manager, a
 # container CMD, or a future deployment change; an import cannot be.
 #
-# This covers the application's own logging only. A reverse proxy or load
-# balancer placed in front of this service can still log the client
-# address at its own layer, and configuring that is the deploying
-# operator's responsibility, not something this file can reach.
+# This covers the application's own logging only. The layer in front of it
+# is deploy/Caddyfile, which discards its access log and strips the client
+# address before the request ever arrives here, and which
+# tests/test_deploy_config.py holds to that. The two are deliberately
+# independent: either one alone would still leave the address written down
+# somewhere, so neither is allowed to rely on the other.
 
 
 def configure_logging() -> None:

@@ -122,3 +122,22 @@ def test_build_feature_vector_leaves_signals_none_without_data():
     assert result.rating_deconvolution is None
     assert result.temporal_burst is None
     assert result.verification_concentration is None
+
+
+# the same shape check extension/src/score/featureVector.ts makes, so the
+# two implementations behave alike on bad input and not only on the shared
+# parity vectors, which carry good input by construction.
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "3 janvier 2026",
+        "3. Januar 2026",
+        "Reviewed in the United States on January 3, 2026",
+        "January 3, 2026",
+        "03/01/2026",
+        "",
+    ],
+)
+def test_day_index_refuses_anything_that_is_not_an_iso_date(raw):
+    with pytest.raises(ValueError, match="iso date"):
+        day_index(raw)

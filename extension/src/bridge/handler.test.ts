@@ -4,6 +4,7 @@ import type { RulesDocument } from "../extract/rules";
 import { addHistoryEntry, deleteAllHistory } from "../storage/history";
 import { deriveAllowedHostnames, handleBridgeMessage, type BridgeHandlerOptions } from "./handler";
 import { isBridgeRequest } from "./messages";
+import { BridgeRateLimiter, RATE_LIMITS } from "./rateLimit";
 
 const RULES: RulesDocument = {
   version: 1,
@@ -148,5 +149,76 @@ describe("handleBridgeMessage", () => {
       options(),
     );
     expect(response).toEqual({ status: "unsupported-domain" });
+  });
+});
+
+// PRIVACY.md section 7: the bridge "is rate limited per origin".
+describe("rate limiting", () => {
+  const rules: RulesDocument = {
+    version: 1,
+    site: "amazon",
+    locales: ["com"],
+    fields: {},
+  };
+
+  function options(rateLimiter: BridgeRateLimiter, origin: string | undefined): BridgeHandlerOptions {
+    return {
+      bundledRules: rules,
+      analyzeUrl: async () => ({ status: "not-a-product-page" }) as const,
+      rateLimiter,
+      origin,
+    };
+  }
+
+  it("rejects a request past the limit without touching storage or a tab", async () => {
+    const limiter = new BridgeRateLimiter(() => 1_000);
+    const analyzeUrl = vi.fn(async () => ({ status: "not-a-product-page" }) as const);
+    const deps = { bundledRules: rules, analyzeUrl, rateLimiter: limiter, origin: "https://verdict.tools" };
+    const request = { type: "verdict:analyze", url: "https://www.amazon.com/dp/B0ABCDEF12" };
+
+    for (let index = 0; index < RATE_LIMITS["verdict:analyze"].limit; index += 1) {
+      await handleBridgeMessage(request, deps);
+    }
+    const callsBefore = analyzeUrl.mock.calls.length;
+
+    expect(await handleBridgeMessage(request, deps)).toEqual({ error: "rate limited" });
+    expect(analyzeUrl.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("refuses a sender whose origin the runtime did not report", async () => {
+    const limiter = new BridgeRateLimiter(() => 1_000);
+    expect(
+      await handleBridgeMessage({ type: "verdict:history:list" }, options(limiter, undefined)),
+    ).toEqual({ error: "unknown origin" });
+  });
+
+  // an unrecognised message must not be able to drain a real caller's
+  // allowance, so the shape check runs first.
+  it("spends no allowance on an unrecognised message", async () => {
+    const limiter = new BridgeRateLimiter(() => 1_000);
+    const deps = options(limiter, "https://verdict.tools");
+    for (let index = 0; index < 500; index += 1) {
+      await handleBridgeMessage({ type: "verdict:nonsense" }, deps);
+    }
+    expect(
+      await handleBridgeMessage(
+        { type: "verdict:analyze", url: "https://www.amazon.com/dp/B0ABCDEF12" },
+        deps,
+      ),
+    ).not.toEqual({ error: "rate limited" });
+  });
+
+  it("limits each origin separately", async () => {
+    const limiter = new BridgeRateLimiter(() => 1_000);
+    const request = { type: "verdict:analyze", url: "https://www.amazon.com/dp/B0ABCDEF12" };
+    for (let index = 0; index < RATE_LIMITS["verdict:analyze"].limit; index += 1) {
+      await handleBridgeMessage(request, options(limiter, "http://localhost:4321"));
+    }
+    expect(await handleBridgeMessage(request, options(limiter, "http://localhost:4321"))).toEqual({
+      error: "rate limited",
+    });
+    expect(
+      await handleBridgeMessage(request, options(limiter, "https://verdict.tools")),
+    ).not.toEqual({ error: "rate limited" });
   });
 });

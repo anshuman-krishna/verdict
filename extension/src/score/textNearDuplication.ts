@@ -44,6 +44,13 @@ export interface TextNearDuplicationOptions {
   // responsibility: a single cache instance must only ever be shared
   // across calls that use the same shingleSize and numPermutations, since
   // a cached signature does not know which parameters produced it.
+  //
+  // PRIVACY.md section 2 gives this a second, load bearing job: "review
+  // text is never persisted... the MinHash signature and the embedding
+  // centroid are kept, and neither can reconstruct the text". A review
+  // restored from the reviews cache therefore arrives with text null and
+  // its signature seeded here, and scores exactly as it would have with
+  // the text present.
   signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
 }
 
@@ -170,19 +177,30 @@ export function textNearDuplication(
   const rows = options.rows ?? DEFAULT_ROWS;
   const threshold = options.jaccardThreshold ?? DEFAULT_JACCARD_THRESHOLD;
 
-  const eligible = reviews.filter(
-    (review): review is { text: string } => review.text !== null && review.text.length > 0,
-  );
+  // a seeded signature of the wrong length cannot be compared against one
+  // computed here (estimateJaccard walks them position by position), so it
+  // counts only when this call asks for the permutation count that
+  // produced it. A review with text falls back to recomputing; a review
+  // without text has nothing to fall back to and is not eligible, the same
+  // as a review that never had text.
+  const seeded = (review: ReviewForNearDuplication): bigint[] | undefined => {
+    const cached = options.signatureCache?.get(review);
+    return cached !== undefined && cached.length === numPermutations ? cached : undefined;
+  };
+  const hasText = (review: ReviewForNearDuplication): boolean =>
+    review.text !== null && review.text.length > 0;
+
+  const eligible = reviews.filter((review) => hasText(review) || seeded(review) !== undefined);
   if (eligible.length < 2) {
     return { duplicateReviewShare: eligible.length === 0 ? null : 0, clusterCount: 0, largestClusterShare: 0 };
   }
 
   const signatures = eligible.map((review) => {
-    const cached = options.signatureCache?.get(review);
+    const cached = seeded(review);
     if (cached !== undefined) {
       return cached;
     }
-    const signature = minhashSignature(shingle(review.text, shingleSize), numPermutations);
+    const signature = minhashSignature(shingle(review.text as string, shingleSize), numPermutations);
     options.signatureCache?.set(review, signature);
     return signature;
   });

@@ -21,7 +21,7 @@ const RULES: RulesDocument = {
   },
 };
 
-const URL = "https://www.amazon.fr/dp/B0ABCDEF12";
+const URL = "https://www.amazon.com/dp/B0ABCDEF12";
 
 function page(html: string): ParentNode {
   const container = document.createElement("div");
@@ -46,7 +46,7 @@ describe("runFixture", () => {
   it("passes a page matching its expectation", () => {
     const result = runFixture("good", page(GOOD_PAGE), expectation(), RULES);
     expect(result.ok).toBe(true);
-    expect(result.locale).toBe("fr");
+    expect(result.locale).toBe("com");
     expect(result.site).toBe("amazon");
     expect(result.extractedReviews).toBe(2);
     expect(result.knownFailure).toBeNull();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_NUM_PERMUTATIONS,
   estimateJaccard,
   exactJaccard,
   fnv1a64,
@@ -163,16 +164,64 @@ describe("textNearDuplication", () => {
       expect(signatureAfterFirstCall).toBeDefined();
 
       // mutating the cached entry proves the second call reads it back
-      // rather than recomputing: a freshly computed signature would
-      // never match this corrupted value.
-      cache.set(shared, [999999n]);
+      // rather than recomputing: a freshly computed signature would never
+      // match this corrupted value. It keeps the real permutation count,
+      // since a signature of the wrong length is deliberately not trusted.
+      const corrupted = Array.from({ length: DEFAULT_NUM_PERMUTATIONS }, () => 999999n);
+      cache.set(shared, corrupted);
       const result = textNearDuplication([shared, review("a third, different review text")], {
         signatureCache: cache,
       });
-      expect(cache.get(shared)).toEqual([999999n]);
-      // with a corrupted 1 element signature, minhash similarity against
-      // anything else drops to near zero, so this must not cluster
+      expect(cache.get(shared)).toEqual(corrupted);
+      // a signature of a single repeated value shares no position with a
+      // real one, so similarity drops to zero and nothing clusters
       expect(result.clusterCount).toBe(0);
+    });
+
+    // PRIVACY.md section 2: review text is never persisted, but its minhash
+    // signature is. A review restored from the reviews cache arrives with
+    // no text and its signature seeded, and has to score identically.
+    it("scores a review with no text but a seeded signature exactly as if it had its text", () => {
+      const texts = [
+        "group one duplicate text appears here word for word",
+        "group one duplicate text appears here word for word",
+        "a lone unique review that matches nothing else at all",
+      ];
+      const withText = texts.map(review);
+      const expected = textNearDuplication(withText);
+
+      const withoutText = texts.map(() => review(null));
+      const seeded = new WeakMap<ReviewForNearDuplication, bigint[]>();
+      texts.forEach((text, index) => {
+        seeded.set(
+          withoutText[index] as ReviewForNearDuplication,
+          minhashSignature(shingle(text, 5), DEFAULT_NUM_PERMUTATIONS),
+        );
+      });
+
+      expect(textNearDuplication(withoutText, { signatureCache: seeded })).toEqual(expected);
+    });
+
+    it("ignores a seeded signature of the wrong length rather than comparing against it", () => {
+      const a = review("first review with plenty of unique words to shingle");
+      const b = review("first review with plenty of unique words to shingle");
+      const seeded = new WeakMap<ReviewForNearDuplication, bigint[]>();
+      seeded.set(a, [1n, 2n, 3n]);
+
+      // a recomputes from its text, so the two identical texts still cluster
+      expect(textNearDuplication([a, b], { signatureCache: seeded }).clusterCount).toBe(1);
+    });
+
+    it("leaves a textless review with a wrong length signature out of the denominator", () => {
+      const textless = review(null);
+      const seeded = new WeakMap<ReviewForNearDuplication, bigint[]>();
+      seeded.set(textless, [1n, 2n, 3n]);
+
+      expect(
+        textNearDuplication([textless, review("a real review with text")], {
+          signatureCache: seeded,
+        }),
+      ).toEqual({ duplicateReviewShare: 0, clusterCount: 0, largestClusterShare: 0 });
     });
 
     it("populates the cache for every eligible review it computes a signature for", () => {

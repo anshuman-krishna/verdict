@@ -31,6 +31,11 @@ export interface BuildReportOptions {
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
+  // PRIVACY.md section 2: reviews restored from the 7 day cache carry no
+  // text, only their minhash signature. Passing that here is what keeps a
+  // report built from a cache hit numerically identical to one built from
+  // a fresh fetch.
+  signatureCache?: WeakMap<Review, bigint[]>;
 }
 
 // SPEC.md 5.1's injectedShare is already defined there as "an interpretable
@@ -75,7 +80,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
   // signature, is the same reviews[i] object throughout.
   const priors: FeatureVectorInputs = {
     ...options.priors,
-    textNearDuplicationSignatureCache: new WeakMap(),
+    textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
   };
   const vector = buildFeatureVector(options.reviews, priors);
 
