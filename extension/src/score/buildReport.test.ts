@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Review } from "../extract/types";
-import type { CombinerModel } from "./combine";
+import { localModelSet, type CombinerModel } from "./combine";
 import { buildReport } from "./buildReport";
 
 const PRIORS = { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] };
@@ -30,7 +30,7 @@ describe("buildReport", () => {
       reviews: skewedReviews().slice(0, 5),
       seed: "product-1",
       claimedRating: 4.6,
-      model: WORKING_MODEL,
+      model: localModelSet(WORKING_MODEL),
       priors: PRIORS,
     });
     expect(outcome).toEqual({ status: "not-enough-data" });
@@ -57,7 +57,7 @@ describe("buildReport", () => {
       reviews: skewedReviews(),
       seed: "product-1",
       claimedRating: 4.6,
-      model: modelNeedingLift,
+      model: localModelSet(modelNeedingLift),
       priors: PRIORS,
     });
     expect(outcome).toEqual({
@@ -71,7 +71,7 @@ describe("buildReport", () => {
       reviews: skewedReviews(),
       seed: "product-1",
       claimedRating: 4.6,
-      model: WORKING_MODEL,
+      model: localModelSet(WORKING_MODEL),
       priors: PRIORS,
       now: () => 1_700_000_000_000,
       random: () => 0,
@@ -116,7 +116,7 @@ describe("buildReport", () => {
       reviews: skewedReviews(),
       seed: "product-1",
       claimedRating: 4.6,
-      model: WORKING_MODEL,
+      model: localModelSet(WORKING_MODEL),
       priors: PRIORS,
       bootstrapResamples: 20,
     });

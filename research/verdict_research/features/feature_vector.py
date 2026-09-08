@@ -11,6 +11,11 @@ from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
     rating_deconvolution,
 )
+from verdict_research.features.reviewer_graph import (
+    ReviewerGraphResult,
+    ReviewForReviewerGraph,
+    reviewer_graph_share,
+)
 from verdict_research.features.temporal_burst import (
     Burst,
     TemporalBurstResult,
@@ -132,6 +137,11 @@ class FeatureVectorInputs:
     # SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
     # signal still reports its change point, which compares the reviews only against each other.
     product_text: str = ""
+    # SPEC.md 5.6, and only ever present when the user opted into the lookup and the service
+    # answered. absent is the default path and the SPEC.md section 13 row for an unreachable service
+    # alike: the signal is None rather than zero, so combine.py scores with the local model instead
+    # of reading "nobody flagged" off a lookup that never happened.
+    flagged_reviewer_ids: set[str] | None = None
 
 
 @dataclass
@@ -142,11 +152,12 @@ class FeatureVector:
     verification_concentration: VerificationConcentrationResult | None
     text_near_duplication: TextNearDuplicationResult
     listing_drift: ListingDriftResult
+    reviewer_graph: ReviewerGraphResult | None
 
 
-# wires the five local signals against raw extracted reviews. the
-# combiner that turns this into a probability and a band does not exist
-# yet, that is SPEC.md section 6 and it waits on ground truth.
+# wires the five local signals against raw extracted reviews, plus SPEC.md 5.6 when a lookup
+# supplied its input. the combiner that turns this into a probability and a band waits on ground
+# truth, that is SPEC.md section 6.
 def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> FeatureVector:
     meets_minimum_data = meets_minimum_data_thresholds(reviews)
 
@@ -186,6 +197,15 @@ def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> 
         inputs.product_text,
     )
 
+    reviewer_graph_result = (
+        None
+        if inputs.flagged_reviewer_ids is None
+        else reviewer_graph_share(
+            [ReviewForReviewerGraph(reviewer_id=review.reviewer_id) for review in reviews],
+            inputs.flagged_reviewer_ids,
+        )
+    )
+
     return FeatureVector(
         meets_minimum_data=meets_minimum_data,
         rating_deconvolution=rating_result,
@@ -193,4 +213,5 @@ def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> 
         verification_concentration=verification_result,
         text_near_duplication=duplication_result,
         listing_drift=drift_result,
+        reviewer_graph=reviewer_graph_result,
     )

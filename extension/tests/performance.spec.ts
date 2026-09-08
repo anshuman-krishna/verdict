@@ -6,7 +6,7 @@ import type { RulesDocument } from "../src/extract/rules";
 import { ANALYSIS_BUDGET_MS, formatVerdict, judge, measure } from "../src/perf/budget";
 import { syntheticProductPageHtml, syntheticReviews } from "../src/perf/syntheticLoad";
 import { buildReport } from "../src/score/buildReport";
-import type { CombinerModel } from "../src/score/combine";
+import { localModelSet, type CombinerModel } from "../src/score/combine";
 import { PLACEHOLDER_PRIORS } from "../src/score/priors";
 
 // SPEC.md section 14's fourth acceptance criterion, "full analysis under
@@ -75,7 +75,7 @@ function timeAnalysis(count: number) {
       seed: URL,
       claimedRating: product?.claimedRating ?? 4.6,
       productText: PRODUCT_TEXT,
-      model: MODEL,
+      model: localModelSet(MODEL),
       priors: PLACEHOLDER_PRIORS,
     });
   });

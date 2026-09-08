@@ -19,6 +19,7 @@ def flatten_feature_vector(feature_vector: FeatureVector) -> FlatFeatures:
     verification = feature_vector.verification_concentration
     duplication = feature_vector.text_near_duplication
     drift = feature_vector.listing_drift
+    graph = feature_vector.reviewer_graph
     return {
         "ratingDeconvolution.injectedShare": rating.injected_share if rating else None,
         "ratingDeconvolution.residualError": rating.residual_error if rating else None,
@@ -32,6 +33,7 @@ def flatten_feature_vector(feature_vector: FeatureVector) -> FlatFeatures:
         "listingDrift.offTopicShare": drift.off_topic_share,
         "listingDrift.meanDistance": drift.mean_distance,
         "listingDrift.driftStatistic": drift.drift_statistic,
+        "reviewerGraph.flaggedReviewShare": graph.flagged_review_share if graph else None,
     }
 
 
@@ -46,6 +48,26 @@ class CombinerModel:
     intercept: float
     coefficients: dict[str, float]
     calibration: list[CalibrationPoint] = field(default_factory=list)
+
+
+# SPEC.md 5.6 runs only for users who opted in and only while the service answers, and SPEC.md
+# section 13 requires the other path to keep working with no visible difference. one model cannot do
+# both: a model carrying a coefficient for the graph feature reports missing-features on every
+# default analysis, and one trained without it and then handed the feature anyway is uncalibrated
+# for what it was just given. so the artefact carries two, each fitted and calibrated on its own,
+# and select_model picks by what the vector actually has.
+@dataclass
+class ModelSet:
+    local: CombinerModel
+    reviewer_graph: CombinerModel | None = None
+
+
+def select_model(models: ModelSet, feature_vector: FeatureVector) -> CombinerModel:
+    graph = feature_vector.reviewer_graph
+    share = None if graph is None else graph.flagged_review_share
+    if models.reviewer_graph is not None and share is not None:
+        return models.reviewer_graph
+    return models.local
 
 
 @dataclass

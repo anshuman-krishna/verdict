@@ -34,6 +34,7 @@ def make_feature_vector(**overrides) -> FeatureVector:
             drift_statistic=0.0,
             embedded_count=0,
         ),
+        reviewer_graph=None,
     )
     defaults.update(overrides)
     return FeatureVector(**defaults)
@@ -54,6 +55,7 @@ def test_flatten_exposes_every_numeric_leaf():
         "listingDrift.offTopicShare": None,
         "listingDrift.meanDistance": None,
         "listingDrift.driftStatistic": 0.0,
+        "reviewerGraph.flaggedReviewShare": None,
     }
 
 

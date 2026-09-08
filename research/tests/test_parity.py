@@ -19,6 +19,10 @@ from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
     rating_deconvolution,
 )
+from verdict_research.features.reviewer_graph import (
+    ReviewForReviewerGraph,
+    reviewer_graph_share,
+)
 from verdict_research.features.temporal_burst import (
     Burst,
     TemporalBurstResult,
@@ -159,6 +163,19 @@ def run(vector: dict):
         )
         return _drift(result)
 
+    if signal == "reviewerGraph":
+        result = reviewer_graph_share(
+            [ReviewForReviewerGraph(reviewer_id=i) for i in data["reviewerIds"]],
+            set(data["flagged"]),
+        )
+        return {
+            "flaggedReviewShare": result.flagged_review_share,
+            "flaggedReviewCount": result.flagged_review_count,
+            "flaggedReviewerCount": result.flagged_reviewer_count,
+            "knownReviewerCount": result.known_reviewer_count,
+            "identifiedReviewCount": result.identified_review_count,
+        }
+
     if signal == "featureVector":
         reviews = [
             Review(
@@ -176,6 +193,11 @@ def run(vector: dict):
                 organic_prior=data["organicPrior"],
                 injection_kernel=data["injectionKernel"],
                 product_text=data.get("productText", ""),
+                flagged_reviewer_ids=(
+                    None
+                    if data.get("flaggedReviewerIds") is None
+                    else set(data["flaggedReviewerIds"])
+                ),
             ),
         )
         return {
@@ -205,6 +227,15 @@ def run(vector: dict):
                 "largestClusterShare": result.text_near_duplication.largest_cluster_share,
             },
             "listingDrift": _drift(result.listing_drift),
+            "reviewerGraph": None
+            if result.reviewer_graph is None
+            else {
+                "flaggedReviewShare": result.reviewer_graph.flagged_review_share,
+                "flaggedReviewCount": result.reviewer_graph.flagged_review_count,
+                "flaggedReviewerCount": result.reviewer_graph.flagged_reviewer_count,
+                "knownReviewerCount": result.reviewer_graph.known_reviewer_count,
+                "identifiedReviewCount": result.reviewer_graph.identified_review_count,
+            },
         }
 
     if signal == "combine":
@@ -249,6 +280,7 @@ def run(vector: dict):
                 drift_statistic=drift["driftStatistic"],
                 embedded_count=drift["embeddedCount"],
             ),
+            reviewer_graph=None,
         )
         model = CombinerModel(
             intercept=data["model"]["intercept"],

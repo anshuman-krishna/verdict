@@ -10,7 +10,7 @@ import type { ProductSnapshot, Review } from "../src/extract/types";
 import { enqueueContributionEdges } from "../src/graph/queue";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../src/reputation/endpoint";
 import { REPUTATION_SALT } from "../src/reputation/salt";
-import type { CombinerModel } from "../src/score/combine";
+import { localModelSet, type CombinerModel } from "../src/score/combine";
 import { getPref, setPref } from "../src/storage/prefs";
 import { getGraphContributionEnabled, getReputationLookupEnabled } from "../src/storage/settings";
 import {
@@ -130,7 +130,7 @@ describe("the default analysis path makes no network requests", () => {
 
     const result = await analyzePage(container, "https://www.amazon.com/dp/B0EXAMPLE1", {
       rules,
-      model,
+      model: localModelSet(model),
       priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
@@ -176,7 +176,7 @@ describe("the default analysis path makes no network requests", () => {
 
     const result = await analyzePage(container, "https://www.amazon.com/dp/B0EXAMPLE1", {
       rules,
-      model,
+      model: localModelSet(model),
       priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
@@ -227,7 +227,7 @@ describe("the default analysis path makes no network requests", () => {
 
     const result = await analyzePage(container, "https://www.amazon.com/dp/B0EXAMPLE1", {
       rules,
-      model,
+      model: localModelSet(model),
       priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,

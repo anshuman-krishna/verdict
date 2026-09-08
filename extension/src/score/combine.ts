@@ -27,6 +27,7 @@ export function flattenFeatureVector(featureVector: FeatureVector): FlatFeatures
     "listingDrift.offTopicShare": featureVector.listingDrift.offTopicShare,
     "listingDrift.meanDistance": featureVector.listingDrift.meanDistance,
     "listingDrift.driftStatistic": featureVector.listingDrift.driftStatistic,
+    "reviewerGraph.flaggedReviewShare": featureVector.reviewerGraph?.flaggedReviewShare ?? null,
   };
 }
 
@@ -41,6 +42,29 @@ export interface CombinerModel {
   // isotonic regression, exported as sorted control points. applied here by clamped linear
   // interpolation, the same technique bootstrap.ts uses for the confidence interval.
   calibration: CalibrationPoint[];
+}
+
+// SPEC.md 5.6 runs only for users who opted in and only while the service answers, and SPEC.md
+// section 13 requires the other path to keep working with no visible difference. one model cannot
+// do both: a model carrying a coefficient for the graph feature reports missing-features on every
+// default analysis, and one trained without it and then handed the feature anyway is uncalibrated
+// for what it was just given. so the artefact carries two, each fitted and calibrated on its own,
+// and selectModel picks by what the vector actually has.
+export interface ModelSet {
+  local: CombinerModel;
+  reviewerGraph: CombinerModel | null;
+}
+
+export function localModelSet(model: CombinerModel): ModelSet {
+  return { local: model, reviewerGraph: null };
+}
+
+export function selectModel(models: ModelSet, featureVector: FeatureVector): CombinerModel {
+  const share = featureVector.reviewerGraph?.flaggedReviewShare ?? null;
+  if (models.reviewerGraph !== null && share !== null) {
+    return models.reviewerGraph;
+  }
+  return models.local;
 }
 
 export type CombinerResult =

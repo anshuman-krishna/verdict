@@ -15,6 +15,9 @@ from verdict_research.features.feature_vector import (
 from verdict_research.features.temporal_burst import Burst
 from verdict_research.schema import Review
 
+FLAT_PRIOR = [0.2, 0.2, 0.2, 0.2, 0.2]
+KERNEL = [0, 0, 0, 0.35, 0.65]
+
 
 def review(rating=None, text=None, date=None, verified=None, reviewer_id=None):
     return Review(rating=rating, text=text, date=date, verified=verified, reviewer_id=reviewer_id)
@@ -141,3 +144,39 @@ def test_build_feature_vector_leaves_signals_none_without_data():
 def test_day_index_refuses_anything_that_is_not_an_iso_date(raw):
     with pytest.raises(ValueError, match="iso date"):
         day_index(raw)
+
+
+def test_the_reviewer_graph_is_absent_unless_a_lookup_supplied_its_input():
+    reviews = [
+        Review(rating=5, text="a", date="2024-01-01", verified=True, reviewer_id="a")
+        for _ in range(3)
+    ]
+    inputs = FeatureVectorInputs(organic_prior=FLAT_PRIOR, injection_kernel=KERNEL)
+    assert build_feature_vector(reviews, inputs).reviewer_graph is None
+
+
+def test_the_reviewer_graph_runs_once_a_lookup_supplied_its_input():
+    reviews = [
+        Review(rating=5, text="a", date="2024-01-01", verified=True, reviewer_id=f"r{i}")
+        for i in range(4)
+    ]
+    inputs = FeatureVectorInputs(
+        organic_prior=FLAT_PRIOR, injection_kernel=KERNEL, flagged_reviewer_ids={"r0", "r1"}
+    )
+    result = build_feature_vector(reviews, inputs).reviewer_graph
+    assert result is not None
+    assert result.flagged_review_share == 0.5
+
+
+# an empty flagged set is a lookup that ran and found nothing, not a lookup that never ran
+def test_an_empty_flagged_set_still_produces_a_result():
+    reviews = [
+        Review(rating=5, text="a", date="2024-01-01", verified=True, reviewer_id="a")
+        for _ in range(3)
+    ]
+    inputs = FeatureVectorInputs(
+        organic_prior=FLAT_PRIOR, injection_kernel=KERNEL, flagged_reviewer_ids=set()
+    )
+    result = build_feature_vector(reviews, inputs).reviewer_graph
+    assert result is not None
+    assert result.flagged_review_share == 0

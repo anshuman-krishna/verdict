@@ -108,12 +108,34 @@ function differentProductRow(vector: FeatureVector): EvidenceRow {
   };
 }
 
+// SPEC.md 5.6, and section 4: opt in, off by default, version 0.2. what makes a community flagged
+// is step 4 of 5.6 and is anshuman's, decided on the service and not here. absent when the lookup
+// never ran, which is one row fewer rather than a row saying nothing was found: those are different
+// facts and the panel must not report the first as the second.
+function reviewerNetworkRow(result: NonNullable<FeatureVector["reviewerGraph"]>): EvidenceRow {
+  if (result.identifiedReviewCount === 0) {
+    return { signal: "reviewer network", strength: "none", value: null, detail: "No reviewer identifiers to check against the network." };
+  }
+  const share = result.flaggedReviewShare as number;
+  const percent = Math.round(share * 100);
+  return {
+    signal: "reviewer network",
+    strength: strengthFromRatio(share, 0.1, 0.3),
+    value: share,
+    detail: `About ${percent} percent of the reviews here were written by ${result.flaggedReviewerCount} of ${result.knownReviewerCount} accounts that also appear in networks flagged across many products.`,
+  };
+}
+
 export function buildEvidence(vector: FeatureVector): EvidenceRow[] {
-  return [
+  const rows = [
     ratingShapeRow(vector),
     arrivalTimingRow(vector),
     verificationRow(vector),
     duplicateTextRow(vector),
     differentProductRow(vector),
   ];
+  if (vector.reviewerGraph !== null) {
+    rows.push(reviewerNetworkRow(vector.reviewerGraph));
+  }
+  return rows;
 }

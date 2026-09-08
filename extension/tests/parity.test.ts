@@ -7,6 +7,7 @@ import type { FeatureVector } from "../src/score/featureVector";
 import { listingIdentityDrift } from "../src/score/listingDrift";
 import { PLACEHOLDER_INJECTION_KERNEL, PLACEHOLDER_ORGANIC_PRIOR } from "../src/score/priors";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
+import { reviewerGraphShare } from "../src/score/reviewerGraph";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
 import { cosineSimilarity, embedText, hashTerms } from "../src/score/textEmbedding";
 import {
@@ -140,8 +141,18 @@ function run(vector: Vector): unknown {
       };
       return listingIdentityDrift(reviews, days, productText);
     }
+    case "reviewerGraph": {
+      const { reviewerIds, flagged } = vector.input as {
+        reviewerIds: (string | null)[];
+        flagged: string[];
+      };
+      return reviewerGraphShare(
+        reviewerIds.map((reviewerId) => ({ reviewerId })),
+        new Set(flagged),
+      );
+    }
     case "featureVector": {
-      const { reviews, organicPrior, injectionKernel, productText } = vector.input as {
+      const { reviews, organicPrior, injectionKernel, productText, flaggedReviewerIds } = vector.input as {
         reviews: {
           rating: number | null;
           text: string | null;
@@ -152,11 +163,15 @@ function run(vector: Vector): unknown {
         organicPrior: number[];
         injectionKernel: number[];
         productText?: string;
+        flaggedReviewerIds?: string[];
       };
       const result = buildFeatureVector(reviews, {
         organicPrior,
         injectionKernel,
         productText,
+        flaggedReviewerIds: flaggedReviewerIds === undefined
+          ? undefined
+          : new Set(flaggedReviewerIds),
       });
       return {
         meetsMinimumData: result.meetsMinimumData,
@@ -171,6 +186,7 @@ function run(vector: Vector): unknown {
         verificationConcentration: result.verificationConcentration,
         textNearDuplication: result.textNearDuplication,
         listingDrift: result.listingDrift,
+        reviewerGraph: result.reviewerGraph,
       };
     }
     case "combine": {

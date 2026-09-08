@@ -171,3 +171,41 @@ describe("buildFeatureVector", () => {
     expect(result.verificationConcentration).toBeNull();
   });
 });
+
+describe("the reviewer graph signal", () => {
+  const reviews = (ids: string[]): Review[] =>
+    ids.map((reviewerId, i) => ({
+      rating: 5,
+      text: `a review ${i}`,
+      date: "2024-01-01",
+      verified: true,
+      reviewerId,
+    }));
+
+  it("is absent unless a lookup supplied its input", () => {
+    const vector = buildFeatureVector(reviews(["a", "b"]), {
+      organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2],
+      injectionKernel: [0, 0, 0, 0.35, 0.65],
+    });
+    expect(vector.reviewerGraph).toBeNull();
+  });
+
+  it("runs once a lookup supplied its input", () => {
+    const vector = buildFeatureVector(reviews(["r0", "r1", "r2", "r3"]), {
+      organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2],
+      injectionKernel: [0, 0, 0, 0.35, 0.65],
+      flaggedReviewerIds: new Set(["r0", "r1"]),
+    });
+    expect(vector.reviewerGraph?.flaggedReviewShare).toBe(0.5);
+  });
+
+  // an empty flagged set is a lookup that ran and found nothing, not a lookup that never ran
+  it("distinguishes a lookup that found nothing from one that never happened", () => {
+    const vector = buildFeatureVector(reviews(["a", "b"]), {
+      organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2],
+      injectionKernel: [0, 0, 0, 0.35, 0.65],
+      flaggedReviewerIds: new Set(),
+    });
+    expect(vector.reviewerGraph?.flaggedReviewShare).toBe(0);
+  });
+});

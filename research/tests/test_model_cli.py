@@ -162,3 +162,69 @@ def test_clear_restores_both_documents(tmp_path):
     )
     assert json.loads(method.read_text(encoding="utf-8"))["published"] is False
     assert json.loads(model.read_text(encoding="utf-8"))["present"] is False
+
+
+def test_the_reviewer_graph_slot_is_written_beside_the_local_model(tmp_path):
+    output = tmp_path / "model.json"
+    method = tmp_path / "method.json"
+    corpus = corpus_file(tmp_path)
+    main([corpus, "--features", "signal", "--output", str(output), "--method-output", str(method)])
+    code = main(
+        [
+            corpus,
+            "--features",
+            "signal",
+            "--slot",
+            "reviewerGraph",
+            "--output",
+            str(output),
+            "--method-output",
+            str(method),
+        ]
+    )
+    assert code == 0
+    artifact = json.loads(output.read_text(encoding="utf-8"))
+    assert artifact["present"] is True
+    assert artifact["reviewerGraph"]["coefficients"]["signal"] != 0.0
+
+
+def test_a_graph_run_refuses_before_a_local_model_exists(tmp_path, capsys):
+    output = tmp_path / "model.json"
+    code = main(
+        [
+            corpus_file(tmp_path),
+            "--features",
+            "signal",
+            "--slot",
+            "reviewerGraph",
+            "--output",
+            str(output),
+            "--method-output",
+            str(tmp_path / "method.json"),
+        ]
+    )
+    assert code == 1
+    assert "train that first" in capsys.readouterr().err
+
+
+# the published accuracy describes the model every default analysis uses, and 5.6's is not it
+def test_a_graph_run_leaves_the_published_method_document_alone(tmp_path):
+    output = tmp_path / "model.json"
+    method = tmp_path / "method.json"
+    corpus = corpus_file(tmp_path)
+    main([corpus, "--features", "signal", "--output", str(output), "--method-output", str(method)])
+    before = method.read_text(encoding="utf-8")
+    main(
+        [
+            corpus,
+            "--features",
+            "signal",
+            "--slot",
+            "reviewerGraph",
+            "--output",
+            str(output),
+            "--method-output",
+            str(method),
+        ]
+    )
+    assert method.read_text(encoding="utf-8") == before

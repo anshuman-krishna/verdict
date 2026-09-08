@@ -120,6 +120,21 @@ function percent(value: number | null): string {
     statistically significant edges, and scores the resulting communities. It needs
     cross-product visibility, so it is opt in and ships in version 0.2, not 0.1.
   </p>
+  <p>
+    When you turn it on, your browser asks whether any of the accounts on this listing sit in a
+    flagged community, and asks it without saying which accounts, which listing, or who is
+    asking. The answer becomes the sixth feature: the share of reviews written by those
+    accounts. Because that feature exists for some analyses and not others, Verdict carries two
+    models rather than one. The default model is fitted on the five local signals and is what
+    almost every report uses. The second is fitted separately, on listings where the answer was
+    available, and is the only one that ever sees the sixth feature.
+  </p>
+  <p>
+    Two models rather than one coefficient set is the honest arrangement. A model that expects
+    the sixth feature cannot score a listing without it, and a model fitted without it is not
+    calibrated for what it would be handed. The accuracy published on this page describes the
+    default model, since that is the one nearly every report is produced by.
+  </p>
 
   <h2>How the signals combine</h2>
   <p>

@@ -17,6 +17,7 @@ function baseVector(overrides: Partial<FeatureVector> = {}): FeatureVector {
       driftStatistic: 0,
       embeddedCount: 0,
     },
+    reviewerGraph: null,
     ...overrides,
   };
 }
@@ -117,5 +118,55 @@ describe("buildEvidence", () => {
       baseVector({ temporalBurst: { burstFraction: 0, burstCount: 0, largestBurstShare: 0, bursts: [] } }),
     );
     expect(rows[1]).toMatchObject({ signal: "arrival timing", strength: "weak", value: 0 });
+  });
+});
+
+describe("the reviewer network row", () => {
+  const graph = {
+    flaggedReviewShare: 0.4,
+    flaggedReviewCount: 4,
+    flaggedReviewerCount: 3,
+    knownReviewerCount: 8,
+    identifiedReviewCount: 10,
+  };
+
+  // a lookup that never ran is one row fewer, not a row saying nothing was found
+  it("is absent when no lookup supplied a result", () => {
+    const signals = buildEvidence(baseVector()).map((row) => row.signal);
+    expect(signals).not.toContain("reviewer network");
+  });
+
+  it("names both the review share and the accounts behind it", () => {
+    const row = buildEvidence(baseVector({ reviewerGraph: graph })).at(-1);
+    expect(row?.signal).toBe("reviewer network");
+    expect(row?.value).toBe(0.4);
+    expect(row?.detail).toContain("40 percent");
+    expect(row?.detail).toContain("3 of 8 accounts");
+  });
+
+  it("says nothing was checkable when no review carried a reviewer id", () => {
+    const row = buildEvidence(
+      baseVector({
+        reviewerGraph: { ...graph, flaggedReviewShare: null, identifiedReviewCount: 0 },
+      }),
+    ).at(-1);
+    expect(row?.strength).toBe("none");
+    expect(row?.value).toBeNull();
+  });
+
+  it("reads a flagged share of zero as weak, not as nothing to report", () => {
+    const row = buildEvidence(
+      baseVector({ reviewerGraph: { ...graph, flaggedReviewShare: 0, flaggedReviewCount: 0 } }),
+    ).at(-1);
+    expect(row?.strength).toBe("weak");
+    expect(row?.value).toBe(0);
+  });
+
+  // DESIGN.md section 10: statistical, never accusatory
+  it("describes a pattern rather than an accusation", () => {
+    const detail = buildEvidence(baseVector({ reviewerGraph: graph })).at(-1)?.detail ?? "";
+    for (const word of ["fake", "fraud", "scam", "paid", "lying"]) {
+      expect(detail.toLowerCase()).not.toContain(word);
+    }
   });
 });

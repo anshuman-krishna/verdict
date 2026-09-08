@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyCalibration, applyModel, flattenFeatureVector } from "./combine";
+import {
+  applyCalibration,
+  applyModel,
+  flattenFeatureVector,
+  localModelSet,
+  selectModel,
+  type CombinerModel,
+} from "./combine";
 import type { FeatureVector } from "./featureVector";
 
 const BASE_TEXT_DUPLICATION = {
@@ -23,6 +30,7 @@ function featureVector(overrides: Partial<FeatureVector> = {}): FeatureVector {
       driftStatistic: 0,
       embeddedCount: 0,
     },
+    reviewerGraph: null,
     ...overrides,
   };
 }
@@ -43,6 +51,7 @@ describe("flattenFeatureVector", () => {
       "listingDrift.offTopicShare": null,
       "listingDrift.meanDistance": null,
       "listingDrift.driftStatistic": 0,
+      "reviewerGraph.flaggedReviewShare": null,
     });
   });
 
@@ -147,5 +156,71 @@ describe("applyModel", () => {
       expect(result.rawProbability).toBeCloseTo(0.5, 10);
       expect(result.probability).toBeCloseTo(0.8, 10);
     }
+  });
+});
+
+const GRAPH_RESULT = {
+  flaggedReviewShare: 0.4,
+  flaggedReviewCount: 4,
+  flaggedReviewerCount: 3,
+  knownReviewerCount: 8,
+  identifiedReviewCount: 10,
+};
+
+const LOCAL: CombinerModel = { intercept: -1, coefficients: {}, calibration: [] };
+const GRAPH: CombinerModel = {
+  intercept: 1,
+  coefficients: { "reviewerGraph.flaggedReviewShare": 2 },
+  calibration: [],
+};
+
+describe("selectModel", () => {
+  it("uses the local model when no lookup ran", () => {
+    expect(selectModel({ local: LOCAL, reviewerGraph: GRAPH }, featureVector())).toBe(LOCAL);
+  });
+
+  it("uses the graph model once the vector carries a flagged share", () => {
+    const vector = featureVector({ reviewerGraph: GRAPH_RESULT });
+    expect(selectModel({ local: LOCAL, reviewerGraph: GRAPH }, vector)).toBe(GRAPH);
+  });
+
+  // SPEC.md section 13: the service being unreachable degrades to local signals, silently
+  it("falls back to local when the artefact carries no graph model", () => {
+    const vector = featureVector({ reviewerGraph: GRAPH_RESULT });
+    expect(selectModel(localModelSet(LOCAL), vector)).toBe(LOCAL);
+  });
+
+  // a listing where nobody is identifiable has no share to score against, flagged or not
+  it("falls back to local when the lookup ran but found no identifiable reviewer", () => {
+    const vector = featureVector({
+      reviewerGraph: { ...GRAPH_RESULT, flaggedReviewShare: null, identifiedReviewCount: 0 },
+    });
+    expect(selectModel({ local: LOCAL, reviewerGraph: GRAPH }, vector)).toBe(LOCAL);
+  });
+
+  it("uses the graph model when the lookup ran and flagged nobody", () => {
+    const vector = featureVector({
+      reviewerGraph: { ...GRAPH_RESULT, flaggedReviewShare: 0, flaggedReviewCount: 0 },
+    });
+    expect(selectModel({ local: LOCAL, reviewerGraph: GRAPH }, vector)).toBe(GRAPH);
+  });
+});
+
+describe("the reviewer graph feature", () => {
+  it("is null when no lookup supplied it", () => {
+    expect(flattenFeatureVector(featureVector())["reviewerGraph.flaggedReviewShare"]).toBeNull();
+  });
+
+  it("carries the share through once it exists", () => {
+    const flat = flattenFeatureVector(featureVector({ reviewerGraph: GRAPH_RESULT }));
+    expect(flat["reviewerGraph.flaggedReviewShare"]).toBe(0.4);
+  });
+
+  // a model naming the feature on a default analysis is a gap, never a zero
+  it("reports missing-features rather than scoring a lookup that never ran", () => {
+    expect(applyModel(featureVector(), GRAPH)).toEqual({
+      status: "missing-features",
+      missing: ["reviewerGraph.flaggedReviewShare"],
+    });
   });
 });

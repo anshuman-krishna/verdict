@@ -6,10 +6,8 @@ import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
-import type { CombinerModel } from "../score/combine";
+import type { ModelSet } from "../score/combine";
 import type { FeatureVectorInputs } from "../score/featureVector";
-import type { Report } from "../score/report";
-import { reviewerGraphEvidenceRow } from "../score/reviewerGraphEvidence";
 
 // isEnabled is read per analysis so the options toggle takes effect on the next check, not a reload
 export interface ReputationLookupDeps {
@@ -24,7 +22,7 @@ export interface ReputationLookupDeps {
 
 export interface OrchestratorDeps {
   rules: RulesDocument;
-  model: CombinerModel | null;
+  model: ModelSet | null;
   priors: FeatureVectorInputs;
   isHistoryEnabled: () => Promise<boolean>;
   saveHistory: (entry: { title: string; thumbnailUrl: string | null; report: unknown }) => Promise<unknown>;
@@ -90,7 +88,13 @@ async function scoreAndMaybeSave(
     return { status: "not-enough-data" };
   }
 
-  let outcome: ReportOutcome = buildReport({
+  // before scoring, not after: SPEC.md 5.6 is a signal in the feature vector, so a flagged share
+  // that arrived once the report was built could only be pinned on beside a band computed without it
+  const flaggedReviewerIds = deps.reputation && (await deps.reputation.isEnabled())
+    ? await flaggedReviewers(reviews, deps.reputation)
+    : undefined;
+
+  const outcome: ReportOutcome = buildReport({
     reviews,
     seed: product.url,
     claimedRating: product.claimedRating,
@@ -102,14 +106,8 @@ async function scoreAndMaybeSave(
     bootstrapResamples: deps.bootstrapResamples,
     signatureCache,
     embeddingCache,
+    flaggedReviewerIds,
   });
-
-  if (outcome.status === "ok" && deps.reputation && (await deps.reputation.isEnabled())) {
-    outcome = {
-      status: "ok",
-      report: await withReviewerGraphEvidence(outcome.report, reviews, deps.reputation),
-    };
-  }
 
   if (outcome.status === "ok" && deps.graphContribution && (await deps.graphContribution.isEnabled())) {
     await queueGraphContribution(page, reviews, deps.graphContribution);
@@ -141,24 +139,22 @@ async function queueGraphContribution(
   }
 }
 
-// an unreachable service degrades to the same "none flagged" row, never an error
-async function withReviewerGraphEvidence(
-  report: Report,
+// an unreachable service degrades to an empty set, never an error: SPEC.md section 13 wants the
+// analysis to carry on with local signals only and say nothing about it
+async function flaggedReviewers(
   reviews: readonly Review[],
   reputation: ReputationLookupDeps,
-): Promise<Report> {
+): Promise<Set<string>> {
   const reviewerIds = reviews
     .map((review) => review.reviewerId)
     .filter((id): id is string => id !== null);
-  const flagged = await lookupFlaggedReviewers(reviewerIds, {
+  return lookupFlaggedReviewers(reviewerIds, {
     endpoint: reputation.endpoint,
     salt: reputation.salt,
     fetchImpl: reputation.fetchImpl,
     random: reputation.random,
     delay: reputation.delay,
   });
-  const row = reviewerGraphEvidenceRow(flagged.size, reviewerIds.length);
-  return { ...report, evidence: [...report.evidence, row] };
 }
 
 // dedupes on reviewerId plus date; a review missing either is kept, risking a double count over a drop

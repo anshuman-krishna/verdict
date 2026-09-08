@@ -11,8 +11,11 @@ from verdict_research.eval.method_document import (
     write_method_document_file,
 )
 from verdict_research.model.artifact import (
+    LOCAL_SLOT,
+    SLOTS,
+    ArtifactError,
     absent_model_artifact,
-    build_model_artifact,
+    place_in_slot,
     write_model_artifact_file,
 )
 from verdict_research.model.pipeline import (
@@ -79,6 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--eval-output", help="write the full evaluation report as json")
     parser.add_argument("--method-output", default=str(DEFAULT_METHOD_OUTPUT))
+    # SPEC.md 5.6's model is fitted on a different corpus from the local one, so it is a separate
+    # run into a separate slot rather than a second half of this one. the other slot is preserved.
+    parser.add_argument(
+        "--slot",
+        default=LOCAL_SLOT,
+        choices=list(SLOTS),
+        help="which model in model.json this run writes",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--test-fraction", type=float, default=0.2)
     parser.add_argument("--calibration-fraction", type=float, default=0.25)
@@ -144,14 +155,38 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     trained_at = time.time()
-    write_model_artifact_file(
-        args.output,
-        build_model_artifact(run.model, trained_at=trained_at, acceptance=acceptance_summary(run)),
-    )
-    write_method_document_file(build_method_document(run, trained_at), args.method_output)
-    print(f"wrote {args.output}")
-    print(f"wrote {args.method_output}")
+    try:
+        artifact = place_in_slot(
+            _existing_artifact(args.output),
+            args.slot,
+            run.model,
+            trained_at=trained_at,
+            acceptance=acceptance_summary(run),
+        )
+    except ArtifactError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    write_model_artifact_file(args.output, artifact)
+    print(f"wrote {args.output} ({args.slot})")
+    # the published accuracy describes the model every default analysis uses, and SPEC.md 5.6's is
+    # not that model: an opt in signal must not move a number the site states for everyone
+    if args.slot == LOCAL_SLOT:
+        write_method_document_file(build_method_document(run, trained_at), args.method_output)
+        print(f"wrote {args.method_output}")
+    else:
+        print(f"{args.method_output} left alone, it describes the {LOCAL_SLOT} model")
     return 0
+
+
+# a run writes one slot and preserves the other, so it has to read what is there. an unreadable or
+# missing file is the absent form, which place_in_slot then refuses to hang a graph model on.
+def _existing_artifact(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return absent_model_artifact("no model has been trained yet")
+    return data if isinstance(data, dict) else absent_model_artifact("model.json was not an object")
 
 
 def clear(argv: list[str] | None = None) -> int:

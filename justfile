@@ -79,6 +79,12 @@ featurise labels *args: canary-extractor
 #   just train path/to/corpus.jsonl --features a,b,c
 # `just train corpus.jsonl --list-features` prints what the corpus carries.
 #
+# SPEC.md 5.6's opt in model is fitted on its own corpus, the one carrying a
+# flagged share, so it is a second run into the other slot rather than a
+# second half of the first:
+#   just train graph-corpus.jsonl --features ...,reviewerGraph.flaggedReviewShare --slot reviewerGraph
+# A run writes its own slot and leaves the other exactly as it found it.
+#
 # train, calibrate, evaluate, and export model.json
 train corpus *args:
     #!/usr/bin/env bash

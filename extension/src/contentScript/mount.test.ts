@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_MAX_PAGES } from "../extract/fetchReviewPages";
 import type { RulesDocument } from "../extract/rules";
-import type { CombinerModel } from "../score/combine";
+import { localModelSet, type CombinerModel } from "../score/combine";
 import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
 import { mountResult } from "./mount";
@@ -37,7 +37,7 @@ const MODEL: CombinerModel = {
 function deps(): OrchestratorDeps {
   return {
     rules: RULES,
-    model: MODEL,
+    model: localModelSet(MODEL),
     priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] },
     isHistoryEnabled: vi.fn().mockResolvedValue(false),
     saveHistory: vi.fn().mockResolvedValue(undefined),

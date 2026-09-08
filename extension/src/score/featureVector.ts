@@ -5,6 +5,7 @@ import {
   type ListingDriftResult,
 } from "./listingDrift";
 import { ratingDeconvolution, type RatingDeconvolutionResult } from "./ratingDeconvolution";
+import { reviewerGraphShare, type ReviewerGraphResult } from "./reviewerGraph";
 import { detectTemporalBursts, type Burst, type TemporalBurstResult } from "./temporalBurst";
 import {
   textNearDuplication,
@@ -125,6 +126,11 @@ export interface FeatureVectorInputs {
   // signal still reports its change point, which compares the reviews only against each other.
   productText?: string;
   listingDriftEmbeddingCache?: ListingDriftOptions["embeddingCache"];
+  // SPEC.md 5.6, and only ever present when the user opted into the lookup and the service answered.
+  // absent is the default path and the SPEC.md section 13 row for an unreachable service alike:
+  // the signal is null rather than zero, so combine.ts scores with the local model instead of
+  // reading "nobody flagged" off a lookup that never happened.
+  flaggedReviewerIds?: ReadonlySet<string>;
 }
 
 export interface FeatureVector {
@@ -134,9 +140,10 @@ export interface FeatureVector {
   verificationConcentration: VerificationConcentrationResult | null;
   textNearDuplication: TextNearDuplicationResult;
   listingDrift: ListingDriftResult;
+  reviewerGraph: ReviewerGraphResult | null;
 }
 
-// the five local signals; the combiner over them waits on ground truth
+// the five local signals, plus SPEC.md 5.6 when a lookup supplied its input
 export function buildFeatureVector(
   reviews: readonly Review[],
   inputs: FeatureVectorInputs,
@@ -177,6 +184,10 @@ export function buildFeatureVector(
     { embeddingCache: inputs.listingDriftEmbeddingCache },
   );
 
+  const reviewerGraphResult = inputs.flaggedReviewerIds !== undefined
+    ? reviewerGraphShare(reviews, inputs.flaggedReviewerIds)
+    : null;
+
   return {
     meetsMinimumData,
     ratingDeconvolution: ratingResult,
@@ -184,5 +195,6 @@ export function buildFeatureVector(
     verificationConcentration: verificationResult,
     textNearDuplication: duplicationResult,
     listingDrift: driftResult,
+    reviewerGraph: reviewerGraphResult,
   };
 }

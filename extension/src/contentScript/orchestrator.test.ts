@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import type { RulesDocument } from "../extract/rules";
-import type { CombinerModel } from "../score/combine";
+import { localModelSet, type CombinerModel } from "../score/combine";
 import { analyzePage, checkMoreDeeply, mergeReviews } from "./orchestrator";
 
 const PRIORS = { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] };
@@ -53,7 +53,7 @@ function parse(html: string): ParentNode {
 function deps(overrides: Partial<Parameters<typeof analyzePage>[2]> = {}) {
   return {
     rules: RULES,
-    model: MODEL,
+    model: localModelSet(MODEL),
     priors: PRIORS,
     isHistoryEnabled: vi.fn().mockResolvedValue(true),
     saveHistory: vi.fn().mockResolvedValue(undefined),
@@ -164,6 +164,55 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
     }
     const row = result.outcome.report.evidence.find((r) => r.signal === "reviewer network");
     expect(row).toMatchObject({ strength: "weak", value: 0 });
+  });
+
+  // the whole point of SPEC.md 5.6: the flagged share is a feature, not a note pinned on beside a
+  // band computed without it
+  it("scores with the reviewer graph model once the lookup has run", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+    const models = {
+      local: MODEL,
+      reviewerGraph: { intercept: 9, coefficients: {}, calibration: [] },
+    };
+    const reputation = {
+      isEnabled: vi.fn().mockResolvedValue(true),
+      endpoint: "https://x",
+      salt: "s",
+      fetchImpl,
+      delay: () => Promise.resolve(),
+    };
+
+    const withLookup = await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ model: models, reputation }),
+    );
+    const withoutLookup = await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ model: models }),
+    );
+
+    if (withLookup?.outcome.status !== "ok" || withoutLookup?.outcome.status !== "ok") {
+      throw new Error("expected both to score");
+    }
+    expect(withLookup.outcome.report.band).not.toBe(withoutLookup.outcome.report.band);
+  });
+
+  // SPEC.md section 13: an unreachable service is local signals only, with nothing said about it
+  it("still scores with the local model when the service does not answer", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("unreachable"));
+    const testDeps = deps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://x",
+        salt: "s",
+        fetchImpl,
+        delay: () => Promise.resolve(),
+      },
+    });
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(result?.outcome.status).toBe("ok");
   });
 
   it("saves the reviewer network row into the history entry too", async () => {

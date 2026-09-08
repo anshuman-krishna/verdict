@@ -1,4 +1,4 @@
-import type { CalibrationPoint, CombinerModel } from "./combine";
+import type { CalibrationPoint, CombinerModel, ModelSet } from "./combine";
 import artifact from "./model.json";
 
 // SPEC.md section 4: "output artefact is model.json, a small parameter file bundled into the
@@ -15,14 +15,11 @@ import artifact from "./model.json";
 
 export const ARTIFACT_VERSION = 1;
 
-export function parseModelArtifact(data: unknown): CombinerModel | null {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+function parseModel(value: unknown): CombinerModel | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
-  const record = data as Record<string, unknown>;
-  if (record.artifactVersion !== ARTIFACT_VERSION || record.present !== true) {
-    return null;
-  }
+  const record = value as Record<string, unknown>;
   const intercept = record.intercept;
   const coefficients = parseCoefficients(record.coefficients);
   const calibration = parseCalibration(record.calibration);
@@ -30,6 +27,27 @@ export function parseModelArtifact(data: unknown): CombinerModel | null {
     return null;
   }
   return { intercept, coefficients, calibration };
+}
+
+// the reviewerGraph block is optional and a malformed one is dropped rather than failing the whole
+// artefact: SPEC.md 5.6 is an opt in that a user may never turn on, and losing the local model with
+// it would take the score away from everybody over a signal almost nobody asked for.
+export function parseModelArtifact(data: unknown): ModelSet | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null;
+  }
+  const record = data as Record<string, unknown>;
+  if (record.artifactVersion !== ARTIFACT_VERSION || record.present !== true) {
+    return null;
+  }
+  const local = parseModel(record);
+  if (local === null) {
+    return null;
+  }
+  return {
+    local,
+    reviewerGraph: record.reviewerGraph === undefined ? null : parseModel(record.reviewerGraph),
+  };
 }
 
 function parseCoefficients(value: unknown): Record<string, number> | null {
@@ -71,4 +89,4 @@ function parseCalibration(value: unknown): CalibrationPoint[] | null {
   return points;
 }
 
-export const BUNDLED_MODEL: CombinerModel | null = parseModelArtifact(artifact);
+export const BUNDLED_MODEL: ModelSet | null = parseModelArtifact(artifact);

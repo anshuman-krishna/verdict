@@ -1,6 +1,6 @@
 import type { Review } from "../extract/types";
 import { bandFromProbability } from "./band";
-import { applyModel, type CombinerModel } from "./combine";
+import { applyModel, selectModel, type ModelSet } from "./combine";
 import { buildEvidence } from "./evidence";
 import { buildFeatureVector, type FeatureVectorInputs } from "./featureVector";
 import { bootstrap, interquartileRange } from "./bootstrap";
@@ -19,7 +19,7 @@ export interface BuildReportOptions {
   reviews: readonly Review[];
   seed: string;
   claimedRating: number;
-  model: CombinerModel | null;
+  model: ModelSet | null;
   priors: FeatureVectorInputs;
   now?: () => number;
   random?: () => number;
@@ -29,6 +29,8 @@ export interface BuildReportOptions {
   // cached reviews carry no text (PRIVACY.md section 2); these keep a cache hit scoring identically
   signatureCache?: WeakMap<Review, bigint[]>;
   embeddingCache?: WeakMap<Review, number[]>;
+  // SPEC.md 5.6's input, absent unless the user opted in and the lookup answered
+  flaggedReviewerIds?: ReadonlySet<string>;
 }
 
 // SPEC.md 5.1's injected share, distinct from the combiner's probability which sets the band
@@ -60,6 +62,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
     listingDriftEmbeddingCache: options.embeddingCache ?? new WeakMap(),
     productText: options.productText ?? "",
+    flaggedReviewerIds: options.flaggedReviewerIds,
   };
   const vector = buildFeatureVector(options.reviews, priors);
 
@@ -70,7 +73,10 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "no-model" };
   }
 
-  const result = applyModel(vector, options.model);
+  // picked once from the full review set, then held for every resample: a resample that happened to
+  // draw no identified reviewer would otherwise switch models mid bootstrap and mix two calibrations
+  const model = selectModel(options.model, vector);
+  const result = applyModel(vector, model);
   if (result.status === "insufficient-data") {
     return { status: "not-enough-data" };
   }
@@ -80,7 +86,6 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
 
   // 200 resamples took ~2s before the signature cache above, milliseconds after: resample() draws the
   // same review objects repeatedly, so their minhashes were being recomputed from scratch each time
-  const model = options.model;
   const samples = bootstrap(
     options.reviews,
     (sample) => {

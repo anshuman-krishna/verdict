@@ -17,9 +17,12 @@ const PRESENT = {
 describe("parseModelArtifact", () => {
   it("reads a complete artifact", () => {
     expect(parseModelArtifact(PRESENT)).toEqual({
-      intercept: -1.5,
-      coefficients: { "temporalBurst.burstFraction": 2.25 },
-      calibration: PRESENT.calibration,
+      local: {
+        intercept: -1.5,
+        coefficients: { "temporalBurst.burstFraction": 2.25 },
+        calibration: PRESENT.calibration,
+      },
+      reviewerGraph: null,
     });
   });
 
@@ -65,7 +68,29 @@ describe("parseModelArtifact", () => {
   });
 
   it("accepts an empty calibration curve, which combine.ts treats as identity", () => {
-    expect(parseModelArtifact({ ...PRESENT, calibration: [] })?.calibration).toEqual([]);
+    expect(parseModelArtifact({ ...PRESENT, calibration: [] })?.local.calibration).toEqual([]);
+  });
+
+  it("reads an optional reviewer graph model alongside the local one", () => {
+    const parsed = parseModelArtifact({
+      ...PRESENT,
+      reviewerGraph: {
+        intercept: 0.5,
+        coefficients: { "reviewerGraph.flaggedReviewShare": 1.75 },
+        calibration: [],
+      },
+    });
+    expect(parsed?.reviewerGraph?.coefficients).toEqual({
+      "reviewerGraph.flaggedReviewShare": 1.75,
+    });
+    expect(parsed?.local.intercept).toBe(-1.5);
+  });
+
+  // an opt in almost nobody turns on must not be able to take the score away from everybody
+  it("drops a malformed reviewer graph block and keeps the local model", () => {
+    const parsed = parseModelArtifact({ ...PRESENT, reviewerGraph: { intercept: "no" } });
+    expect(parsed?.reviewerGraph).toBeNull();
+    expect(parsed?.local.intercept).toBe(-1.5);
   });
 
   it("refuses anything that is not an object", () => {
