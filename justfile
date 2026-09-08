@@ -58,6 +58,20 @@ fixtures:
     set -euo pipefail
     cd extension && VERDICT_FIXTURE_GATE=1 npx vitest run tests/fixtures.spec.ts
 
+# PLAN.md week 4's other half: turns anshuman's labels and the saved pages
+# they name into the corpus.jsonl `just train` reads. Every feature comes out
+# of the shipped extractor and the shipped signals, so the corpus holds what
+# the extension computes rather than a second estimate of it.
+#   just featurise research/labels.jsonl --output research/corpus.jsonl
+# The label file is ground truth and is written by hand. The corpus it
+# produces carries features and labels only: no url, no title, no reviewer id.
+#
+# build the training corpus from labelled fixtures
+featurise labels *args: canary-extractor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv --directory research run python -m verdict_research.corpus.cli "{{labels}}" {{args}}
+
 # PLAN.md week 5 as one command: fit, calibrate on a held out slice,
 # evaluate on the untouched test set, and write extension/src/score/model.json
 # only if SPEC.md section 14's precision, recall, and calibration criteria

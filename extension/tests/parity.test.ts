@@ -5,6 +5,7 @@ import { applyModel, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
 import { listingIdentityDrift } from "../src/score/listingDrift";
+import { PLACEHOLDER_INJECTION_KERNEL, PLACEHOLDER_ORGANIC_PRIOR } from "../src/score/priors";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
 import { cosineSimilarity, embedText, hashTerms } from "../src/score/textEmbedding";
@@ -103,6 +104,14 @@ function run(vector: Vector): unknown {
       const signatureA = minhashSignature(shingle(textA, 5), numPermutations);
       const signatureB = minhashSignature(shingle(textB, 5), numPermutations);
       return { estimatedJaccard: estimateJaccard(signatureA, signatureB) };
+    }
+    case "sharedPriors": {
+      const { observed } = vector.input as { observed: number[] };
+      return ratingDeconvolution(
+        observed,
+        PLACEHOLDER_ORGANIC_PRIOR,
+        PLACEHOLDER_INJECTION_KERNEL,
+      );
     }
     case "textEmbeddingTermCounts": {
       const { text, dimensions } = vector.input as { text: string; dimensions: number };

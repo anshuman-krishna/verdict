@@ -1,3 +1,4 @@
+import priors from "../../../schema/priors.json";
 import type { FeatureVectorInputs } from "./featureVector";
 
 // SPEC.md 5.1 says organicPrior is "estimated per product category from the negative corpus", and
@@ -10,8 +11,12 @@ import type { FeatureVectorInputs } from "./featureVector";
 // the one line of shape SPEC.md 5.1 actually specifies, "concentrated on four and five stars",
 // weighted toward five. Both must be replaced once the negative corpus produces real per category
 // priors.
-export const PLACEHOLDER_ORGANIC_PRIOR: readonly number[] = [0.2, 0.2, 0.2, 0.2, 0.2];
-export const PLACEHOLDER_INJECTION_KERNEL: readonly number[] = [0, 0, 0, 0.35, 0.65];
+//
+// the numbers live in schema/priors.json because the research featuriser reads them too: a corpus
+// built with one set of priors and scored with another trains on a feature the extension never
+// computes.
+export const PLACEHOLDER_ORGANIC_PRIOR: readonly number[] = priors.organicPrior;
+export const PLACEHOLDER_INJECTION_KERNEL: readonly number[] = priors.injectionKernel;
 
 export const PLACEHOLDER_PRIORS: FeatureVectorInputs = {
   organicPrior: PLACEHOLDER_ORGANIC_PRIOR,

@@ -67,3 +67,28 @@ Prints one line per failing fixture, naming the field and the strategy that
 ran, and reports the pass rate and the locale spread against SPEC.md section
 14. It exits non zero when the corpus is empty, because unmeasured is not
 the same as passing.
+
+## Labelling a fixture
+
+`just featurise` turns these pages into the training corpus. It reads a
+separate label file, one json object per line, naming fixtures by their base
+name. See `research/labels.example.jsonl`.
+
+```json
+{"fixture": "b0abcdef12", "label": 1, "source": "solicitation", "notes": "..."}
+```
+
+| field | required | meaning |
+|---|---|---|
+| `fixture` | yes | the base name shared by the page and its expectation file |
+| `label` | yes | `1` manipulated, `0` clean. Nothing else is accepted |
+| `source` | no | which of SPEC.md section 12's four sources this label came from, since they are not equally strong |
+| `notes` | no | why this listing carries this label |
+
+Labelling one fixture twice is an error rather than a last write wins, since
+two rows for one page is a disagreement about ground truth.
+
+The corpus that comes out carries features, labels, and the locale, and no
+url, title, or reviewer id. `just featurise ... --print-mapping` prints which
+fixture produced which row while the run is in front of you, so tracing a
+surprising row back does not require the corpus to be a list of products.

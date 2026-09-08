@@ -1,11 +1,14 @@
+import json
 import subprocess
 
 import pytest
 
-from verdict_research.canary.extraction import (
+from verdict_research.shipped_extractor import (
     ExtractorError,
     NodeExtractor,
+    NodeReviewExtractor,
     parse_extractor_output,
+    parse_full_extractor_output,
 )
 
 
@@ -80,4 +83,84 @@ class TestNodeExtractor:
             extractor_path=built, run=lambda argv, html, timeout: completed(returncode=1)
         )
         with pytest.raises(ExtractorError, match="exited non zero"):
+            extractor("<html></html>", "https://www.amazon.com/dp/B0ABCDEF12")
+
+
+FULL = json.dumps(
+    {
+        "url": "https://www.amazon.com/dp/B0ABCDEF12",
+        "site": "amazon",
+        "locale": "com",
+        "rulesVersion": 41,
+        "reviewCount": 1,
+        "title": "a knife set",
+        "product": {
+            "title": "a knife set",
+            "category": "kitchen",
+            "claimedRating": 4.6,
+            "reviewCount": 90,
+            "site": "amazon",
+            "locale": "com",
+            "url": "https://www.amazon.com/dp/B0ABCDEF12",
+            "thumbnailUrl": None,
+        },
+        "reviews": [
+            {
+                "rating": 5,
+                "text": "cut cleanly",
+                "date": "2024-01-02",
+                "verified": True,
+                "reviewerId": "abc",
+            }
+        ],
+    }
+)
+
+
+class TestParseFullExtractorOutput:
+    def test_reads_the_reviews_and_the_product(self):
+        result = parse_full_extractor_output(FULL)
+        assert result.reviews[0].rating == 5
+        assert result.product is not None
+        assert result.product.category == "kitchen"
+        assert result.locale == "com"
+
+    def test_a_page_with_no_product_is_not_an_error(self):
+        data = json.loads(FULL)
+        data["product"] = None
+        data["reviews"] = []
+        result = parse_full_extractor_output(json.dumps(data))
+        assert result.product is None
+        assert result.reviews == []
+
+    # the counts path and the reviews path must not disagree about what a broken run looks like
+    def test_a_missing_field_is_an_error(self):
+        data = json.loads(FULL)
+        del data["reviews"]
+        with pytest.raises(ExtractorError, match="missing a field"):
+            parse_full_extractor_output(json.dumps(data))
+
+    def test_empty_output_is_an_error(self):
+        with pytest.raises(ExtractorError, match="wrote nothing"):
+            parse_full_extractor_output("  \n")
+
+
+class TestNodeReviewExtractor:
+    def test_asks_the_shipped_extractor_for_the_reviews(self, tmp_path):
+        artefact = tmp_path / "extract.mjs"
+        artefact.write_text("", encoding="utf-8")
+        seen: list[list[str]] = []
+
+        def run(argv, html, timeout):
+            seen.append(list(argv))
+            return completed(stdout=FULL)
+
+        extractor = NodeReviewExtractor(extractor_path=artefact, run=run)
+        result = extractor("<html></html>", "https://www.amazon.com/dp/B0ABCDEF12")
+        assert len(result.reviews) == 1
+        assert "--reviews" in seen[0]
+
+    def test_refuses_to_run_without_the_built_artefact(self, tmp_path):
+        extractor = NodeReviewExtractor(extractor_path=tmp_path / "absent.mjs")
+        with pytest.raises(ExtractorError, match="just canary-extractor"):
             extractor("<html></html>", "https://www.amazon.com/dp/B0ABCDEF12")

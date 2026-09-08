@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import type { RulesDocument } from "../extract/rules";
-import { extractOnce } from "./extractOnce";
+import { extractFull, extractOnce } from "./extractOnce";
 
 const RULES: RulesDocument = {
   version: 41,
@@ -68,5 +68,26 @@ describe("extractOnce", () => {
 
   it("carries the rules version through even when nothing matched", () => {
     expect(extractOnce(page("<div></div>"), "https://www.amazon.com/dp/B0ABCDEF12", RULES).rulesVersion).toBe(41);
+  });
+});
+
+describe("extractFull", () => {
+  it("carries the reviews and the product snapshot the corpus builder needs", () => {
+    const result = extractFull(page(GOOD), "https://www.amazon.fr/dp/B0ABCDEF12", RULES);
+    expect(result.reviews).toHaveLength(2);
+    expect(result.reviews[0]?.rating).toBe(5);
+    expect(result.product?.title).toBe("a product");
+  });
+
+  it("agrees with extractOnce on every field they share", () => {
+    const url = "https://www.amazon.com/dp/B0ABCDEF12";
+    const { product: _product, reviews: _reviews, ...shared } = extractFull(page(GOOD), url, RULES);
+    expect(shared).toEqual(extractOnce(page(GOOD), url, RULES));
+  });
+
+  it("returns no reviews rather than throwing on a url it cannot place", () => {
+    const result = extractFull(page(GOOD), "https://example.com/thing", RULES);
+    expect(result.reviews).toEqual([]);
+    expect(result.product).toBeNull();
   });
 });

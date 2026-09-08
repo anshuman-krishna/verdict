@@ -1,0 +1,5 @@
+{
+  "note": "provisional. SPEC.md 5.1 estimates organicPrior per product category from the negative corpus, which PLAN.md week 4 has not built yet. read by extension/src/score/priors.ts and research/verdict_research/features/priors.py so a corpus is never featurised with different numbers than the extension scores with.",
+  "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2],
+  "injectionKernel": [0, 0, 0, 0.35, 0.65]
+}

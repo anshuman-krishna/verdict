@@ -11,6 +11,10 @@ from verdict_research.features.listing_drift import (
     ReviewForDrift,
     listing_identity_drift,
 )
+from verdict_research.features.priors import (
+    PLACEHOLDER_INJECTION_KERNEL,
+    PLACEHOLDER_ORGANIC_PRIOR,
+)
 from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
     rating_deconvolution,
@@ -127,6 +131,12 @@ def run(vector: dict):
         signature_a = minhash_signature(shingle(data["textA"], 5), data["numPermutations"])
         signature_b = minhash_signature(shingle(data["textB"], 5), data["numPermutations"])
         return {"estimatedJaccard": estimate_jaccard(signature_a, signature_b)}
+
+    if signal == "sharedPriors":
+        result = rating_deconvolution(
+            data["observed"], PLACEHOLDER_ORGANIC_PRIOR, PLACEHOLDER_INJECTION_KERNEL
+        )
+        return {"injectedShare": result.injected_share, "residualError": result.residual_error}
 
     if signal == "textEmbeddingTermCounts":
         return {"termCounts": hash_terms(data["text"], data["dimensions"])}

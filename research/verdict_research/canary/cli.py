@@ -13,7 +13,6 @@ from verdict_research.canary.check import (
     run_canary,
     summarize,
 )
-from verdict_research.canary.extraction import NodeExtractor
 from verdict_research.canary.fetching import PacedFetcher
 from verdict_research.canary.state import (
     DEFAULT_RETAINED_CHECKS,
@@ -26,6 +25,7 @@ from verdict_research.canary.status_document import (
     write_status_document_file,
 )
 from verdict_research.canary.targets import read_targets
+from verdict_research.shipped_extractor import NodeExtractor
 
 # PLAN.md week 7's canary as one command. Fetch each target, ask the shipped extractor what it
 # finds, classify, alert on what changed since last time, and write the document SITE.md's /status
