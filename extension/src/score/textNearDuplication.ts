@@ -112,6 +112,26 @@ export function estimateJaccard(signatureA: readonly bigint[], signatureB: reado
   return matches / signatureA.length;
 }
 
+// a resample draws the same signature arrays repeatedly, and converting 128 bigints to strings for
+// every band on every draw was two thirds of the whole analysis budget. keyed by the signature
+// array, which the caller's signatureCache already keeps alive for exactly as long as it is useful.
+const bandKeyCache = new WeakMap<readonly bigint[], { bands: number; rows: number; keys: string[] }>();
+
+function bandKeys(signature: readonly bigint[], bands: number, rows: number): string[] {
+  const cached = bandKeyCache.get(signature);
+  if (cached !== undefined && cached.bands === bands && cached.rows === rows) {
+    return cached.keys;
+  }
+  const parts = signature.map((value) => value.toString());
+  const keys: string[] = [];
+  for (let band = 0; band < bands; band++) {
+    const start = band * rows;
+    keys.push(`${band}:${parts.slice(start, start + rows).join(",")}`);
+  }
+  bandKeyCache.set(signature, { bands, rows, keys });
+  return keys;
+}
+
 class UnionFind {
   private readonly parent: number[];
 
@@ -176,12 +196,28 @@ export function textNearDuplication(
     return signature;
   });
 
+  const unionFind = new UnionFind(signatures.length);
+
+  // a resample draws the same review several times, and those draws share one signature array. they
+  // are the same text, so they join without comparison, and only one of them enters the banding: at
+  // 300 draws that is a third fewer entries and half the candidate pairs.
+  const firstIndexOf = new Map<readonly bigint[], number>();
+  const distinct: number[] = [];
+  for (let i = 0; i < signatures.length; i++) {
+    const signature = signatures[i] as bigint[];
+    const first = firstIndexOf.get(signature);
+    if (first === undefined) {
+      firstIndexOf.set(signature, i);
+      distinct.push(i);
+    } else {
+      unionFind.union(i, first);
+    }
+  }
+
   const buckets = new Map<string, number[]>();
-  for (let band = 0; band < bands; band++) {
-    const start = band * rows;
-    for (let i = 0; i < signatures.length; i++) {
-      const signature = signatures[i] as bigint[];
-      const key = `${band}:${signature.slice(start, start + rows).join(",")}`;
+  for (const i of distinct) {
+    const keys = bandKeys(signatures[i] as bigint[], bands, rows);
+    for (const key of keys) {
       const bucket = buckets.get(key);
       if (bucket === undefined) {
         buckets.set(key, [i]);
@@ -191,21 +227,24 @@ export function textNearDuplication(
     }
   }
 
-  const unionFind = new UnionFind(signatures.length);
-  const candidatePairs = new Set<string>();
+  // a pair is one number, not a string to allocate and parse back: the same pair surfaces in up to
+  // `bands` buckets, so this set is hit far more often than it is filled
+  const width = signatures.length;
+  const candidatePairs = new Set<number>();
   for (const bucket of buckets.values()) {
     if (bucket.length < 2) {
       continue;
     }
     for (let i = 0; i < bucket.length; i++) {
       for (let j = i + 1; j < bucket.length; j++) {
-        candidatePairs.add(`${bucket[i]}:${bucket[j]}`);
+        candidatePairs.add((bucket[i] as number) * width + (bucket[j] as number));
       }
     }
   }
 
   for (const pair of candidatePairs) {
-    const [left, right] = pair.split(":").map(Number) as [number, number];
+    const left = Math.floor(pair / width);
+    const right = pair % width;
     const similarity = estimateJaccard(
       signatures[left] as bigint[],
       signatures[right] as bigint[],

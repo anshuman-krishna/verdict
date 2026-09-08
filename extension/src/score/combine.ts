@@ -24,6 +24,9 @@ export function flattenFeatureVector(featureVector: FeatureVector): FlatFeatures
     "textNearDuplication.clusterCount": featureVector.textNearDuplication.clusterCount,
     "textNearDuplication.largestClusterShare":
       featureVector.textNearDuplication.largestClusterShare,
+    "listingDrift.offTopicShare": featureVector.listingDrift.offTopicShare,
+    "listingDrift.meanDistance": featureVector.listingDrift.meanDistance,
+    "listingDrift.driftStatistic": featureVector.listingDrift.driftStatistic,
   };
 }
 

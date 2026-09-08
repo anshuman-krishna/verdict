@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import { applyModel, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
+import { listingIdentityDrift } from "../src/score/listingDrift";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
+import { cosineSimilarity, embedText, hashTerms } from "../src/score/textEmbedding";
 import {
   estimateJaccard,
   minhashSignature,
@@ -102,8 +104,35 @@ function run(vector: Vector): unknown {
       const signatureB = minhashSignature(shingle(textB, 5), numPermutations);
       return { estimatedJaccard: estimateJaccard(signatureA, signatureB) };
     }
+    case "textEmbeddingTermCounts": {
+      const { text, dimensions } = vector.input as { text: string; dimensions: number };
+      return { termCounts: hashTerms(text, dimensions) };
+    }
+    case "textEmbeddingCosine": {
+      const { textA, textB, productText } = vector.input as {
+        textA: string;
+        textB: string;
+        productText: string;
+      };
+      const a = embedText(textA) as number[];
+      const b = embedText(textB) as number[];
+      const product = embedText(productText) as number[];
+      return {
+        aWithProduct: cosineSimilarity(a, product),
+        bWithProduct: cosineSimilarity(b, product),
+        aWithB: cosineSimilarity(a, b),
+      };
+    }
+    case "listingDrift": {
+      const { reviews, days, productText } = vector.input as {
+        reviews: { text: string | null }[];
+        days: (number | null)[];
+        productText: string;
+      };
+      return listingIdentityDrift(reviews, days, productText);
+    }
     case "featureVector": {
-      const { reviews, organicPrior, injectionKernel } = vector.input as {
+      const { reviews, organicPrior, injectionKernel, productText } = vector.input as {
         reviews: {
           rating: number | null;
           text: string | null;
@@ -113,8 +142,13 @@ function run(vector: Vector): unknown {
         }[];
         organicPrior: number[];
         injectionKernel: number[];
+        productText?: string;
       };
-      const result = buildFeatureVector(reviews, { organicPrior, injectionKernel });
+      const result = buildFeatureVector(reviews, {
+        organicPrior,
+        injectionKernel,
+        productText,
+      });
       return {
         meetsMinimumData: result.meetsMinimumData,
         ratingDeconvolution: result.ratingDeconvolution,
@@ -127,6 +161,7 @@ function run(vector: Vector): unknown {
           : null,
         verificationConcentration: result.verificationConcentration,
         textNearDuplication: result.textNearDuplication,
+        listingDrift: result.listingDrift,
       };
     }
     case "combine": {

@@ -6,6 +6,11 @@ from verdict_research.features.feature_vector import (
     FeatureVectorInputs,
     build_feature_vector,
 )
+from verdict_research.features.listing_drift import (
+    ListingDriftResult,
+    ReviewForDrift,
+    listing_identity_drift,
+)
 from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
     rating_deconvolution,
@@ -14,6 +19,11 @@ from verdict_research.features.temporal_burst import (
     Burst,
     TemporalBurstResult,
     detect_temporal_bursts,
+)
+from verdict_research.features.text_embedding import (
+    cosine_similarity,
+    embed_text,
+    hash_terms,
 )
 from verdict_research.features.text_near_duplication import (
     ReviewForNearDuplication,
@@ -57,6 +67,19 @@ def assert_close(actual, expected, path):
             assert_close(actual.get(key), expected[key], f"{path}.{key}")
         return
     assert actual == expected, f"{path}: {actual} vs {expected}"
+
+
+def _drift(result: ListingDriftResult) -> dict:
+    return {
+        "offTopicShare": result.off_topic_share,
+        "offTopicCount": result.off_topic_count,
+        "meanDistance": result.mean_distance,
+        "driftStatistic": result.drift_statistic,
+        "embeddedCount": result.embedded_count,
+        "changePoint": None
+        if result.change_point is None
+        else {"day": result.change_point.day, "afterCount": result.change_point.after_count},
+    }
 
 
 def run(vector: dict):
@@ -105,6 +128,27 @@ def run(vector: dict):
         signature_b = minhash_signature(shingle(data["textB"], 5), data["numPermutations"])
         return {"estimatedJaccard": estimate_jaccard(signature_a, signature_b)}
 
+    if signal == "textEmbeddingTermCounts":
+        return {"termCounts": hash_terms(data["text"], data["dimensions"])}
+
+    if signal == "textEmbeddingCosine":
+        a = embed_text(data["textA"])
+        b = embed_text(data["textB"])
+        product = embed_text(data["productText"])
+        return {
+            "aWithProduct": cosine_similarity(a, product),
+            "bWithProduct": cosine_similarity(b, product),
+            "aWithB": cosine_similarity(a, b),
+        }
+
+    if signal == "listingDrift":
+        result = listing_identity_drift(
+            [ReviewForDrift(text=r["text"]) for r in data["reviews"]],
+            data["days"],
+            data["productText"],
+        )
+        return _drift(result)
+
     if signal == "featureVector":
         reviews = [
             Review(
@@ -119,7 +163,9 @@ def run(vector: dict):
         result = build_feature_vector(
             reviews,
             FeatureVectorInputs(
-                organic_prior=data["organicPrior"], injection_kernel=data["injectionKernel"]
+                organic_prior=data["organicPrior"],
+                injection_kernel=data["injectionKernel"],
+                product_text=data.get("productText", ""),
             ),
         )
         return {
@@ -148,6 +194,7 @@ def run(vector: dict):
                 "clusterCount": result.text_near_duplication.cluster_count,
                 "largestClusterShare": result.text_near_duplication.largest_cluster_share,
             },
+            "listingDrift": _drift(result.listing_drift),
         }
 
     if signal == "combine":
@@ -156,6 +203,7 @@ def run(vector: dict):
         burst = fv["temporalBurst"]
         verification = fv["verificationConcentration"]
         duplication = fv["textNearDuplication"]
+        drift = fv["listingDrift"]
         feature_vector = FeatureVector(
             meets_minimum_data=fv["meetsMinimumData"],
             rating_deconvolution=RatingDeconvolutionResult(
@@ -182,6 +230,14 @@ def run(vector: dict):
                 duplicate_review_share=duplication["duplicateReviewShare"],
                 cluster_count=duplication["clusterCount"],
                 largest_cluster_share=duplication["largestClusterShare"],
+            ),
+            listing_drift=ListingDriftResult(
+                off_topic_share=drift["offTopicShare"],
+                off_topic_count=drift["offTopicCount"],
+                mean_distance=drift["meanDistance"],
+                change_point=None,
+                drift_statistic=drift["driftStatistic"],
+                embedded_count=drift["embeddedCount"],
             ),
         )
         model = CombinerModel(

@@ -23,6 +23,7 @@ export interface FetchProgress {
 export interface FetchedReviews {
   reviews: Review[];
   signatures: WeakMap<Review, bigint[]>;
+  embeddings: WeakMap<Review, number[]>;
 }
 
 export interface FetchReviewPagesOptions {
@@ -51,7 +52,11 @@ export async function fetchReviewPages(
 
   const cached = await getCachedReviews(options.productId, options.site);
   if (cached) {
-    return { reviews: cached.reviews, signatures: cached.signatures };
+    return {
+      reviews: cached.reviews,
+      signatures: cached.signatures,
+      embeddings: cached.embeddings,
+    };
   }
 
   const reviews: Review[] = [];
@@ -65,5 +70,5 @@ export async function fetchReviewPages(
   }
 
   await setCachedReviews(options.productId, options.site, reviews);
-  return { reviews, signatures: new WeakMap() };
+  return { reviews, signatures: new WeakMap(), embeddings: new WeakMap() };
 }

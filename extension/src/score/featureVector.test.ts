@@ -129,7 +129,7 @@ describe("deriveInsideBurst", () => {
 });
 
 describe("buildFeatureVector", () => {
-  it("assembles all four signals from raw reviews", () => {
+  it("assembles all five signals from raw reviews", () => {
     const reviews: Review[] = [
       review({ rating: 5, text: "great product, works well", date: "2024-01-01", verified: true }),
       review({ rating: 5, text: "great product, works well", date: "2024-01-01", verified: false }),
@@ -142,7 +142,25 @@ describe("buildFeatureVector", () => {
     expect(result.ratingDeconvolution).not.toBeNull();
     expect(result.temporalBurst).not.toBeNull();
     expect(result.textNearDuplication.clusterCount).toBe(1);
+    expect(result.listingDrift.embeddedCount).toBe(3);
     expect(result.meetsMinimumData).toBe(false);
+  });
+
+  it("passes the product text through to the drift signal", () => {
+    const reviews: Review[] = [
+      review({ text: "the kitchen knife set is sharp stainless steel", date: "2024-01-01" }),
+      review({ text: "battery lasted two days on my phone", date: "2024-01-02" }),
+    ];
+    const inputs = { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.3, 0.7] };
+    const withProduct = buildFeatureVector(reviews, {
+      ...inputs,
+      productText: "stainless steel kitchen knife set",
+    });
+    expect(withProduct.listingDrift.meanDistance).not.toBeNull();
+    expect(withProduct.listingDrift.offTopicShare).not.toBeNull();
+    const withoutProduct = buildFeatureVector(reviews, inputs);
+    expect(withoutProduct.listingDrift.meanDistance).toBeNull();
+    expect(withoutProduct.listingDrift.embeddedCount).toBe(2);
   });
 
   it("leaves rating deconvolution and temporal burst null when no review carries that data", () => {

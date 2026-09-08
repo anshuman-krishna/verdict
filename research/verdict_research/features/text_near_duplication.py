@@ -91,7 +91,7 @@ class _UnionFind:
             self.parent[root_x] = root_y
 
 
-# SPEC.md 5.4: minhash with 128 permutations over character 5 grams, banded lsh, cluster reviews
+# SPEC.md 5.5: minhash with 128 permutations over character 5 grams, banded lsh, cluster reviews
 # above 0.7 jaccard similarity. bands and rows and the output shape are not specified there; this is
 # a proposal, not a ratified spec line.
 def text_near_duplication(

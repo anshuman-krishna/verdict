@@ -80,16 +80,31 @@ function duplicateTextRow(vector: FeatureVector): EvidenceRow {
   };
 }
 
-// SPEC.md 5.4, listing identity drift, is not built yet (SPEC.md section 16 open question 2, the
-// embedding model bundle size decision). SPEC.md section 13's failure table already covers this
-// exact case for when the embedding model fails to load at runtime: "skip signal 5.4, widen
-// confidence band, note it in the evidence." this row is that note.
-function differentProductRow(): EvidenceRow {
+const MS_PER_DAY = 86_400_000;
+
+function isoDay(day: number): string {
+  return new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+// SPEC.md 5.4 proposes "412 of these reviews describe a different product". the bundled embedder is
+// lexical, not the sentence model that line assumes, so this says what it can actually defend: no
+// shared wording. SPEC.md section 13's row for the model failing to load is the null case here.
+function differentProductRow(vector: FeatureVector): EvidenceRow {
+  const result = vector.listingDrift;
+  if (result.embeddedCount === 0) {
+    return { signal: "different product", strength: "none", value: null, detail: "No review text to compare against the product." };
+  }
+  const shift = result.changePoint !== null
+    ? ` The wording of reviews shifts around ${isoDay(result.changePoint.day)}.`
+    : "";
+  if (result.offTopicShare === null) {
+    return { signal: "different product", strength: "none", value: null, detail: `No product title to compare the reviews against.${shift}` };
+  }
   return {
     signal: "different product",
-    strength: "none",
-    value: null,
-    detail: "This check is not available in this release.",
+    strength: strengthFromRatio(result.offTopicShare, 0.15, 0.4),
+    value: result.offTopicShare,
+    detail: `${result.offTopicCount} of ${result.embeddedCount} reviews with text share no wording with the current product title and category.${shift}`,
   };
 }
 
@@ -99,6 +114,6 @@ export function buildEvidence(vector: FeatureVector): EvidenceRow[] {
     arrivalTimingRow(vector),
     verificationRow(vector),
     duplicateTextRow(vector),
-    differentProductRow(),
+    differentProductRow(vector),
   ];
 }

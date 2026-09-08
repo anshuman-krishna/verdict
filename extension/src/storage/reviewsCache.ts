@@ -1,4 +1,5 @@
 import type { Review } from "../extract/types";
+import { EMBEDDING_DIMENSIONS, embedTermCounts, hashTerms } from "../score/textEmbedding";
 import {
   DEFAULT_NUM_PERMUTATIONS,
   DEFAULT_SHINGLE_SIZE,
@@ -9,9 +10,10 @@ import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } fr
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// PRIVACY.md section 2: review text is never persisted. every field except the text is, plus the
-// minhash signature that stands in for it, which supports "how similar" and has no inverse.
-// textNearDuplication.ts takes a seeded signature, so a cache hit scores identically to a fresh fetch
+// PRIVACY.md section 2: review text is never persisted. every field except the text is, plus the two
+// derivations that stand in for it, the minhash signature ("how similar") and the drift embedding
+// ("how close to this listing"). neither has an inverse. both signals take a seeded value, so a
+// cache hit scores identically to a fresh fetch
 
 interface StoredReview {
   rating: number | null;
@@ -20,6 +22,9 @@ interface StoredReview {
   reviewerId: string | null;
   // decimal strings rather than bigint: worth more in an export or a migration than the bytes saved
   textSignature: string[] | null;
+  // hashTerms's flat pairs, not the dense vector: a fraction of the bytes, and integers, so the
+  // vector it normalises back to is bit identical
+  textTermCounts: number[] | null;
 }
 
 interface CacheRecord {
@@ -29,6 +34,7 @@ interface CacheRecord {
   // without these, a shingle size change gives signatures of the right length and the wrong meaning
   shingleSize: number;
   numPermutations: number;
+  embeddingDimensions: number;
 }
 
 export interface CachedReviews {
@@ -38,6 +44,8 @@ export interface CachedReviews {
   // keyed by the objects in `reviews` above, ready to hand to
   // score/textNearDuplication.ts as its signatureCache.
   signatures: WeakMap<Review, bigint[]>;
+  // the same, for score/listingDrift.ts's embeddingCache
+  embeddings: WeakMap<Review, number[]>;
   cachedAt: number;
 }
 
@@ -62,6 +70,7 @@ function toStored(review: Review): StoredReview {
         : minhashSignature(shingle(text, DEFAULT_SHINGLE_SIZE), DEFAULT_NUM_PERMUTATIONS).map(
             (value) => value.toString(),
           ),
+    textTermCounts: text === null || text.length === 0 ? null : hashTerms(text),
   };
 }
 
@@ -86,7 +95,8 @@ export async function getCachedReviews(
   // report built on signatures this build cannot interpret is not.
   if (
     record.shingleSize !== DEFAULT_SHINGLE_SIZE ||
-    record.numPermutations !== DEFAULT_NUM_PERMUTATIONS
+    record.numPermutations !== DEFAULT_NUM_PERMUTATIONS ||
+    record.embeddingDimensions !== EMBEDDING_DIMENSIONS
   ) {
     await deleteCachedReviews(productId, site);
     return null;
@@ -94,6 +104,7 @@ export async function getCachedReviews(
 
   const reviews: Review[] = [];
   const signatures = new WeakMap<Review, bigint[]>();
+  const embeddings = new WeakMap<Review, number[]>();
   for (const stored of record.reviews) {
     const review: Review = {
       rating: stored.rating,
@@ -106,8 +117,14 @@ export async function getCachedReviews(
     if (Array.isArray(stored.textSignature)) {
       signatures.set(review, stored.textSignature.map((value) => BigInt(value)));
     }
+    const embedding = Array.isArray(stored.textTermCounts)
+      ? embedTermCounts(stored.textTermCounts)
+      : null;
+    if (embedding !== null) {
+      embeddings.set(review, embedding);
+    }
   }
-  return { reviews, signatures, cachedAt: record.cachedAt };
+  return { reviews, signatures, embeddings, cachedAt: record.cachedAt };
 }
 
 export async function setCachedReviews(
@@ -126,6 +143,7 @@ export async function setCachedReviews(
     cachedAt: Date.now(),
     shingleSize: DEFAULT_SHINGLE_SIZE,
     numPermutations: DEFAULT_NUM_PERMUTATIONS,
+    embeddingDimensions: EMBEDDING_DIMENSIONS,
   };
   return put(store, record);
 }

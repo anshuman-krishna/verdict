@@ -1,6 +1,7 @@
 import pytest
 
 from verdict_research.features.feature_vector import FeatureVector
+from verdict_research.features.listing_drift import ListingDriftResult
 from verdict_research.features.rating_deconvolution import RatingDeconvolutionResult
 from verdict_research.features.temporal_burst import TemporalBurstResult
 from verdict_research.features.text_near_duplication import TextNearDuplicationResult
@@ -25,6 +26,14 @@ def make_feature_vector(**overrides) -> FeatureVector:
         text_near_duplication=TextNearDuplicationResult(
             duplicate_review_share=0.25, cluster_count=2, largest_cluster_share=0.25
         ),
+        listing_drift=ListingDriftResult(
+            off_topic_share=None,
+            off_topic_count=0,
+            mean_distance=None,
+            change_point=None,
+            drift_statistic=0.0,
+            embedded_count=0,
+        ),
     )
     defaults.update(overrides)
     return FeatureVector(**defaults)
@@ -42,6 +51,9 @@ def test_flatten_exposes_every_numeric_leaf():
         "textNearDuplication.duplicateReviewShare": 0.25,
         "textNearDuplication.clusterCount": 2,
         "textNearDuplication.largestClusterShare": 0.25,
+        "listingDrift.offTopicShare": None,
+        "listingDrift.meanDistance": None,
+        "listingDrift.driftStatistic": 0.0,
     }
 
 

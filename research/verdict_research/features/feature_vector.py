@@ -2,6 +2,11 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from verdict_research.features.listing_drift import (
+    ListingDriftResult,
+    ReviewForDrift,
+    listing_identity_drift,
+)
 from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
     rating_deconvolution,
@@ -78,6 +83,12 @@ def build_rating_histogram(reviews: list[Review]) -> list[float] | None:
     return [count / len(rated) for count in bins]
 
 
+# parallel to reviews, none where a review carries no date. listing_drift.py needs the undated
+# reviews in place rather than filtered out, since they still carry text.
+def derive_day_indices(reviews: list[Review]) -> list[int | None]:
+    return [None if r.date is None else day_index(r.date) for r in reviews]
+
+
 @dataclass
 class DailyCounts:
     daily_counts: list[int]
@@ -118,6 +129,9 @@ class FeatureVectorInputs:
     injection_kernel: list[float]
     window_days: int = 28
     percentile: float = 0.99
+    # SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
+    # signal still reports its change point, which compares the reviews only against each other.
+    product_text: str = ""
 
 
 @dataclass
@@ -127,9 +141,10 @@ class FeatureVector:
     temporal_burst: TemporalBurstResult | None
     verification_concentration: VerificationConcentrationResult | None
     text_near_duplication: TextNearDuplicationResult
+    listing_drift: ListingDriftResult
 
 
-# wires the four implemented signals against raw extracted reviews. the
+# wires the five local signals against raw extracted reviews. the
 # combiner that turns this into a probability and a band does not exist
 # yet, that is SPEC.md section 6 and it waits on ground truth.
 def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> FeatureVector:
@@ -165,10 +180,17 @@ def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> 
         [ReviewForNearDuplication(text=review.text) for review in reviews]
     )
 
+    drift_result = listing_identity_drift(
+        [ReviewForDrift(text=review.text) for review in reviews],
+        derive_day_indices(reviews),
+        inputs.product_text,
+    )
+
     return FeatureVector(
         meets_minimum_data=meets_minimum_data,
         rating_deconvolution=rating_result,
         temporal_burst=temporal_result,
         verification_concentration=verification_result,
         text_near_duplication=duplication_result,
+        listing_drift=drift_result,
     )

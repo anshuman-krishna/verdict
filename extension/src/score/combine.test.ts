@@ -15,6 +15,14 @@ function featureVector(overrides: Partial<FeatureVector> = {}): FeatureVector {
     temporalBurst: { bursts: [], burstFraction: 0.1, burstCount: 1, largestBurstShare: 0.1 },
     verificationConcentration: { lift: 1.5, baseCount: 10 },
     textNearDuplication: BASE_TEXT_DUPLICATION,
+    listingDrift: {
+      offTopicShare: null,
+      offTopicCount: 0,
+      meanDistance: null,
+      changePoint: null,
+      driftStatistic: 0,
+      embeddedCount: 0,
+    },
     ...overrides,
   };
 }
@@ -32,6 +40,9 @@ describe("flattenFeatureVector", () => {
       "textNearDuplication.duplicateReviewShare": 0.25,
       "textNearDuplication.clusterCount": 2,
       "textNearDuplication.largestClusterShare": 0.25,
+      "listingDrift.offTopicShare": null,
+      "listingDrift.meanDistance": null,
+      "listingDrift.driftStatistic": 0,
     });
   });
 

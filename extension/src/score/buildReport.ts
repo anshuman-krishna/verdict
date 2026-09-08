@@ -24,8 +24,11 @@ export interface BuildReportOptions {
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
-  // cached reviews carry no text (PRIVACY.md section 2); this keeps a cache hit scoring identically
+  // SPEC.md 5.4 measures each review against the listing it sits on
+  productText?: string;
+  // cached reviews carry no text (PRIVACY.md section 2); these keep a cache hit scoring identically
   signatureCache?: WeakMap<Review, bigint[]>;
+  embeddingCache?: WeakMap<Review, number[]>;
 }
 
 // SPEC.md 5.1's injected share, distinct from the combiner's probability which sets the band
@@ -55,6 +58,8 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
   const priors: FeatureVectorInputs = {
     ...options.priors,
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
+    listingDriftEmbeddingCache: options.embeddingCache ?? new WeakMap(),
+    productText: options.productText ?? "",
   };
   const vector = buildFeatureVector(options.reviews, priors);
 

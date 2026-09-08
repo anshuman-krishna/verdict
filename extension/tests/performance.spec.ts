@@ -6,6 +6,7 @@ import type { RulesDocument } from "../src/extract/rules";
 import { ANALYSIS_BUDGET_MS, formatVerdict, judge, measure } from "../src/perf/budget";
 import { syntheticProductPageHtml, syntheticReviews } from "../src/perf/syntheticLoad";
 import { buildReport } from "../src/score/buildReport";
+import type { CombinerModel } from "../src/score/combine";
 import { PLACEHOLDER_PRIORS } from "../src/score/priors";
 
 // SPEC.md section 14's fourth acceptance criterion, "full analysis under
@@ -43,6 +44,19 @@ const RULES: RulesDocument = {
 };
 
 const URL = "https://www.amazon.com/dp/B0PERF0001";
+const PRODUCT_TEXT = "a product";
+
+// a model with null coefficients is not a cheaper model, it is no analysis at all: buildReport
+// returns before the bootstrap, which is the expensive half this file exists to measure. the
+// coefficients are arbitrary, since timing does not depend on their values.
+const MODEL: CombinerModel = {
+  intercept: -1,
+  coefficients: {
+    "textNearDuplication.duplicateReviewShare": 2,
+    "listingDrift.driftStatistic": 1,
+  },
+  calibration: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+};
 
 function timeAnalysis(count: number) {
   const reviews = syntheticReviews({ count, seed: 42 });
@@ -60,7 +74,8 @@ function timeAnalysis(count: number) {
       reviews: extracted,
       seed: URL,
       claimedRating: product?.claimedRating ?? 4.6,
-      model: null,
+      productText: PRODUCT_TEXT,
+      model: MODEL,
       priors: PLACEHOLDER_PRIORS,
     });
   });

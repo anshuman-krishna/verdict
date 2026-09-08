@@ -72,12 +72,18 @@ export async function analyzePage(
   return { page, product, reviews, outcome };
 }
 
+// SPEC.md 5.4 compares each review against "the current product title and category"
+function productText(product: ProductSnapshot): string {
+  return product.category === null ? product.title : `${product.title} ${product.category}`;
+}
+
 async function scoreAndMaybeSave(
   page: ParsedProductPage,
   product: ProductSnapshot,
   reviews: readonly Review[],
   deps: OrchestratorDeps,
   signatureCache?: WeakMap<Review, bigint[]>,
+  embeddingCache?: WeakMap<Review, number[]>,
 ): Promise<ReportOutcome> {
   // nothing to adjust against, so not a report SPEC.md section 2 promises
   if (product.claimedRating === null) {
@@ -88,12 +94,14 @@ async function scoreAndMaybeSave(
     reviews,
     seed: product.url,
     claimedRating: product.claimedRating,
+    productText: productText(product),
     model: deps.model,
     priors: deps.priors,
     now: deps.now,
     random: deps.random,
     bootstrapResamples: deps.bootstrapResamples,
     signatureCache,
+    embeddingCache,
   });
 
   if (outcome.status === "ok" && deps.reputation && (await deps.reputation.isEnabled())) {
@@ -214,6 +222,13 @@ export async function checkMoreDeeply(
   });
 
   const reviews = mergeReviews(existingReviews, fetched.reviews);
-  const outcome = await scoreAndMaybeSave(page, product, reviews, deps, fetched.signatures);
+  const outcome = await scoreAndMaybeSave(
+    page,
+    product,
+    reviews,
+    deps,
+    fetched.signatures,
+    fetched.embeddings,
+  );
   return { page, product, reviews, outcome };
 }

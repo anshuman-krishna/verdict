@@ -9,20 +9,89 @@ function baseVector(overrides: Partial<FeatureVector> = {}): FeatureVector {
     temporalBurst: null,
     verificationConcentration: null,
     textNearDuplication: { duplicateReviewShare: null, clusterCount: 0, largestClusterShare: 0 },
+    listingDrift: {
+      offTopicShare: null,
+      offTopicCount: 0,
+      meanDistance: null,
+      changePoint: null,
+      driftStatistic: 0,
+      embeddedCount: 0,
+    },
     ...overrides,
   };
 }
 
 describe("buildEvidence", () => {
-  it("always returns exactly five rows, ending with the unbuilt 5.4 placeholder", () => {
+  it("always returns exactly five rows, one per signal", () => {
     const rows = buildEvidence(baseVector());
     expect(rows).toHaveLength(5);
+    expect(rows.map((row) => row.signal)).toEqual([
+      "rating shape",
+      "arrival timing",
+      "verification pattern",
+      "duplicate text",
+      "different product",
+    ]);
+  });
+
+  it("says the drift check found no text rather than reporting a zero", () => {
+    const rows = buildEvidence(baseVector());
     expect(rows[4]).toEqual({
       signal: "different product",
       strength: "none",
       value: null,
-      detail: "This check is not available in this release.",
+      detail: "No review text to compare against the product.",
     });
+  });
+
+  it("counts off topic reviews and dates the shift", () => {
+    const rows = buildEvidence(baseVector({
+      listingDrift: {
+        offTopicShare: 0.5,
+        offTopicCount: 12,
+        meanDistance: 0.8,
+        changePoint: { day: 20000, afterCount: 12 },
+        driftStatistic: 1.1,
+        embeddedCount: 24,
+      },
+    }));
+    expect(rows[4]?.strength).toBe("strong");
+    expect(rows[4]?.detail).toBe(
+      "12 of 24 reviews with text share no wording with the current product title and category."
+        + " The wording of reviews shifts around 2024-10-04.",
+    );
+  });
+
+  it("omits the date when nothing crossed the reporting threshold", () => {
+    const rows = buildEvidence(baseVector({
+      listingDrift: {
+        offTopicShare: 0,
+        offTopicCount: 0,
+        meanDistance: 0.4,
+        changePoint: null,
+        driftStatistic: 0.01,
+        embeddedCount: 24,
+      },
+    }));
+    expect(rows[4]?.strength).toBe("weak");
+    expect(rows[4]?.detail).not.toContain("shifts around");
+  });
+
+  it("says there is no product to compare against, and keeps the shift it can still see", () => {
+    const rows = buildEvidence(baseVector({
+      listingDrift: {
+        offTopicShare: null,
+        offTopicCount: 0,
+        meanDistance: null,
+        changePoint: { day: 20000, afterCount: 12 },
+        driftStatistic: 1.1,
+        embeddedCount: 24,
+      },
+    }));
+    expect(rows[4]?.strength).toBe("none");
+    expect(rows[4]?.detail).toBe(
+      "No product title to compare the reviews against. The wording of reviews shifts around 2024-10-04.",
+    );
   });
 
   it("reports none for every signal when the underlying result is null", () => {

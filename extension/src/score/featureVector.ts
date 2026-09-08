@@ -1,4 +1,9 @@
 import type { Review } from "../extract/types";
+import {
+  listingIdentityDrift,
+  type ListingDriftOptions,
+  type ListingDriftResult,
+} from "./listingDrift";
 import { ratingDeconvolution, type RatingDeconvolutionResult } from "./ratingDeconvolution";
 import { detectTemporalBursts, type Burst, type TemporalBurstResult } from "./temporalBurst";
 import {
@@ -62,6 +67,12 @@ export function buildRatingHistogram(reviews: readonly Review[]): number[] | nul
   return bins.map((count) => count / rated.length);
 }
 
+// parallel to reviews, null where a review carries no date. listingDrift.ts needs the undated
+// reviews in place rather than filtered out, since they still carry text.
+export function deriveDayIndices(reviews: readonly Review[]): (number | null)[] {
+  return reviews.map((review) => (review.date === null ? null : dayIndex(review.date)));
+}
+
 export interface DailyCounts {
   dailyCounts: number[];
   minDay: number;
@@ -110,6 +121,10 @@ export interface FeatureVectorInputs {
   percentile?: number;
   // shared across the bootstrap's resamples; see textNearDuplication.ts's signatureCache
   textNearDuplicationSignatureCache?: TextNearDuplicationOptions["signatureCache"];
+  // SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
+  // signal still reports its change point, which compares the reviews only against each other.
+  productText?: string;
+  listingDriftEmbeddingCache?: ListingDriftOptions["embeddingCache"];
 }
 
 export interface FeatureVector {
@@ -118,9 +133,10 @@ export interface FeatureVector {
   temporalBurst: TemporalBurstResult | null;
   verificationConcentration: VerificationConcentrationResult | null;
   textNearDuplication: TextNearDuplicationResult;
+  listingDrift: ListingDriftResult;
 }
 
-// the four implemented signals; the combiner over them waits on ground truth
+// the five local signals; the combiner over them waits on ground truth
 export function buildFeatureVector(
   reviews: readonly Review[],
   inputs: FeatureVectorInputs,
@@ -154,11 +170,19 @@ export function buildFeatureVector(
     signatureCache: inputs.textNearDuplicationSignatureCache,
   });
 
+  const driftResult = listingIdentityDrift(
+    reviews,
+    deriveDayIndices(reviews),
+    inputs.productText ?? "",
+    { embeddingCache: inputs.listingDriftEmbeddingCache },
+  );
+
   return {
     meetsMinimumData,
     ratingDeconvolution: ratingResult,
     temporalBurst: temporalResult,
     verificationConcentration: verificationResult,
     textNearDuplication: duplicationResult,
+    listingDrift: driftResult,
   };
 }

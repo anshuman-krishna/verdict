@@ -77,15 +77,24 @@ function percent(value: number | null): string {
   <h3>4. Listing identity drift</h3>
   <p>
     Sellers sometimes reuse an existing listing for a different product, so its reviews
-    describe something else entirely. This signal compares review text against the current
-    product title and category using a small sentence embedding model, and looks for a change
-    point in that comparison over time.
+    describe something else entirely. This signal turns each review into a vector, measures how
+    far that sits from the current product title and category, and scans for the point in time
+    where the two halves of the review history stop pointing the same way.
+  </p>
+  <p class="worked-example">
+    Worked example: 15 reviews about a knife set followed by 15 about a charging cable. The
+    centroids of the two halves sit <span class="data">0.99</span> apart on a scale where
+    <span class="data">0</span> is identical, and Verdict dates the split at the 16th review. A
+    listing whose reviews never change subject scores <span class="data">0.008</span>.
   </p>
   <p>
-    This is the most persuasive line Verdict can produce, and also the one with the biggest
-    open cost: a bundled embedding model is 20 to 25 MB, against an 8 MB budget for the whole
-    extension. Whether version 0.1 ships it or defers it to 0.2 has not been decided yet, so it
-    does not run today.
+    What builds those vectors is the open question. A bundled sentence embedding model, which
+    would read meaning rather than wording, costs 20 to 25 MB against an 8 MB budget for the
+    whole extension. Version 0.1 ships a lexical stand in instead: it hashes words and word
+    pairs, so it catches a listing whose reviews stopped using the product's own vocabulary and
+    misses one whose reviews describe the same thing in different words. That is why the panel
+    says reviews "share no wording with" the listing rather than that they describe a different
+    product, which is the stronger claim only the larger model could support.
   </p>
 
   <h3>5. Text near duplication</h3>

@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import type { Review } from "../extract/types";
+import { EMBEDDING_DIMENSIONS, embedText } from "../score/textEmbedding";
 import { DEFAULT_NUM_PERMUTATIONS, DEFAULT_SHINGLE_SIZE } from "../score/textNearDuplication";
 import { openDatabase, put, STORE_NAMES } from "./database";
 import { cacheKey, deleteCachedReviews, getCachedReviews, setCachedReviews } from "./reviewsCache";
@@ -24,11 +25,19 @@ async function writeStaleRecord(productId: string, site: string, cachedAt: numbe
   await put(store, {
     key,
     reviews: [
-      { rating: 5, date: "2026-01-01", verified: true, reviewerId: "r-1", textSignature: null },
+      {
+        rating: 5,
+        date: "2026-01-01",
+        verified: true,
+        reviewerId: "r-1",
+        textSignature: null,
+        textTermCounts: null,
+      },
     ],
     cachedAt,
     shingleSize: DEFAULT_SHINGLE_SIZE,
     numPermutations: DEFAULT_NUM_PERMUTATIONS,
+    embeddingDimensions: EMBEDDING_DIMENSIONS,
   });
 }
 
@@ -122,11 +131,19 @@ describe("what the cache is allowed to persist", () => {
     const record = await storedRecord("p-product");
     expect(Object.keys(record).sort()).toEqual([
       "cachedAt",
+      "embeddingDimensions",
       "key",
       "numPermutations",
       "reviews",
       "shingleSize",
     ]);
+  });
+
+  it("keeps an embedding that scores the same as the text it replaced", async () => {
+    await setCachedReviews("p-embedding", "amazon", [review]);
+    const cached = await getCachedReviews("p-embedding", "amazon");
+    const embedding = cached?.embeddings.get(cached.reviews[0] as Review);
+    expect(embedding).toEqual(embedText(review.text as string));
   });
 
   it("keeps a full length signature for a review that had text", async () => {
@@ -174,6 +191,22 @@ describe("what the cache is allowed to persist", () => {
   it("discards a record from a build that did not record its parameters", async () => {
     await writeLegacyRecord("p-legacy", "amazon");
     await expect(getCachedReviews("p-legacy", "amazon")).resolves.toBeNull();
+  });
+
+  it("discards a record written before the drift embedding was stored", async () => {
+    const key = await cacheKey("p-no-embedding", "amazon");
+    const db = await openDatabase();
+    const store = db
+      .transaction(STORE_NAMES.reviewsCache, "readwrite")
+      .objectStore(STORE_NAMES.reviewsCache);
+    await put(store, {
+      key,
+      reviews: [],
+      cachedAt: Date.now(),
+      shingleSize: DEFAULT_SHINGLE_SIZE,
+      numPermutations: DEFAULT_NUM_PERMUTATIONS,
+    });
+    await expect(getCachedReviews("p-no-embedding", "amazon")).resolves.toBeNull();
   });
 
   it("gives the same text the same signature across two writes", async () => {

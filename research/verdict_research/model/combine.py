@@ -18,6 +18,7 @@ def flatten_feature_vector(feature_vector: FeatureVector) -> FlatFeatures:
     burst = feature_vector.temporal_burst
     verification = feature_vector.verification_concentration
     duplication = feature_vector.text_near_duplication
+    drift = feature_vector.listing_drift
     return {
         "ratingDeconvolution.injectedShare": rating.injected_share if rating else None,
         "ratingDeconvolution.residualError": rating.residual_error if rating else None,
@@ -28,6 +29,9 @@ def flatten_feature_vector(feature_vector: FeatureVector) -> FlatFeatures:
         "textNearDuplication.duplicateReviewShare": duplication.duplicate_review_share,
         "textNearDuplication.clusterCount": duplication.cluster_count,
         "textNearDuplication.largestClusterShare": duplication.largest_cluster_share,
+        "listingDrift.offTopicShare": drift.off_topic_share,
+        "listingDrift.meanDistance": drift.mean_distance,
+        "listingDrift.driftStatistic": drift.drift_statistic,
     }
 
 
