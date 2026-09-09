@@ -33,7 +33,22 @@ export interface TextNearDuplicationOptions {
   // caller's job to share a cache only across calls with the same shingleSize and numPermutations.
   // also how a cached review scores without its text (PRIVACY.md section 2)
   signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
+  linkCache?: DuplicateLinkCache;
 }
+
+// whether two reviews are near duplicates is a property of the pair, so a resample that redraws them
+// cannot change the answer. the links are found once over the whole set and read back on every
+// later call whose reviews are all part of that same set, which is what takes the banding and the
+// 128 bigint comparison per candidate pair out of the bootstrap.
+export interface DuplicateLinks {
+  population: object;
+  bands: number;
+  rows: number;
+  threshold: number;
+  linked: (readonly bigint[])[];
+}
+
+export type DuplicateLinkCache = WeakMap<readonly bigint[], DuplicateLinks>;
 
 // fnv-1a, 64 bit, over the utf-8 bytes of the string
 export function fnv1a64(input: string): bigint {
@@ -178,23 +193,37 @@ export function textNearDuplication(
     const cached = options.signatureCache?.get(review);
     return cached !== undefined && cached.length === numPermutations ? cached : undefined;
   };
-  const hasText = (review: ReviewForNearDuplication): boolean =>
-    review.text !== null && review.text.length > 0;
 
-  const eligible = reviews.filter((review) => hasText(review) || seeded(review) !== undefined);
-  if (eligible.length < 2) {
-    return { duplicateReviewShare: eligible.length === 0 ? null : 0, clusterCount: 0, largestClusterShare: 0 };
-  }
-
-  const signatures = eligible.map((review) => {
+  // two reviews with the same text get the same signature array, not two equal ones. minhashing is
+  // most of the analysis and a listing with the same paragraph posted forty times is the case this
+  // signal exists for, so it pays for one. sharing the array is also what joins them below.
+  const byText = new Map<string, bigint[]>();
+  const signatures: (readonly bigint[])[] = [];
+  for (const review of reviews) {
     const cached = seeded(review);
     if (cached !== undefined) {
-      return cached;
+      signatures.push(cached);
+      continue;
     }
-    const signature = minhashSignature(shingle(review.text as string, shingleSize), numPermutations);
+    if (review.text === null || review.text.length === 0) {
+      continue;
+    }
+    const shared = byText.get(review.text);
+    const signature = shared ??
+      minhashSignature(shingle(review.text, shingleSize), numPermutations);
+    if (shared === undefined) {
+      byText.set(review.text, signature);
+    }
     options.signatureCache?.set(review, signature);
-    return signature;
-  });
+    signatures.push(signature);
+  }
+  if (signatures.length < 2) {
+    return {
+      duplicateReviewShare: signatures.length === 0 ? null : 0,
+      clusterCount: 0,
+      largestClusterShare: 0,
+    };
+  }
 
   const unionFind = new UnionFind(signatures.length);
 
@@ -204,7 +233,7 @@ export function textNearDuplication(
   const firstIndexOf = new Map<readonly bigint[], number>();
   const distinct: number[] = [];
   for (let i = 0; i < signatures.length; i++) {
-    const signature = signatures[i] as bigint[];
+    const signature = signatures[i] as readonly bigint[];
     const first = firstIndexOf.get(signature);
     if (first === undefined) {
       firstIndexOf.set(signature, i);
@@ -214,10 +243,78 @@ export function textNearDuplication(
     }
   }
 
+  const links = options.linkCache ?? new WeakMap<readonly bigint[], DuplicateLinks>();
+  if (!linksCover(links, signatures, distinct, bands, rows, threshold)) {
+    findLinks(links, signatures, distinct, bands, rows, threshold);
+  }
+
+  for (const i of distinct) {
+    const entry = links.get(signatures[i] as readonly bigint[]) as DuplicateLinks;
+    for (const other of entry.linked) {
+      const j = firstIndexOf.get(other);
+      if (j !== undefined) {
+        unionFind.union(i, j);
+      }
+    }
+  }
+
+  const clusterSizes = new Map<number, number>();
+  for (let i = 0; i < signatures.length; i++) {
+    const root = unionFind.find(i);
+    clusterSizes.set(root, (clusterSizes.get(root) ?? 0) + 1);
+  }
+
+  let duplicateReviewCount = 0;
+  let clusterCount = 0;
+  let largestClusterSize = 0;
+  for (const size of clusterSizes.values()) {
+    if (size >= 2) {
+      duplicateReviewCount += size;
+      clusterCount++;
+      largestClusterSize = Math.max(largestClusterSize, size);
+    }
+  }
+
+  return {
+    duplicateReviewShare: duplicateReviewCount / signatures.length,
+    clusterCount,
+    largestClusterShare: largestClusterSize / signatures.length,
+  };
+}
+
+// one shared population token rather than a per entry check, so a cache carried across two different
+// review sets is rebuilt rather than answering half of one set with links found in the other.
+function linksCover(
+  links: DuplicateLinkCache,
+  signatures: readonly (readonly bigint[])[],
+  distinct: readonly number[],
+  bands: number,
+  rows: number,
+  threshold: number,
+): boolean {
+  const first = links.get(signatures[distinct[0] as number] as readonly bigint[]);
+  if (
+    first === undefined || first.bands !== bands || first.rows !== rows ||
+    first.threshold !== threshold
+  ) {
+    return false;
+  }
+  return distinct.every((i) =>
+    links.get(signatures[i] as readonly bigint[])?.population === first.population
+  );
+}
+
+function findLinks(
+  links: DuplicateLinkCache,
+  signatures: readonly (readonly bigint[])[],
+  distinct: readonly number[],
+  bands: number,
+  rows: number,
+  threshold: number,
+): void {
   const buckets = new Map<string, number[]>();
   for (const i of distinct) {
-    const keys = bandKeys(signatures[i] as bigint[], bands, rows);
-    for (const key of keys) {
+    for (const key of bandKeys(signatures[i] as readonly bigint[], bands, rows)) {
       const bucket = buckets.get(key);
       if (bucket === undefined) {
         buckets.set(key, [i]);
@@ -242,38 +339,31 @@ export function textNearDuplication(
     }
   }
 
+  const linked = new Map<number, (readonly bigint[])[]>();
+  for (const i of distinct) {
+    linked.set(i, []);
+  }
   for (const pair of candidatePairs) {
     const left = Math.floor(pair / width);
     const right = pair % width;
     const similarity = estimateJaccard(
-      signatures[left] as bigint[],
-      signatures[right] as bigint[],
+      signatures[left] as readonly bigint[],
+      signatures[right] as readonly bigint[],
     );
     if (similarity > threshold) {
-      unionFind.union(left, right);
+      linked.get(left)?.push(signatures[right] as readonly bigint[]);
+      linked.get(right)?.push(signatures[left] as readonly bigint[]);
     }
   }
 
-  const clusterSizes = new Map<number, number>();
-  for (let i = 0; i < signatures.length; i++) {
-    const root = unionFind.find(i);
-    clusterSizes.set(root, (clusterSizes.get(root) ?? 0) + 1);
+  const population = {};
+  for (const i of distinct) {
+    links.set(signatures[i] as readonly bigint[], {
+      population,
+      bands,
+      rows,
+      threshold,
+      linked: linked.get(i) as (readonly bigint[])[],
+    });
   }
-
-  let duplicateReviewCount = 0;
-  let clusterCount = 0;
-  let largestClusterSize = 0;
-  for (const size of clusterSizes.values()) {
-    if (size >= 2) {
-      duplicateReviewCount += size;
-      clusterCount++;
-      largestClusterSize = Math.max(largestClusterSize, size);
-    }
-  }
-
-  return {
-    duplicateReviewShare: duplicateReviewCount / eligible.length,
-    clusterCount,
-    largestClusterShare: largestClusterSize / eligible.length,
-  };
 }

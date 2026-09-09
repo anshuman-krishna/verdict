@@ -122,6 +122,7 @@ export interface FeatureVectorInputs {
   percentile?: number;
   // shared across the bootstrap's resamples; see textNearDuplication.ts's signatureCache
   textNearDuplicationSignatureCache?: TextNearDuplicationOptions["signatureCache"];
+  textNearDuplicationLinkCache?: TextNearDuplicationOptions["linkCache"];
   // SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
   // signal still reports its change point, which compares the reviews only against each other.
   productText?: string;
@@ -175,6 +176,7 @@ export function buildFeatureVector(
   // passed by reference, not rewrapped: object identity is what the signature cache keys on
   const duplicationResult = textNearDuplication(reviews, {
     signatureCache: inputs.textNearDuplicationSignatureCache,
+    linkCache: inputs.textNearDuplicationLinkCache,
   });
 
   const driftResult = listingIdentityDrift(

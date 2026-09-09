@@ -60,6 +60,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
   const priors: FeatureVectorInputs = {
     ...options.priors,
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
+    textNearDuplicationLinkCache: new WeakMap(),
     listingDriftEmbeddingCache: options.embeddingCache ?? new WeakMap(),
     productText: options.productText ?? "",
     flaggedReviewerIds: options.flaggedReviewerIds,
@@ -84,8 +85,9 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "missing-features", missing: result.missing };
   }
 
-  // 200 resamples took ~2s before the signature cache above, milliseconds after: resample() draws the
-  // same review objects repeatedly, so their minhashes were being recomputed from scratch each time
+  // the two caches above are what make this affordable. a resample draws the same review objects
+  // repeatedly, so without them each of the 200 draws recomputed every minhash and then re-verified
+  // every candidate pair, which on 300 reviews was the whole 1500ms budget on its own
   const samples = bootstrap(
     options.reviews,
     (sample) => {

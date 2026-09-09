@@ -7,6 +7,7 @@ import {
   minhashSignature,
   shingle,
   textNearDuplication,
+  type DuplicateLinkCache,
   type ReviewForNearDuplication,
 } from "./textNearDuplication";
 
@@ -233,5 +234,68 @@ describe("textNearDuplication", () => {
       expect(cache.get(a)).toBeInstanceOf(Array);
       expect(cache.get(b)).toBeInstanceOf(Array);
     });
+  });
+  describe("linkCache", () => {
+    const population = [
+      review("the battery lasts about three days and the packaging was fine"),
+      review("the battery lasts about three days and the packaging was fine"),
+      review("colour matches the photos but it is smaller than i expected"),
+      review("instructions were unclear though the thing works as described"),
+      review("colour matches the photos but it is smaller than i expected"),
+    ];
+
+    it("reports what an uncached call reports", () => {
+      const cache: DuplicateLinkCache = new WeakMap();
+
+      expect(textNearDuplication(population, { linkCache: cache })).toEqual(
+        textNearDuplication(population),
+      );
+    });
+
+    it("reports what an uncached call reports on a subset, which is what a resample draws", () => {
+      const cache: DuplicateLinkCache = new WeakMap();
+      const subset = [population[0], population[0], population[2], population[3]].filter(
+        (entry): entry is ReviewForNearDuplication => entry !== undefined,
+      );
+      textNearDuplication(population, { linkCache: cache });
+
+      expect(textNearDuplication(subset, { linkCache: cache })).toEqual(
+        textNearDuplication(subset),
+      );
+    });
+
+    // the links found over one product say nothing about another, and a cache handed both must not
+    // answer half of the second set with them
+    it("rebuilds rather than answering for reviews it never saw", () => {
+      const cache: DuplicateLinkCache = new WeakMap();
+      textNearDuplication(population, { linkCache: cache });
+      const other = [
+        review("a completely separate listing with its own reviewers writing"),
+        review("a completely separate listing with its own reviewers writing"),
+      ];
+
+      expect(textNearDuplication([...population, ...other], { linkCache: cache })).toEqual(
+        textNearDuplication([...population, ...other]),
+      );
+    });
+
+    it("finds the same links again when the threshold changes", () => {
+      const cache: DuplicateLinkCache = new WeakMap();
+      textNearDuplication(population, { linkCache: cache });
+
+      expect(textNearDuplication(population, { linkCache: cache, jaccardThreshold: 0.99 })).toEqual(
+        textNearDuplication(population, { jaccardThreshold: 0.99 }),
+      );
+    });
+  });
+
+  it("minhashes one text once however many reviews carry it", () => {
+    const cache = new WeakMap<ReviewForNearDuplication, bigint[]>();
+    const first = review("a paragraph posted under two different names on the same listing");
+    const second = review("a paragraph posted under two different names on the same listing");
+
+    textNearDuplication([first, second], { signatureCache: cache });
+
+    expect(cache.get(first)).toBe(cache.get(second));
   });
 });
