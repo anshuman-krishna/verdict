@@ -17,17 +17,14 @@ import {
   type VerificationConcentrationResult,
 } from "./verificationConcentration";
 
-// SPEC.md section 6, "minimum data thresholds". below any of these the
-// report says "not enough data" and shows no score at all.
+// SPEC.md section 6 minimum data thresholds
 export const MINIMUM_REVIEW_COUNT = 30;
 export const MINIMUM_DATED_REVIEW_COUNT = 20;
 export const MINIMUM_HISTORY_DAYS = 21;
 
 const MS_PER_DAY = 86_400_000;
 
-// a zoneless datetime parses as local time and a date only string as utc, so the output would depend
-// on the reader's timezone. extract/normalise.ts makes this throw unreachable; it is the guard that
-// keeps it that way
+// a zoneless date parses per reader
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/;
 
@@ -52,7 +49,6 @@ export function meetsMinimumDataThresholds(reviews: readonly Review[]): boolean 
   return span >= MINIMUM_HISTORY_DAYS;
 }
 
-// five bins, matching ratingDeconvolution's organicPrior and injectionKernel
 export function buildRatingHistogram(reviews: readonly Review[]): number[] | null {
   const rated = reviews.filter((review): review is Review & { rating: number } =>
     review.rating !== null
@@ -68,8 +64,6 @@ export function buildRatingHistogram(reviews: readonly Review[]): number[] | nul
   return bins.map((count) => count / rated.length);
 }
 
-// parallel to reviews, null where a review carries no date. listingDrift.ts needs the undated
-// reviews in place rather than filtered out, since they still carry text.
 export function deriveDayIndices(reviews: readonly Review[]): (number | null)[] {
   return reviews.map((review) => (review.date === null ? null : dayIndex(review.date)));
 }
@@ -79,8 +73,6 @@ export interface DailyCounts {
   minDay: number;
 }
 
-// a dense, gap filled daily series, day 0 being the earliest dated review,
-// which is what detectTemporalBursts expects. null when no review is dated.
 export function buildDailyCounts(reviews: readonly Review[]): DailyCounts | null {
   const days = reviews
     .filter((review): review is Review & { date: string } => review.date !== null)
@@ -98,8 +90,6 @@ export function buildDailyCounts(reviews: readonly Review[]): DailyCounts | null
   return { dailyCounts, minDay };
 }
 
-// whether each review's date falls inside one of the given bursts. a review
-// with no date is never inside a burst, since it has no day to place it in.
 export function deriveInsideBurst(
   reviews: readonly Review[],
   minDay: number,
@@ -115,22 +105,14 @@ export function deriveInsideBurst(
 }
 
 export interface FeatureVectorInputs {
-  // SPEC.md 5.1 estimates these from the negative corpus, which does not exist yet
   organicPrior: readonly number[];
   injectionKernel: readonly number[];
   windowDays?: number;
   percentile?: number;
-  // shared across the bootstrap's resamples; see textNearDuplication.ts's signatureCache
   textNearDuplicationSignatureCache?: TextNearDuplicationOptions["signatureCache"];
   textNearDuplicationLinkCache?: TextNearDuplicationOptions["linkCache"];
-  // SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
-  // signal still reports its change point, which compares the reviews only against each other.
   productText?: string;
   listingDriftEmbeddingCache?: ListingDriftOptions["embeddingCache"];
-  // SPEC.md 5.6, and only ever present when the user opted into the lookup and the service answered.
-  // absent is the default path and the SPEC.md section 13 row for an unreachable service alike:
-  // the signal is null rather than zero, so combine.ts scores with the local model instead of
-  // reading "nobody flagged" off a lookup that never happened.
   flaggedReviewerIds?: ReadonlySet<string>;
 }
 
@@ -144,7 +126,6 @@ export interface FeatureVector {
   reviewerGraph: ReviewerGraphResult | null;
 }
 
-// the five local signals, plus SPEC.md 5.6 when a lookup supplied its input
 export function buildFeatureVector(
   reviews: readonly Review[],
   inputs: FeatureVectorInputs,
@@ -173,7 +154,6 @@ export function buildFeatureVector(
     );
   }
 
-  // passed by reference, not rewrapped: object identity is what the signature cache keys on
   const duplicationResult = textNearDuplication(reviews, {
     signatureCache: inputs.textNearDuplicationSignatureCache,
     linkCache: inputs.textNearDuplicationLinkCache,

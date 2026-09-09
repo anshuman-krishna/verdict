@@ -15,8 +15,6 @@ def test_reports_the_share_of_reviews_written_by_flagged_accounts():
     assert result.identified_review_count == 4
 
 
-# SPEC.md 5.6 asks for the share of reviews, and one account leaving eight is a different listing
-# from eight accounts leaving one each
 def test_counts_reviews_not_reviewers_while_reporting_both():
     result = reviewer_graph_share(reviews(["a", "a", "a", "b"]), {"a"})
     assert result.flagged_review_share == 0.75
@@ -30,7 +28,6 @@ def test_skips_reviews_with_no_reviewer_id():
     assert result.identified_review_count == 1
 
 
-# an anonymous review set could never be looked up, which is not the same as nobody being flagged
 def test_reports_none_when_no_review_carries_a_reviewer_id():
     result = reviewer_graph_share(reviews([None, None]), {"a"})
     assert result.flagged_review_share is None

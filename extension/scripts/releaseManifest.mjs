@@ -1,13 +1,7 @@
-// pure on purpose: every byte, hash and size is measured by release-manifest.mjs and handed in, so
-// SPEC.md section 14's cap lives here and is testable rather than restated in a ci shell script
-
-// measured unpacked: the cap is about what the store installs, and a zip's ratio moves with contents
 export const BUNDLE_BUDGET_BYTES = 8 * 1024 * 1024;
 
 export const MANIFEST_VERSION = 1;
 
-// a build is only checkable against the repository if it names the exact commit, so an unknown or
-// dirty tree is a refusal rather than a manifest with a blank in it.
 export function buildReleaseManifest({ version, commit, artifacts, budgetBytes = BUNDLE_BUDGET_BYTES }) {
   if (typeof version !== "string" || version.length === 0) {
     throw new Error("release manifest needs the extension version");
@@ -19,8 +13,6 @@ export function buildReleaseManifest({ version, commit, artifacts, budgetBytes =
     throw new Error("release manifest needs at least one built artifact");
   }
 
-  // the sources zip AMO requires is a release artifact but not an installed bundle, so it carries a
-  // null unpacked size and the cap does not apply to it.
   const overBudget = artifacts.filter(
     (artifact) => artifact.unpackedBytes !== null && artifact.unpackedBytes > budgetBytes,
   );
@@ -54,8 +46,6 @@ export function buildReleaseManifest({ version, commit, artifacts, budgetBytes =
   };
 }
 
-// reports every mismatch, not the first: "one file differs" and "all of them differ" are different
-// situations to be told about
 export function verifyReleaseManifest(manifest, observed) {
   const problems = [];
   const observedByFile = new Map(observed.map((artifact) => [artifact.file, artifact]));

@@ -10,20 +10,13 @@ import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } fr
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-// PRIVACY.md section 2: review text is never persisted. every field except the text is, plus the two
-// derivations that stand in for it, the minhash signature ("how similar") and the drift embedding
-// ("how close to this listing"). neither has an inverse. both signals take a seeded value, so a
-// cache hit scores identically to a fresh fetch
 
 interface StoredReview {
   rating: number | null;
   date: string | null;
   verified: boolean | null;
   reviewerId: string | null;
-  // decimal strings rather than bigint: worth more in an export or a migration than the bytes saved
   textSignature: string[] | null;
-  // hashTerms's flat pairs, not the dense vector: a fraction of the bytes, and integers, so the
-  // vector it normalises back to is bit identical
   textTermCounts: number[] | null;
 }
 
@@ -31,20 +24,14 @@ interface CacheRecord {
   key: string;
   reviews: StoredReview[];
   cachedAt: number;
-  // without these, a shingle size change gives signatures of the right length and the wrong meaning
   shingleSize: number;
   numPermutations: number;
   embeddingDimensions: number;
 }
 
 export interface CachedReviews {
-  // every review as stored, with text null. Never the text that was
-  // fetched: it does not survive this module.
   reviews: Review[];
-  // keyed by the objects in `reviews` above, ready to hand to
-  // score/textNearDuplication.ts as its signatureCache.
   signatures: WeakMap<Review, bigint[]>;
-  // the same, for score/listingDrift.ts's embeddingCache
   embeddings: WeakMap<Review, number[]>;
   cachedAt: number;
 }
@@ -91,8 +78,6 @@ export async function getCachedReviews(
     await deleteCachedReviews(productId, site);
     return null;
   }
-  // treated exactly like an expired record: a re-fetch is cheap, and a
-  // report built on signatures this build cannot interpret is not.
   if (
     record.shingleSize !== DEFAULT_SHINGLE_SIZE ||
     record.numPermutations !== DEFAULT_NUM_PERMUTATIONS ||

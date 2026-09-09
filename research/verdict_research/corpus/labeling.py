@@ -1,11 +1,6 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-# SPEC.md section 12.4's mechanical half only. no labelling functions live here: each one is a claim
-# about what makes a listing manipulated, and those are anshuman's.
-# the statistics matter more than the aggregator: high coverage with chance accuracy is worse than
-# no function at all, and measuring against the seed is the only way to see that first
-
 ABSTAIN = -1
 NEGATIVE = 0
 POSITIVE = 1
@@ -17,11 +12,9 @@ Vote = int
 @dataclass(frozen=True)
 class LabelingFunction:
     name: str
-    # abstaining is correct whenever the feature a function reads is missing, which is common
     vote: Callable[[Features], Vote]
 
 
-# a function that raises abstains rather than aborting: one half written function is not the matrix
 def apply_labeling_functions(
     rows: Sequence[Features], functions: Sequence[LabelingFunction]
 ) -> list[list[Vote]]:
@@ -41,15 +34,9 @@ def apply_labeling_functions(
 @dataclass(frozen=True)
 class LabelingFunctionStats:
     name: str
-    # share of examples this function votes on at all
     coverage: float
-    # share of examples where it votes and at least one other function also
-    # votes, which is what makes its agreement measurable
     overlap: float
-    # share of examples where it votes and another function votes the
-    # opposite way
     conflict: float
-    # None when it never votes on a labelled example, which is not the same as being wrong
     empirical_accuracy: float | None
 
 
@@ -113,8 +100,6 @@ class WeakLabel:
     negative_votes: int
 
 
-# ties abstain: a tiebreak would encode a preference between functions that nothing measured.
-# unweighted until there are real functions and a seed to fit weights on
 def majority_vote(votes: Sequence[Vote]) -> WeakLabel:
     positive = sum(1 for vote in votes if vote == POSITIVE)
     negative = sum(1 for vote in votes if vote == NEGATIVE)

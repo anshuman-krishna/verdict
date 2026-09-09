@@ -1,23 +1,4 @@
 #!/usr/bin/env node
-// the other half of rulesLoader.ts's verifySignature. run by hand, once a real keypair exists whose
-// private half lives in a secrets store rather than here.
-//
-// usage:
-//   just sign-rules --key path/to/private-key.jwk.json
-//   node scripts/sign-rules.mjs --key <path> [--rules <path>] [--out <path>]
-//
-// --rules defaults to the document the extension bundles, --out to the path the site serves.
-// --key must be a p-256 ecdsa private jwk, the curve rulesLoader.ts verifies against. to make one:
-//   node -e "
-//     const { webcrypto } = require('crypto');
-//     webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
-//       .then(async (pair) => {
-//         console.log('PRIVATE (keep this secret):', JSON.stringify(await webcrypto.subtle.exportKey('jwk', pair.privateKey)));
-//         console.log('PUBLIC (goes in extract/remoteRules.ts):', JSON.stringify(await webcrypto.subtle.exportKey('jwk', pair.publicKey)));
-//       });
-//   "
-// Never commit the private key. The public half is what
-// REMOTE_RULES_PUBLIC_KEY_JWK in extract/remoteRules.ts needs updating to.
 
 import { webcrypto } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -44,7 +25,6 @@ function parseArgs(argv) {
   return args;
 }
 
-// null on a first publish, when nothing is served yet.
 function publishedVersion(outPath) {
   try {
     return JSON.parse(readFileSync(outPath, "utf8")).rules.version ?? null;

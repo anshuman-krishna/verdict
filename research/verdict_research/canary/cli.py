@@ -27,14 +27,6 @@ from verdict_research.canary.status_document import (
 from verdict_research.canary.targets import read_targets
 from verdict_research.shipped_extractor import NodeExtractor
 
-# PLAN.md week 7's canary as one command. Fetch each target, ask the shipped extractor what it
-# finds, classify, alert on what changed since last time, and write the document SITE.md's /status
-# page renders.
-#
-# the order matters and is the reason this exists as a single command rather than as four the
-# operator sequences: alerts are decided against the summaries from before this run was folded in,
-# so a locale that has been broken for a week does not alert again every run.
-
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_STATUS_OUTPUT = REPOSITORY / "site" / "src" / "data" / "status.json"
 DEFAULT_HISTORY = REPOSITORY / "research" / "canary-history.json"
@@ -48,9 +40,6 @@ class CanaryRun:
     alerts: list[CanaryAlert]
 
 
-# the ordering that makes the alerting correct, in one place: alerts are
-# decided against the summaries from before this run was folded in, so a
-# locale that has been broken for a week does not alert again every run.
 def run_once(
     targets: list[CanaryTarget],
     history: list[CanaryResult],
@@ -78,8 +67,6 @@ def _report(results: list[CanaryResult]) -> None:
         print(f"{result.site}.{result.locale}: {result.status}, {detail}{error}")
 
 
-# fetch_html and extract are injectable so the job can be exercised without
-# a network or a built extractor bundle. Production passes neither.
 def main(
     argv: list[str] | None = None,
     *,
@@ -93,8 +80,6 @@ def main(
     parser.add_argument("--status-output", default=str(DEFAULT_STATUS_OUTPUT))
     parser.add_argument("--retained-checks", type=int, default=DEFAULT_RETAINED_CHECKS)
     parser.add_argument("--timeout", type=float, default=20.0)
-    # writing nothing is the right default for a first look at a new target list: a run that has not
-    # been reviewed should not be able to change what the public status page says.
     parser.add_argument("--write", action="store_true", help="update the history and status files")
     args = parser.parse_args(argv)
 
@@ -114,9 +99,6 @@ def main(
     )
     _report(run.results)
 
-    # stdout, not a transport. cron mails a job's output, systemd journals
-    # it, and a ci step surfaces it, so the honest default is to say it
-    # once and let whatever runs this decide where that goes.
     send_alerts(run.alerts, print)
 
     if not args.write:

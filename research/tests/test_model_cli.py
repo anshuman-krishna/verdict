@@ -3,9 +3,6 @@ import json
 from verdict_research.corpus.dataset import LabeledExample, save_jsonl
 from verdict_research.model.cli import clear, main
 
-# synthetic, as in test_model_pipeline.py: this checks the command's
-# refusals and its output paths, not any claim about a real listing.
-
 
 def corpus_file(tmp_path, count: int = 400, separable: bool = True) -> str:
     examples = [
@@ -104,8 +101,6 @@ def test_clear_restores_the_stated_absent_form(tmp_path):
     assert artifact["reason"] == "retired"
 
 
-# the /method page publishes these numbers, so they come from the same run that produced the model:
-# a second command to remember is a page that eventually describes a different model.
 def test_training_writes_the_method_document_beside_the_model(tmp_path):
     model = tmp_path / "model.json"
     method = tmp_path / "methodEvaluation.json"
@@ -207,7 +202,6 @@ def test_a_graph_run_refuses_before_a_local_model_exists(tmp_path, capsys):
     assert "train that first" in capsys.readouterr().err
 
 
-# the published accuracy describes the model every default analysis uses, and 5.6's is not it
 def test_a_graph_run_leaves_the_published_method_document_alone(tmp_path):
     output = tmp_path / "model.json"
     method = tmp_path / "method.json"

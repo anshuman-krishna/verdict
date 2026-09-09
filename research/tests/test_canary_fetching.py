@@ -39,8 +39,6 @@ def test_sends_a_user_agent_that_says_what_it_is():
     assert "verdict" in USER_AGENT
 
 
-# SPEC.md section 9 paces the extension's own fetching at 800ms with
-# jitter; a monitoring job has no reason to be faster than the product.
 def test_does_not_pause_before_the_first_request():
     slept: list[float] = []
     fetcher(lambda request, timeout: b"", slept)("https://example.com/a")
@@ -81,8 +79,6 @@ def test_a_timeout_becomes_a_fetch_error():
         fetcher(opener)("https://example.com/a")
 
 
-# a canary that followed a redirect to plain http would be reporting on a
-# page whose identity it did not verify.
 def test_the_default_opener_refuses_a_plain_http_url():
     with pytest.raises(FetchError, match="https"):
         PacedFetcher(sleep=lambda _s: None)("http://example.com/a")

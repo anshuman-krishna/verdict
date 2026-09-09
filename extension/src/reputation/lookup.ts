@@ -1,6 +1,3 @@
-// SPEC.md section 8's k anonymous lookup. built ahead of the service because the protocol is fully
-// specified and waits on nothing
-
 export const PREFIX_LENGTH = 4;
 export const BUCKET_COUNT = 32;
 
@@ -12,8 +9,6 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
-// h = sha256(reviewer_id + salt), computed locally. the server never sees a reviewer id or this
-// full hash, only its first PREFIX_LENGTH characters, mixed in with random padding.
 export function reviewerHash(reviewerId: string, salt: string): Promise<string> {
   return sha256Hex(`${reviewerId}${salt}`);
 }
@@ -26,7 +21,6 @@ function randomHexPrefix(random: () => number): string {
   return result;
 }
 
-// insertion order would put the real prefixes first and tell an observer what the padding hides
 function shuffle<T>(items: readonly T[], random: () => number): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) {
@@ -43,8 +37,6 @@ export interface LookupRequest {
   prefixes: string[];
 }
 
-// always exactly BUCKET_COUNT prefixes: more real ones than that are dropped rather than sent, since
-// a larger request would itself stand out
 export async function buildLookupRequest(
   reviewerIds: readonly string[],
   salt: string,
@@ -67,7 +59,6 @@ export interface LookupResponse {
   matches: Record<string, string[]>;
 }
 
-// matched locally: the server saw prefixes, and never learns which mattered or how many there were
 export async function matchFlaggedReviewers(
   reviewerIds: readonly string[],
   salt: string,

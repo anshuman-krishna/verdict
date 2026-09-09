@@ -1,4 +1,5 @@
 import type { RulesDocument } from "../extract/rules";
+import { allowedDomains } from "../extract/sites";
 import { summarizeReport } from "../score/report";
 import {
   deleteAllHistory,
@@ -14,11 +15,8 @@ import {
   isBridgeRequest,
 } from "./messages";
 
-// SPEC.md section 9's site/locale pair for the bundled rules doubles as the supported storefront
-// domain list: "amazon" + "co.uk" is amazon.co.uk. Deriving it from the rules document rather than
-// a second hardcoded list means the two can never quietly drift apart.
 export function deriveAllowedHostnames(rules: RulesDocument): string[] {
-  return rules.locales.map((locale) => `${rules.site}.${locale}`);
+  return allowedDomains(rules.site, rules.locales);
 }
 
 function isAllowedHostname(hostname: string, allowed: readonly string[]): boolean {
@@ -41,25 +39,16 @@ async function handleAnalyze(
   if (!isAllowedHostname(hostname, allowedHostnames)) {
     return { status: "unsupported-domain" };
   }
-  // PRIVACY.md section 1: no page url or product identifier the server can read. this domain check
-  // runs before anything else so an unsupported url is rejected before a tab ever opens for it.
   return analyzeUrl(url);
 }
 
 export interface BridgeHandlerOptions {
   bundledRules: RulesDocument;
   analyzeUrl: AnalyzeUrl;
-  // PRIVACY.md section 7's per origin rate limit. Optional so a caller that
-  // has not wired one is obvious in review rather than silently unlimited:
-  // an absent limiter is treated as an unknown sender below, not as a pass.
   rateLimiter?: BridgeRateLimiter;
-  // the sender's origin, from browser.runtime.onMessageExternal. Absent means the runtime did not
-  // tell us who is asking, which is not a reason to answer anyway.
   origin?: string;
 }
 
-// never accepts a message that is not one of the shapes messages.ts declares, and never throws: an
-// unrecognised or malformed message is rejected rather than passed through to storage or a fetch.
 export async function handleBridgeMessage(
   message: unknown,
   options: BridgeHandlerOptions,
@@ -67,9 +56,6 @@ export async function handleBridgeMessage(
   if (!isBridgeRequest(message)) {
     return { error: "unrecognised message" };
   }
-  // the shape check runs first so an unrecognised message never spends an
-  // allowance, and the limit runs before any storage read or tab open so a
-  // rejected request costs nothing but this comparison.
   if (options.rateLimiter !== undefined) {
     if (options.origin === undefined) {
       return { error: "unknown origin" };
@@ -106,7 +92,6 @@ async function handleRequest(
       const json = request.format === "json";
       return {
         format: request.format,
-        // dated so two exports do not overwrite each other in a downloads folder
         filename: `verdict-history-${new Date().toISOString().slice(0, 10)}.${request.format}`,
         content: json ? await exportHistoryAsJson() : await exportHistoryAsCsv(),
       };

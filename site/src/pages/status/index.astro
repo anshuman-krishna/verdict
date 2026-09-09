@@ -2,20 +2,8 @@
 import Layout from "../../layouts/Layout.astro";
 import status from "../../data/status.json";
 
-// SITE.md: "a register table. One row per site and locale: last verified,
-// extraction health, rules version, median reviews extracted. Updated by
-// the Python canary job." That job writes src/data/status.json
-// (research/verdict_research/canary/status_document.py) and the site is
-// rebuilt, so this stays a static page with no client javascript and no
-// third party request, per SITE.md's build notes.
-//
-// an empty document is the normal state before the canary has ever run,
-// not an error, so it renders as an empty register rather than nothing.
-
 const { rows, generatedAt } = status;
 
-// DESIGN.md section 10: statistical, never accusatory, and never a word
-// that reads as an alarm.
 const HEALTH_LABELS: Record<string, string> = {
   healthy: "reading correctly",
   degraded: "reading less than expected",
@@ -89,8 +77,6 @@ function formatDate(seconds: number): string {
     overflow-x: auto;
   }
 
-  /* cancellation red, DESIGN.md section 4, the same ink the panel strikes
-     excluded reviews with. */
   .unhealthy {
     color: var(--cancel);
   }

@@ -9,9 +9,7 @@ def edge(a: str, b: str, weight: float) -> ReviewerEdge:
 
 
 def test_disparity_alpha_hand_checked():
-    # (1 - 0.8)^(3-1) = 0.2^2 = 0.04
     assert disparity_alpha(0.8, 3) == pytest.approx(0.04)
-    # (1 - 0.1)^(3-1) = 0.9^2 = 0.81
     assert disparity_alpha(0.1, 3) == pytest.approx(0.81)
 
 
@@ -21,13 +19,6 @@ def test_disparity_alpha_is_always_significant_at_degree_one():
 
 
 def test_disparity_filter_keeps_a_dominant_edge_and_drops_a_diluted_one():
-    # A has degree 3, strength 10: a-b carries share 0.8, alpha = 0.2^2 = 0.04, significant. a-c and
-    # a-d each carry share 0.1, alpha = 0.9^2 = 0.81, not significant. B has degree 5, strength 12:
-    # b-a carries share 0.667, alpha = 0.333^4 ~= 0.0123, significant too, so a-b survives from both
-    # sides. C has degree 3, strength 3 (c-a, c-x, c-y all weight 1): every share is 0.333, alpha =
-    # 0.667^2 ~= 0.444, not significant from c's side either, so a-c is dropped: neither endpoint
-    # finds it dominant. a-d survives anyway, because d's only edge is a-d (degree 1 always
-    # survives), and b's and c's other leaves (e, f, g, h, x, y) are degree 1 for the same reason.
     edges = [
         edge("a", "b", 8),
         edge("a", "c", 1),

@@ -30,8 +30,6 @@ class TestPredictProbability:
             coefficients={"x": 4.0},
             calibration=[CalibrationPoint(x=0.0, y=0.5), CalibrationPoint(x=1.0, y=0.5)],
         )
-        # the calibration curve is flat at 0.5 everywhere, so no matter
-        # what the raw sigmoid says, the calibrated output is 0.5
         assert predict_probability(calibrated, {"x": 100.0}) == pytest.approx(0.5)
 
 
@@ -65,7 +63,7 @@ class TestEvaluateModel:
         probs = [sigmoid(4.0), sigmoid(-4.0), sigmoid(0.4), sigmoid(-0.4)]
         labels = [1, 0, 0, 1]
         bins = [min(9, max(0, int(p * 10))) for p in probs]
-        assert len(set(bins)) == 4  # each lands in its own bin, so each term is |p - label|
+        assert len(set(bins)) == 4
         expected = sum(abs(p - label) for p, label in zip(probs, labels, strict=True)) / 4
         assert report.expected_calibration_error == pytest.approx(expected)
 
@@ -90,8 +88,6 @@ class TestEvaluateModel:
         assert report.curve == []
 
     def test_a_custom_decision_threshold_changes_the_headline_confusion_counts(self):
-        # sigmoid(0.4) ~= 0.599: a single actual positive predicted positive at the lenient default
-        # threshold, predicted negative once the threshold is raised above it.
         examples = [LabeledExample(example_id="a", features={"x": 0.1}, label=1)]
 
         lenient = evaluate_model(MODEL, examples, decision_threshold=0.5)
@@ -99,5 +95,5 @@ class TestEvaluateModel:
         assert lenient.recall_at_default_threshold == pytest.approx(1.0)
 
         strict = evaluate_model(MODEL, examples, decision_threshold=0.7)
-        assert strict.precision_at_default_threshold is None  # no predicted positives at all
+        assert strict.precision_at_default_threshold is None
         assert strict.recall_at_default_threshold == pytest.approx(0.0)

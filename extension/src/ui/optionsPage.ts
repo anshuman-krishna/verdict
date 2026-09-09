@@ -103,10 +103,6 @@ export function renderOptions(
       callbacks.onToggleReputationLookup((event.target as HTMLInputElement).checked);
     });
 
-  // PRIVACY.md section 5: "a screen that lists exactly what is sent, with no pre ticked box and no
-  // dark pattern." Checking the box does not by itself enable anything: it reveals the sent/never
-  // sent disclosure above and waits for an explicit Confirm click before calling back. Unchecking
-  // calls back immediately, since turning it off has nothing to disclose.
   const contributionToggle = container.querySelector<HTMLInputElement>(".contribution-toggle");
   const disclosure = container.querySelector<HTMLElement>(".disclosure");
   contributionToggle?.addEventListener("change", (event) => {

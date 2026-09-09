@@ -9,10 +9,6 @@ from verdict_service.graph.sqlite_store import (
     connect,
 )
 
-# fastapi runs sync handlers in a threadpool, so concurrent requests reach one connection. before
-# the lock, two writers and a reader dropped 597 of 600 edges and raised "bad parameter or other
-# API misuse", silently: a contribution accepted with a 200 and never stored.
-
 
 def edge(index: int) -> ContributionEdge:
     return ContributionEdge(
@@ -90,8 +86,6 @@ def test_both_stores_share_one_lock_when_they_share_a_file(tmp_path):
     assert len(flagged.matches("")) == 200
 
 
-# the recompute is leiden over the whole retained edge set, and run_periodically calls a sync job
-# inline, so on the loop it would hold every request for as long as the graph takes.
 def test_the_recompute_job_does_not_run_on_the_event_loop():
     import verdict_service.main as main
 
@@ -110,7 +104,6 @@ def test_a_slow_recompute_leaves_the_loop_free():
     async def scenario() -> float:
         task = asyncio.create_task(asyncio.to_thread(slow))
         started.wait(1.0)
-        # if the job held the loop, this sleep could not complete first
         began = time.monotonic()
         await asyncio.sleep(0.01)
         elapsed = time.monotonic() - began

@@ -5,13 +5,6 @@ from verdict_service.api.store import FlaggedHashStore
 from verdict_service.graph.contribution_store import ContributionEdgeStore
 from verdict_service.graph.pipeline import compute_flagged_hashes_from_contributions
 
-# the join point pipeline.py, contribution_store.py, and main.py all name but leave unwired: turning
-# what api/contribution.py has accepted into what api/reputation.py answers lookups against.
-
-# PRIVACY.md section 8: "raw contributed edges are deleted after 90 days". the same cutoff governs
-# both what this function feeds the pipeline and what a scheduled prune removes from
-# contribution_edge_store, since they are the same retention window described once, not two
-# independent numbers that happen to agree.
 RETENTION_SECONDS = 90 * 24 * 60 * 60
 
 
@@ -38,8 +31,6 @@ def recompute_flagged_hashes(
     cutoff = now() - retention_seconds
     edges = contribution_store.list_since(cutoff)
     flagged = compute_flagged_hashes_from_contributions(edges)
-    # a persisted store commits per write, and a run over a real edge set
-    # flags many, so it is given the whole batch when it can take one.
     add_many = getattr(flagged_store, "add_many", None)
     if callable(add_many):
         add_many(list(flagged))

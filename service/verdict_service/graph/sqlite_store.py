@@ -5,10 +5,6 @@ from pathlib import Path
 
 from verdict_service.graph.contribution_store import ContributionEdge
 
-# without this a restart loses every edge, so the ninety days PRIVACY.md section 8 retains never
-# accumulate. sqlite from the standard library: one file on a volume is a smaller thing to secure
-# than a second process, and the load is one row per contribution plus an indexed prefix read
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS contribution_edges (
     id INTEGER PRIMARY KEY,
@@ -30,9 +26,6 @@ CREATE TABLE IF NOT EXISTS flagged_hashes (
 """
 
 
-# fastapi runs sync handlers in a threadpool and the recompute runs in another thread, so several
-# threads reach one connection. without this they lose writes silently: two concurrent writers and a
-# reader dropped 597 of 600 edges and raised "bad parameter or other API misuse"
 class Database:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
@@ -53,8 +46,6 @@ class Database:
 
 def connect(path: str | Path) -> Database:
     connection = sqlite3.connect(str(path), check_same_thread=False)
-    # wal so the hourly recompute's writes do not block a lookup mid batch,
-    # and so a lookup never sees a half applied recompute.
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
     connection.executescript(SCHEMA)
@@ -78,7 +69,6 @@ class SqliteContributionEdgeStore:
                 edge.product_hash,
                 edge.star_rating,
                 edge.week_bucket,
-                # "not stated" is not the same claim as "not verified", so None has to survive
                 None if edge.verified is None else int(edge.verified),
                 json.dumps(edge.minhash_signature),
                 edge.received_at,
@@ -111,11 +101,8 @@ class SqliteFlaggedHashStore:
             return [row[0] for row in self._database.read("SELECT full_hash FROM flagged_hashes")]
         upper = _prefix_upper_bound(prefix)
         if upper is None:
-            # no representable bound; unreachable through api/reputation.py, which accepts only hex
             rows = self._database.read("SELECT full_hash FROM flagged_hashes")
             return [row[0] for row in rows if row[0].startswith(prefix)]
-        # a range, not LIKE or GLOB: uses the index, and a pattern character cannot change its
-        # meaning
         rows = self._database.read(
             "SELECT full_hash FROM flagged_hashes WHERE full_hash >= ? AND full_hash < ?",
             (prefix, upper),
@@ -129,9 +116,6 @@ class SqliteFlaggedHashStore:
 
     def add_many(self, hashes: list[str]) -> None:
         """record a whole recompute's flagged hashes in one transaction."""
-        # one commit, not thousands of fsyncs per run. additive, never a replace: PRIVACY.md section
-        # 8 keeps assignments after their edges age out, and nothing here is a decision to lift a
-        # flag
         self._database.write_many(
             "INSERT OR IGNORE INTO flagged_hashes (full_hash) VALUES (?)",
             [(full_hash,) for full_hash in hashes],

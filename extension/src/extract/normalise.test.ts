@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { LOCALE_FORMATS, localeFormat, normaliseDate, normaliseNumber } from "./normalise";
 
 describe("normaliseNumber", () => {
-  // the strings amazon actually writes, per locale
   it.each([
     ["com", "8,043 global ratings", 8043],
     ["com", "4.6 out of 5 stars", 4.6],
@@ -17,8 +16,6 @@ describe("normaliseNumber", () => {
     expect(normaliseNumber(raw, locale)).toBe(expected);
   });
 
-  // the bug this module exists for: parseFloat reads both of these wrong
-  // and reports a number that looks perfectly reasonable.
   it("does not read a thousands separator as a decimal point", () => {
     expect(Number.parseFloat("8,043")).toBe(8);
     expect(normaliseNumber("8,043", "com")).toBe(8043);
@@ -29,8 +26,6 @@ describe("normaliseNumber", () => {
     expect(normaliseNumber("4,6", "fr")).toBe(4.6);
   });
 
-  // a group separator means groups of three. Reading french "4.6" as forty
-  // six would be a new wrong answer in place of the old one.
   it("requires three digits after a group separator", () => {
     expect(normaliseNumber("4.6", "fr")).toBe(4);
     expect(normaliseNumber("8.043", "fr")).toBe(8043);
@@ -55,8 +50,6 @@ describe("normaliseNumber", () => {
     expect(normaliseNumber("", "com")).toBeNull();
   });
 
-  // an unrecognised locale has no separator convention to apply, and
-  // guessing one is how "8,043" becomes 8 again.
   it("returns null for a locale it does not know", () => {
     expect(normaliseNumber("8,043", "jp")).toBeNull();
   });
@@ -89,8 +82,6 @@ describe("normaliseDate", () => {
     expect(normaliseDate("3. Marz 2026", "de")).toBe("2026-03-03");
   });
 
-  // the same digits mean different days in different countries, which is
-  // why the locale decides rather than the string.
   it("reads a digit only date in the locale's order", () => {
     expect(normaliseDate("03/01/2026", "com")).toBe("2026-03-01");
     expect(normaliseDate("03/01/2026", "co.uk")).toBe("2026-01-03");
@@ -133,22 +124,15 @@ describe("normaliseDate", () => {
   });
 });
 
-// score/featureVector.ts's dayIndex divides Date.parse by a day. Date.parse accepts "3 janvier
-// 2026" on v8 as a favour and returns local midnight, so before normalisation the same review
-// landed on different days for readers in different timezones and a burst boundary moved with them.
 describe("what normalising a date fixes", () => {
   it("produces a date whose day index does not depend on the reader's timezone", () => {
     const normalised = normaliseDate("Commenté en France le 3 janvier 2026", "fr") as string;
     expect(normalised).toBe("2026-01-03");
-    // an iso date only string parses as utc midnight by specification,
-    // which is what makes the day index stable
     expect(Date.parse(normalised)).toBe(Date.UTC(2026, 0, 3));
   });
 });
 
 describe("locale coverage", () => {
-  // SPEC.md section 14 asks for at least four locales, and SPEC.md section
-  // 9's rules document names these four.
   it("covers every locale the bundled rules declare", () => {
     expect(Object.keys(LOCALE_FORMATS).sort()).toEqual(["co.uk", "com", "de", "fr"]);
   });

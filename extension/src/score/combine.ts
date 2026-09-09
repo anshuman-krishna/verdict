@@ -1,14 +1,6 @@
 import type { FeatureVector } from "./featureVector";
 
-// SPEC.md section 6: logistic regression on the feature vector, calibrated by isotonic regression
-// on a held out slice. this file applies a model, it does not fit one. fitting needs ground truth
-// (PLAN.md week 4) and lives in the research pipeline; nothing here invents coefficients, a
-// calibration curve, or which features matter, since choosing those is the calibration target
-// SPEC.md section 16 reserves for anshuman.
 
-// every numeric leaf of a feature vector, under a stable dot path name.
-// a model.json declares coefficients against a subset of these keys, so
-// which features it actually uses is the model's choice, not this file's.
 export type FlatFeatures = Record<string, number | null>;
 
 export function flattenFeatureVector(featureVector: FeatureVector): FlatFeatures {
@@ -39,17 +31,9 @@ export interface CalibrationPoint {
 export interface CombinerModel {
   intercept: number;
   coefficients: Record<string, number>;
-  // isotonic regression, exported as sorted control points. applied here by clamped linear
-  // interpolation, the same technique bootstrap.ts uses for the confidence interval.
   calibration: CalibrationPoint[];
 }
 
-// SPEC.md 5.6 runs only for users who opted in and only while the service answers, and SPEC.md
-// section 13 requires the other path to keep working with no visible difference. one model cannot
-// do both: a model carrying a coefficient for the graph feature reports missing-features on every
-// default analysis, and one trained without it and then handed the feature anyway is uncalibrated
-// for what it was just given. so the artefact carries two, each fitted and calibrated on its own,
-// and selectModel picks by what the vector actually has.
 export interface ModelSet {
   local: CombinerModel;
   reviewerGraph: CombinerModel | null;
@@ -59,6 +43,7 @@ export function localModelSet(model: CombinerModel): ModelSet {
   return { local: model, reviewerGraph: null };
 }
 
+// the graph model calibrates separately
 export function selectModel(models: ModelSet, featureVector: FeatureVector): CombinerModel {
   const share = featureVector.reviewerGraph?.flaggedReviewShare ?? null;
   if (models.reviewerGraph !== null && share !== null) {
@@ -76,8 +61,6 @@ function sigmoid(x: number): number {
   return 1 / (1 + Math.exp(-x));
 }
 
-// clamped linear interpolation over sorted control points. the fitted curve is the model's, this
-// only evaluates it at a point that may fall between two of its knots.
 export function applyCalibration(points: readonly CalibrationPoint[], x: number): number {
   if (points.length === 0) {
     return x;
@@ -101,9 +84,6 @@ export function applyCalibration(points: readonly CalibrationPoint[], x: number)
   return last.y;
 }
 
-// never guesses a value for a feature the model needs but this review set did not produce (SPEC.md
-// section 5.2/5.3 both null out under thin data). a missing required feature is reported, not
-// imputed, per SPEC.md section 6's own rule: never confident on thin data.
 export function applyModel(featureVector: FeatureVector, model: CombinerModel): CombinerResult {
   if (!featureVector.meetsMinimumData) {
     return { status: "insufficient-data" };

@@ -68,8 +68,6 @@ describe("buildCorpusReport", () => {
     expect(report.meetsCriterion).toBe(false);
   });
 
-  // a documented failure still counts against the pass rate, so nobody can
-  // reach the section 14 number by writing reasons.
   it("keeps a documented failure in the pass rate but out of the undocumented list", () => {
     const results = [
       ...passing("com", 9),

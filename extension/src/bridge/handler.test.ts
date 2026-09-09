@@ -18,8 +18,6 @@ const RULES: RulesDocument = {
   fields: {},
 };
 
-// most tests here never exercise the analyze path; this fails loudly if one of them unexpectedly
-// does, rather than silently reporting an unrelated status.
 function options(overrides: Partial<BridgeHandlerOptions> = {}): BridgeHandlerOptions {
   return {
     bundledRules: RULES,
@@ -49,8 +47,18 @@ describe("isBridgeRequest", () => {
 });
 
 describe("deriveAllowedHostnames", () => {
-  it("joins site and locale with a dot", () => {
+  it("returns the registry domains for the locales the rules cover", () => {
     expect(deriveAllowedHostnames(RULES)).toEqual(["amazon.com", "amazon.co.uk"]);
+  });
+
+  it("drops a locale the registry does not know", () => {
+    expect(deriveAllowedHostnames({ ...RULES, locales: ["com", "invented"] })).toEqual([
+      "amazon.com",
+    ]);
+  });
+
+  it("returns nothing for a site the registry does not carry", () => {
+    expect(deriveAllowedHostnames({ ...RULES, site: "nowhere" })).toEqual([]);
   });
 });
 
@@ -156,7 +164,6 @@ describe("handleBridgeMessage", () => {
   });
 });
 
-// PRIVACY.md section 7: the bridge "is rate limited per origin".
 describe("rate limiting", () => {
   const rules: RulesDocument = {
     version: 1,
@@ -196,8 +203,6 @@ describe("rate limiting", () => {
     ).toEqual({ error: "unknown origin" });
   });
 
-  // an unrecognised message must not be able to drain a real caller's
-  // allowance, so the shape check runs first.
   it("spends no allowance on an unrecognised message", async () => {
     const limiter = new BridgeRateLimiter(() => 1_000);
     const deps = options(limiter, "https://verdict.tools");
@@ -227,9 +232,6 @@ describe("rate limiting", () => {
   });
 });
 
-// SITE.md's /history copy promises "export it as json or csv" and the page had only a delete. the
-// strings come from storage/history.ts, so a file downloaded from the website is byte identical to
-// one from the options page.
 describe("history export", () => {
   function options(): BridgeHandlerOptions {
     return {
@@ -280,7 +282,6 @@ describe("history export", () => {
     });
   });
 
-  // PRIVACY.md section 7: the bridge never returns raw review text to the page.
   it("returns nothing that could be review text", async () => {
     const response = (await handleBridgeMessage(
       { type: "verdict:history:export", format: "json" },

@@ -13,8 +13,6 @@ describe("reviewerGraphShare", () => {
     expect(result.identifiedReviewCount).toBe(4);
   });
 
-  // SPEC.md 5.6 asks for the share of reviews, and one account leaving eight is a different
-  // listing from eight accounts leaving one each
   it("counts reviews, not reviewers, while reporting both", () => {
     const result = reviewerGraphShare(reviews(["a", "a", "a", "b"]), new Set(["a"]));
     expect(result.flaggedReviewShare).toBe(0.75);
@@ -28,7 +26,6 @@ describe("reviewerGraphShare", () => {
     expect(result.identifiedReviewCount).toBe(1);
   });
 
-  // an anonymous review set could never be looked up, which is not the same as nobody being flagged
   it("reports a null share when no review carries a reviewer id", () => {
     const result = reviewerGraphShare(reviews([null, null]), new Set(["a"]));
     expect(result.flaggedReviewShare).toBeNull();

@@ -1,20 +1,10 @@
 import { resolveFieldTraced, type StrategyTrace } from "../extract/interpreter";
-import { parseAmazonProductUrl } from "../extract/productPage";
+import { parseProductUrl } from "../extract/sites";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import type { RulesDocument } from "../extract/rules";
 import type { FixtureExpectation, Layout } from "./expectation";
 
-// PLAN.md week 1 task 6: "a test that loads every fixture, runs extraction, and compares against
-// the hand written expectations. Report per fixture, with failures naming the field and the
-// strategy that ran", and its verify line: "a deliberately broken selector shows up as a failure
-// rather than as a silent empty result".
-//
-// so this runs the production path (extractProductSnapshot and extractReviews, the same two
-// functions the content script calls) for the values, and re-walks the rule only for a field that
-// failed, to say which strategy produced the wrong answer or which one found nothing.
 
-// claimed ratings are one decimal place on the page and arrive here through parseFloat, so this is
-// float noise tolerance, not a judgement about how close is close enough.
 const RATING_TOLERANCE = 1e-6;
 
 export interface FieldCheck {
@@ -22,7 +12,6 @@ export interface FieldCheck {
   expected: unknown;
   actual: unknown;
   ok: boolean;
-  // only populated for a failing check
   strategies: StrategyTrace[] | null;
 }
 
@@ -32,10 +21,7 @@ export interface FixtureResult {
   locale: string;
   layout: Layout;
   ok: boolean;
-  // the reason from the expectation file when this fixture is a documented
-  // gap, null when it is expected to pass
   knownFailure: string | null;
-  // reported always, judged only when the expectation sets a floor
   extractedReviews: number;
   checks: FieldCheck[];
 }
@@ -48,7 +34,7 @@ export function runFixture(
   expectation: FixtureExpectation,
   rules: RulesDocument,
 ): FixtureResult {
-  const page = parseAmazonProductUrl(expectation.url);
+  const page = parseProductUrl(expectation.url);
   if (page === null) {
     throw new FixtureError(`${name}: "url" is not a product url this build can parse`);
   }
@@ -64,8 +50,6 @@ export function runFixture(
     extractedReviews: reviews.length,
   };
 
-  // reviewExtraction returns null only when title found nothing, and every
-  // other field is beside the point once the page did not identify itself.
   if (snapshot === null) {
     const check = failedCheck("title", expectation.title ?? "any non empty title", null, document, rules);
     return { ...base, ok: false, checks: [check] };
@@ -125,9 +109,6 @@ function failedCheck(
   return { field, expected, actual, ok: false, strategies: traceOf(document, rules, field) };
 }
 
-// an empty trace means the rules document has no rule for this field at all, which report.ts
-// renders differently from "every strategy ran and matched nothing". Conflating the two is how a
-// missing rule reads as a broken page.
 function traceOf(document: ParentNode, rules: RulesDocument, field: string): StrategyTrace[] {
   const rule = rules.fields[field];
   if (rule === undefined) {

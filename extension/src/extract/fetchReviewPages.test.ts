@@ -10,7 +10,6 @@ function review(text: string): Review {
 describe("fetchReviewPages", () => {
   it("does not call fetchPage until explicitly invoked", async () => {
     const fetchPage = vi.fn(async (page: number) => [review(`page ${page}`)]);
-    // importing the module and building the options object triggers nothing
     expect(fetchPage).not.toHaveBeenCalled();
     await fetchReviewPages({
       productId: "p-lazy",
@@ -22,8 +21,6 @@ describe("fetchReviewPages", () => {
     expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 
-  // SPEC.md section 13: a caller showing a busy state needs partial results to put underneath it,
-  // and this run is spaced at least 800ms per page, so it is always over the 400ms line.
   it("reports progress after every page, with a cumulative review count", async () => {
     const progress: FetchProgress[] = [];
     await fetchReviewPages({
@@ -146,8 +143,6 @@ describe("fetchReviewPages", () => {
     expect(second.reviews.map((r) => r.reviewerId)).toEqual(first.reviews.map((r) => r.reviewerId));
   });
 
-  // PRIVACY.md section 2: "review text is never persisted... the MinHash signature and the
-  // embedding centroid are kept, and neither can reconstruct the text."
   describe("what survives the cache", () => {
     it("returns no review text at all on a cache hit", async () => {
       const options = {

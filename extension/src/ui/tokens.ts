@@ -1,6 +1,3 @@
-// DESIGN.md section 4, transcribed verbatim. the panel renders inside a
-// closed shadow root (DESIGN.md section 11) so these tokens are defined
-// here rather than relying on anything from the host page.
 export const DESIGN_TOKENS_CSS = `
 :host {
   --paper: #E7ECE3;

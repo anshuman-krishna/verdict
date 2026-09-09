@@ -29,8 +29,6 @@ describe("hostsIn", () => {
     );
   });
 
-  // a template literal survives minification as "https://$", which is not a
-  // host and must not be reported as one.
   it("ignores a minified template literal fragment", () => {
     expect(hostsIn("`https://${host}/product-reviews/`")).toEqual(new Set());
   });
@@ -61,8 +59,6 @@ describe("hostProblems", () => {
     expect(hostProblems(MANIFEST, file('fetch("https://api.verdict.tools/v1/x")'))).toEqual([]);
   });
 
-  // the failure that would otherwise ship: no existing check looks at what
-  // the bundle can reach, only at what it does on the default path.
   it("catches a beacon to somewhere the manifest never mentioned", () => {
     const problems = hostProblems(MANIFEST, file('fetch("https://analytics.example.com/collect")'));
     expect(problems).toHaveLength(1);
@@ -90,7 +86,6 @@ describe("hostProblems", () => {
       expect(hostProblems(wildcard, file('"https://www.amazon.com/x"'))).toEqual([]);
     });
 
-    // a declaration must not quietly cover a host nobody meant
     it("does not cover a deeper subdomain", () => {
       expect(hostProblems(wildcard, file('"https://a.b.amazon.com/x"'))).toHaveLength(1);
     });
@@ -112,8 +107,6 @@ describe("permissionProblems", () => {
     expect(problems[0]).toMatch(/"tabs"/);
   });
 
-  // the check runs both ways so the reasons cannot become a list of things
-  // that used to be true.
   it("catches a reason for a permission the manifest no longer asks for", () => {
     const problems = permissionProblems({ ...MANIFEST, permissions: ["storage"] });
     expect(problems).toHaveLength(1);

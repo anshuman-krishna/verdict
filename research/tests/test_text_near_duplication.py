@@ -33,7 +33,6 @@ def test_shingle_treats_short_text_as_a_single_shingle():
 
 
 def test_exact_jaccard_hand_computed_two_of_four_union_members():
-    # {a,b,c} union {b,c,d} = {a,b,c,d}, intersection = {b,c}, 2/4 = 0.5
     assert exact_jaccard({"a", "b", "c"}, {"b", "c", "d"}) == 0.5
 
 

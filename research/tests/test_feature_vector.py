@@ -127,9 +127,6 @@ def test_build_feature_vector_leaves_signals_none_without_data():
     assert result.verification_concentration is None
 
 
-# the same shape check extension/src/score/featureVector.ts makes, so the
-# two implementations behave alike on bad input and not only on the shared
-# parity vectors, which carry good input by construction.
 @pytest.mark.parametrize(
     "raw",
     [
@@ -168,7 +165,6 @@ def test_the_reviewer_graph_runs_once_a_lookup_supplied_its_input():
     assert result.flagged_review_share == 0.5
 
 
-# an empty flagged set is a lookup that ran and found nothing, not a lookup that never ran
 def test_an_empty_flagged_set_still_produces_a_result():
     reviews = [
         Review(rating=5, text="a", date="2024-01-01", verified=True, reviewer_id="a")

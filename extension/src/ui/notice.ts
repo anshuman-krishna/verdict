@@ -1,11 +1,5 @@
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
-// SPEC.md section 13's failure table has an exact line for this: "extraction yields under 30
-// reviews: not enough data to judge, no score, no error styling." DESIGN.md's panel mock only
-// covers a scored report, so this is a second, much smaller custom element rather than a new mode
-// on VerdictPanelElement: a certificate block with nothing to certify is not a certificate block.
-// same closed shadow root pattern as panel.ts, for the same reason (DESIGN.md section 11, a hostile
-// host page stylesheet must not be able to make verdict say something it does not say).
 
 const shadowRoots = new WeakMap<VerdictNoticeElement, ShadowRoot>();
 
@@ -20,8 +14,6 @@ export function getNoticeShadowRootForTesting(notice: VerdictNoticeElement): Sha
 export interface NoticeAction {
   label: string;
   onClick: () => void;
-  // shown in place of the label while an action (checking more deeply) is
-  // in flight, so a slow fetch does not read as a dead button.
   pendingLabel?: string;
 }
 
@@ -29,11 +21,6 @@ export interface NoticeState {
   message: string;
   action?: NoticeAction;
   busy?: boolean;
-  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms without showing partial
-  // results underneath". a review fetch is spaced at least 800ms per page
-  // (extract/fetchReviewPages.ts), so it is always over that line. This row is what sits
-  // underneath, present from the moment busy starts rather than after a timer, so there is no
-  // window where the notice is working and saying nothing about it.
   progress?: string;
 }
 
@@ -77,9 +64,6 @@ export class VerdictNoticeElement extends HTMLElement {
     });
   }
 
-  // patches the progress row's text without touching the rest of the shadow tree, so a page
-  // arriving every 800ms does not rebuild the close button under the pointer or move focus off it.
-  // no-op when the last render carried no progress row.
   updateProgress(progress: string): void {
     const node = shadowRoots.get(this)?.querySelector(".progress");
     if (node !== null && node !== undefined) {

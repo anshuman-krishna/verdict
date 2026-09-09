@@ -1,18 +1,8 @@
 import type { CalibrationPoint, CombinerModel, ModelSet } from "./combine";
 import artifact from "./model.json";
 
-// SPEC.md section 4: "output artefact is model.json, a small parameter file bundled into the
-// extension at build time". That file is written by the research pipeline
-// (research/verdict_research/model/cli.py) straight into this directory, so the bundle takes it by
-// import rather than by a copy step somebody has to remember.
-//
-// model.json states absence rather than implying it. A model that does not exist yet, one exported
-// from a version this build does not understand, and one that is malformed all resolve to null
-// here, and buildReport.ts turns null into { status: "no-model" }. Nothing in this file substitutes
-// a zero, a default coefficient, or an uncalibrated probability, because every one of those would
-// read downstream as a real model reporting no risk, and SPEC.md section 6's minimum data
-// thresholds point the same way: under them the report says "not enough data", never a score.
 
+// absence is stated, never implied
 export const ARTIFACT_VERSION = 1;
 
 function parseModel(value: unknown): CombinerModel | null {
@@ -29,9 +19,6 @@ function parseModel(value: unknown): CombinerModel | null {
   return { intercept, coefficients, calibration };
 }
 
-// the reviewerGraph block is optional and a malformed one is dropped rather than failing the whole
-// artefact: SPEC.md 5.6 is an opt in that a user may never turn on, and losing the local model with
-// it would take the score away from everybody over a signal almost nobody asked for.
 export function parseModelArtifact(data: unknown): ModelSet | null {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return null;
@@ -64,9 +51,6 @@ function parseCoefficients(value: unknown): Record<string, number> | null {
   return parsed;
 }
 
-// combine.ts interpolates between these points, so out of order knots would
-// silently produce a wrong probability rather than an obvious failure. The
-// order is checked here, once, instead of being assumed there.
 function parseCalibration(value: unknown): CalibrationPoint[] | null {
   if (!Array.isArray(value)) {
     return null;

@@ -1,19 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { parseAmazonProductUrl } from "../src/extract/productPage";
+import { parseProductUrl } from "../src/extract/sites";
 import { extractProductSnapshot, extractReviews } from "../src/extract/reviewExtraction";
 import type { RulesDocument } from "../src/extract/rules";
 import { buildReport } from "../src/score/buildReport";
 import { meetsMinimumDataThresholds } from "../src/score/featureVector";
 import { PLACEHOLDER_PRIORS } from "../src/score/priors";
 
-// SPEC.md section 14's first acceptance criterion covers four locales. Before extract/normalise.ts,
-// three of them could not reach a score at all: score/featureVector.ts's dayIndex needs an iso
-// date, and a page saying "Commenté en France le 3 janvier 2026" or "8.043" produced either a
-// timezone dependent day or a rating of 4 instead of 4.6.
-//
-// the pages below are synthetic, and none of them is a fixture: they carry no expectation about any
-// real listing, only the number and date shapes each storefront writes.
 
 const RULES: RulesDocument = {
   version: 1,
@@ -66,8 +59,6 @@ const SHAPES: LocaleShape[] = [
   },
 ];
 
-// 30 reviews over 30 days clears every SPEC.md section 6 threshold: the
-// review count, the dated count, and the 21 day history span.
 function pageFor(shape: LocaleShape): ParentNode {
   const reviews = Array.from({ length: 30 }, (_unused, index) => ({
     rating: (index % 5) + 1,
@@ -89,7 +80,7 @@ function pageFor(shape: LocaleShape): ParentNode {
 
 describe.each(SHAPES)("extraction on amazon.$locale", (shape) => {
   const url = `https://${shape.host}/dp/B0LOCALE01`;
-  const page = parseAmazonProductUrl(url);
+  const page = parseProductUrl(url);
   const document = pageFor(shape);
 
   it("reads the claimed rating as written in this locale", () => {
@@ -110,8 +101,6 @@ describe.each(SHAPES)("extraction on amazon.$locale", (shape) => {
     expect(reviews.every((review) => /^\d{4}-\d{2}-\d{2}$/.test(review.date ?? ""))).toBe(true);
   });
 
-  // the whole point: before normalisation the dates parsed to NaN or to a local midnight, the
-  // history span came out NaN, and every one of these pages reported "not enough data" forever.
   it("clears the section 6 minimum data thresholds", () => {
     expect(meetsMinimumDataThresholds(extractReviews(document, RULES, shape.locale))).toBe(true);
   });
@@ -125,8 +114,6 @@ describe.each(SHAPES)("extraction on amazon.$locale", (shape) => {
       model: null,
       priors: PLACEHOLDER_PRIORS,
     });
-    // no model is bundled yet, so "no-model" is the correct far end of the
-    // path. What matters is that it is not "not-enough-data".
     expect(outcome.status).toBe("no-model");
   });
 });

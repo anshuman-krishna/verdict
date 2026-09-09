@@ -9,16 +9,9 @@ import type {
 
 const DEFAULT_EMBEDDED_JSON_SELECTOR = 'script[type="application/ld+json"]';
 
-// one entry per strategy actually attempted, in the order they ran. PLAN.md week 1 task 6 asks the
-// fixture harness to report "the field and the strategy that ran" on a failure, which is impossible
-// from an empty array alone: a field that found nothing and a field with no rule at all look
-// identical from outside.
 export interface StrategyTrace {
   strategy: FieldRule["strategy"];
-  // 0 is the field's own rule, 1 its fallback, and so on down the chain
   depth: number;
-  // the json path or selector this step ran, so a report can name it
-  // without the reader opening rules.json
   target: string;
   matched: number;
 }
@@ -28,15 +21,10 @@ export interface TracedField {
   trace: StrategyTrace[];
 }
 
-// walks a field's strategy, then its fallback chain, stopping at the first
-// strategy that yields at least one match. never throws: an unmatched or
-// malformed rule resolves to an empty array rather than blocking analysis.
 export function resolveField(root: ParentNode, rule: FieldRule): unknown[] {
   return resolveFieldTraced(root, rule).values;
 }
 
-// same walk as resolveField, which delegates here so there is only ever one
-// fallback implementation to keep correct.
 export function resolveFieldTraced(root: ParentNode, rule: FieldRule): TracedField {
   const trace: StrategyTrace[] = [];
   let current: FieldRule | undefined = rule;
@@ -82,10 +70,6 @@ function runStrategy(root: ParentNode, rule: FieldRule): unknown[] {
   }
 }
 
-// one record per matched container, each field resolved against that container rather than against
-// the page, so two review blocks cannot borrow each other's fields. A container that yields nothing
-// for any field is dropped: an empty record is not a review, and keeping it would inflate the count
-// SPEC.md section 6's minimum thresholds are measured against.
 function runComposite(root: ParentNode, rule: CompositeStrategy): unknown[] {
   let containers: Element[];
   try {
@@ -103,8 +87,6 @@ function runComposite(root: ParentNode, rule: CompositeStrategy): unknown[] {
         continue;
       }
       record[name] = value;
-      // a presence rule always answers, including with false, so it is not
-      // by itself evidence that this container is a record
       populated ||= fieldRule.strategy !== "presence" || value === true;
     }
     if (populated) {
@@ -114,8 +96,6 @@ function runComposite(root: ParentNode, rule: CompositeStrategy): unknown[] {
   return records;
 }
 
-// always answers, so it never falls through to a fallback: "no badge here"
-// is the answer, not a failure to find one.
 function runPresence(root: ParentNode, rule: PresenceStrategy): unknown[] {
   try {
     return [root.querySelector(rule.value) !== null];

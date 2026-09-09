@@ -2,18 +2,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-# PRIVACY.md section 4 commits to a published reverse proxy configuration with IP logging disabled:
-# "if we ever cannot demonstrate this, the feature comes out." A config file alone is a promise.
-# this reader is what turns it into something a test can hold to, so an edit that re-enables logging
-# fails the build instead of the audit.
-#
-# deliberately a small structural reader rather than a full Caddyfile parser. It answers only the
-# questions PRIVACY.md makes claims about, and it fails loudly on a file it cannot follow rather
-# than reporting that an unreadable config is fine.
-
 CADDYFILE = Path(__file__).resolve().parents[1] / "deploy" / "Caddyfile"
 
-# every header carrying the client address that a proxy adds by default
 CLIENT_ADDRESS_HEADERS = ("X-Forwarded-For", "X-Forwarded-Host", "X-Real-IP")
 
 
@@ -44,9 +34,6 @@ def read_proxy_guarantees(path: Path = CADDYFILE) -> ProxyGuarantees:
     if "reverse_proxy" not in body:
         raise DeployConfigError("no reverse_proxy directive, this is not the proxy configuration")
 
-    # `log { output discard }`, allowing any whitespace or newlines between
-    # the braces, and nothing else inside them: a log block that also names
-    # a file would match a looser pattern and would not be a guarantee.
     access_log_discarded = re.search(r"\blog\s*\{\s*output\s+discard\s*\}", body) is not None
     admin_api_disabled = re.search(r"^\s*admin\s+off\s*$", body, re.MULTILINE) is not None
 
@@ -66,8 +53,6 @@ def read_proxy_guarantees(path: Path = CADDYFILE) -> ProxyGuarantees:
     )
 
 
-# one string per broken guarantee, empty when the published configuration
-# still says what PRIVACY.md says it says.
 def proxy_problems(guarantees: ProxyGuarantees) -> list[str]:
     problems: list[str] = []
     if not guarantees.access_log_discarded:

@@ -94,7 +94,7 @@ describe("loadRules", () => {
     });
     expect(first).toEqual(rules);
 
-    now += 60_000; // an hour later, well inside the 24 hour ttl
+    now += 60_000;
     const second = await loadRules({
       url: "https://verdict.tools/rules.json",
       publicKeyJwk,
@@ -113,8 +113,6 @@ describe("loadRules", () => {
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const signedRules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: FIELDS };
     const signature = await sign(signedRules, keyPair.privateKey);
-    // tampered after signing: the version claimed in the envelope no longer
-    // matches what was actually signed
     const tamperedRules: RulesDocument = { ...signedRules, version: 99 };
     const envelope: SignedRulesEnvelope = { rules: tamperedRules, signature };
 
@@ -170,9 +168,6 @@ describe("loadRules", () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const fallback = bundledDefault();
-    // never resolves and never rejects on its own: only AbortSignal.timeout aborting the request
-    // can end this call. a passed abort signal is proof the caller can actually cut this fetch off;
-    // a real hang exercises the same path in production, just slower.
     const fetchImpl: typeof fetch = vi.fn(
       (_input: RequestInfo | URL, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
@@ -204,7 +199,6 @@ describe("loadRules", () => {
       signature: await sign(newerRules, keyPair.privateKey),
     };
 
-    // first call establishes version 5 as trusted, then the ttl expires
     await loadRules({
       url: "https://verdict.tools/rules.json",
       publicKeyJwk,
@@ -235,10 +229,6 @@ describe("loadRules", () => {
   });
 });
 
-// a signature says who wrote the document, not that it is a rules document. A bug in whatever
-// publishes the file would produce something correctly signed and structurally wrong, and the
-// interpreter is defensive enough that it would degrade to zero matches, which looks exactly like a
-// page that changed.
 describe("loadRules against a signed but malformed document", () => {
   async function envelopeFor(rules: unknown): Promise<{
     envelope: SignedRulesEnvelope;
@@ -334,8 +324,6 @@ describe("loadRules against a signed but malformed document", () => {
   });
 });
 
-// a dropped field is a fix that silently did not apply, so the loader says so rather than computing
-// the reason and throwing it away.
 describe("loadRules reporting what it had to drop", () => {
   async function envelopeFor(rules: unknown): Promise<{
     envelope: SignedRulesEnvelope;

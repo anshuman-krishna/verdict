@@ -2,16 +2,9 @@ import json
 import random
 from dataclasses import dataclass, field
 
-# the mechanical layer under the corpus: a record shape, jsonl io, and a deterministic split. what
-# counts as a label is anshuman's. no function can enforce SPEC.md section 12's "created once, never
-# looked at", but calling this twice with different seeds is how that rule gets broken by accident
-
 
 @dataclass
 class LabeledExample:
-    # opaque to this module: a hash or a row number, never a reviewer id
-    # or a product id. what identifies a review or a product is extraction
-    # and cache territory (extract/, storage/), not the corpus.
     example_id: str
     features: dict[str, float | None]
     label: int
@@ -50,8 +43,6 @@ def save_jsonl(examples: list[LabeledExample], path: str) -> None:
             handle.write("\n")
 
 
-# for iterating on a scratch corpus. the real held out set is a one time act: run this once against
-# the labelled corpus, record the seed and the resulting ids, then stop calling it on that corpus
 def train_test_split(
     examples: list[LabeledExample], test_fraction: float = 0.2, seed: int = 0
 ) -> tuple[list[LabeledExample], list[LabeledExample]]:

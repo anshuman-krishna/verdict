@@ -11,9 +11,6 @@ from verdict_research.model.train import (
 
 class TestFitIsotonicRegression:
     def test_hand_computed_the_textbook_pava_example(self):
-        # x = 0..5, y = [1, 2, 1, 3, 2, 4]. worked by hand in the session
-        # notes via the pool adjacent violators algorithm, and matches the
-        # standard textbook result for this exact sequence.
         pairs = list(zip(range(6), [1, 2, 1, 3, 2, 4], strict=True))
         result = fit_isotonic_regression(pairs)
         assert [p.y for p in result] == [1, 1.5, 1.5, 2.5, 2.5, 4]

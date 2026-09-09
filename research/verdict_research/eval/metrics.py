@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 
-# the arithmetic SPEC.md section 14's criteria are checked against. the numbers themselves are fixed
-# there, not chosen here, and nothing in this module sees or produces a label
-
 
 @dataclass(frozen=True)
 class ConfusionCounts:
@@ -28,9 +25,6 @@ def confusion_counts(y_true: list[int], y_pred: list[int]) -> ConfusionCounts:
     return ConfusionCounts(true_positive=tp, false_positive=fp, true_negative=tn, false_negative=fn)
 
 
-# None rather than 0.0 when the denominator is zero (no predicted positives, or no actual
-# positives): "no precision computed" and "zero precision" are different facts, and SPEC.md section
-# 6's rule applies here as much as it does to a signal with too little data.
 def precision(counts: ConfusionCounts) -> float | None:
     denominator = counts.true_positive + counts.false_positive
     return counts.true_positive / denominator if denominator > 0 else None
@@ -55,7 +49,6 @@ class ThresholdPoint:
     recall: float | None
 
 
-# section 14's "precision at a recall floor" is one row of this table, not a separate calculation
 def precision_recall_curve(y_true: list[int], y_score: list[float]) -> list[ThresholdPoint]:
     if len(y_true) != len(y_score):
         raise ValueError("y_true and y_score must be the same length")
@@ -70,8 +63,6 @@ def precision_recall_curve(y_true: list[int], y_score: list[float]) -> list[Thre
     return points
 
 
-# equal width binning, each bucket's mean prediction against its actual positive rate, weighted by
-# how many predictions fell in it
 def expected_calibration_error(y_true: list[int], y_prob: list[float], bins: int = 10) -> float:
     if len(y_true) != len(y_prob):
         raise ValueError("y_true and y_prob must be the same length")

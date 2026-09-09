@@ -34,8 +34,6 @@ class TestContributionEdges:
         store.add(original)
         assert store.list_since(0.0) == [original]
 
-    # PRIVACY.md section 5 sends the verified flag only when the page
-    # carried one, and "not stated" is not the same claim as "not verified".
     @pytest.mark.parametrize("verified", [True, False, None])
     def test_keeps_the_three_verified_states_apart(self, connection, verified):
         store = SqliteContributionEdgeStore(connection)
@@ -70,8 +68,6 @@ class TestContributionEdges:
         assert SqliteContributionEdgeStore(connection).prune_older_than(150.0) == 0
 
     def test_keeps_two_edges_that_are_otherwise_identical(self, connection):
-        # the same reviewer reviewing the same product twice is data, not a
-        # duplicate to collapse
         store = SqliteContributionEdgeStore(connection)
         store.add(edge())
         store.add(edge())
@@ -101,8 +97,6 @@ class TestFlaggedHashes:
         store.add("abcd1111")
         assert store.matches("abcd") == ["abcd1111"]
 
-    # the store should not depend on api/reputation.py having validated the
-    # prefix, so a pattern character has to be a literal here.
     @pytest.mark.parametrize("prefix", ["%", "_", "a*", "a?", "a[b"])
     def test_a_pattern_character_is_matched_literally_not_as_a_wildcard(self, connection, prefix):
         store = SqliteFlaggedHashStore(connection)
@@ -114,8 +108,6 @@ class TestFlaggedHashes:
         store.add_many(["abcd1111", "abcd2222"])
         assert sorted(store.matches("abcd")) == ["abcd1111", "abcd2222"]
 
-    # PRIVACY.md section 8 keeps derived community assignments after their
-    # source edges age out, so a later batch must never unflag anyone.
     def test_add_many_adds_rather_than_replaces(self, connection):
         store = SqliteFlaggedHashStore(connection)
         store.add_many(["abcd1111"])
@@ -134,9 +126,6 @@ class TestFlaggedHashes:
         assert store.matches("abcd") == ["abcd1111"]
 
 
-# the whole point: a restart used to lose every contributed edge, so the service could never
-# accumulate the ninety days PRIVACY.md section 8 describes retaining, and answered every lookup
-# with nothing until an hour after the process last started.
 class TestSurvivingARestart:
     def test_edges_are_still_there_after_reopening_the_file(self, tmp_path):
         path = tmp_path / "verdict.db"
@@ -160,7 +149,6 @@ class TestSurvivingARestart:
 
 
 def test_connect_uses_write_ahead_logging(tmp_path):
-    # so the hourly recompute's writes do not block a lookup mid batch
     database = connect(tmp_path / "verdict.db")
     assert database.read("PRAGMA journal_mode")[0][0] == "wal"
 

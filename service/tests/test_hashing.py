@@ -3,8 +3,6 @@ from verdict_service.graph.hashing import reviewer_hash
 
 class TestReviewerHash:
     def test_known_sha256_vector_for_the_empty_string(self):
-        # confirms hashlib is actually being invoked correctly: sha256 of
-        # an empty input is a widely published constant.
         assert (
             reviewer_hash("", "")
             == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -25,6 +23,4 @@ class TestReviewerHash:
         assert reviewer_hash("alice", "salt-a") != reviewer_hash("alice", "salt-b")
 
     def test_concatenates_id_and_salt_directly_with_no_separator(self):
-        # this must match extension/src/reputation/lookup.ts's `${reviewerId}${salt}` exactly, so
-        # "ab" + "cd" and "a" + "bcd" collide the same way on both sides rather than diverging.
         assert reviewer_hash("ab", "cd") == reviewer_hash("a", "bcd")

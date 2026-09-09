@@ -2,8 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseExpectation, type FixtureExpectation } from "../src/fixtures/expectation";
 
-// the only part of the fixture machinery that touches the filesystem, kept out of src/ so nothing
-// importable by an entrypoint can pull node:fs into a bundle.
 
 export const FIXTURE_DIR = join(import.meta.dirname, "..", "fixtures");
 
@@ -15,9 +13,6 @@ export interface LoadedFixture {
 
 export class CorpusError extends Error {}
 
-// an html with no json, or a json with no html, is an error rather than a
-// skip: a half saved fixture that quietly disappeared from the run would
-// make the pass rate in report.ts better, not worse.
 export function loadCorpus(directory: string = FIXTURE_DIR): LoadedFixture[] {
   let entries: string[];
   try {

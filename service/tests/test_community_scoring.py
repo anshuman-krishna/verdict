@@ -37,12 +37,9 @@ class TestRatingHomogeneity:
         assert rating_homogeneity([5, 5, 5]) == 1.0
 
     def test_hand_computed_a_maximally_split_scale(self):
-        # mean 3, variance ((1-3)^2 + (5-3)^2) / 2 = 4, stddev 2,
-        # homogeneity = 1 - 2/2 = 0
         assert rating_homogeneity([1, 5]) == pytest.approx(0.0)
 
     def test_hand_computed_a_partial_spread(self):
-        # mean 4.5, variance 0.25, stddev 0.5, homogeneity = 1 - 0.5/2 = 0.75
         assert rating_homogeneity([4, 5, 4, 5]) == pytest.approx(0.75)
 
     def test_fewer_than_two_ratings_is_no_evidence_not_full_homogeneity(self):
@@ -92,8 +89,6 @@ class TestScoreCommunity:
             ReviewRecord(reviewer_id="c", rating=5, day_index=10, category="kitchen"),
         ]
         score = score_community(community, edges, reviews)
-        # density 1.0, homogeneity 1.0, clustering 1.0, incoherence 0.0
-        # (only one category): combined = (1+1+1+0)/4 = 0.75
         assert score.combined == pytest.approx(0.75)
         assert score.flagged is True
 
@@ -114,8 +109,6 @@ class TestScoreCommunity:
             ReviewRecord(reviewer_id="outsider", rating=1, day_index=900, category="toys"),
         ]
         score = score_community(community, [], reviews)
-        # only "a"'s single review counts, which is too few for either
-        # homogeneity or clustering to have an opinion
         assert score.rating_homogeneity == 0.0
         assert score.temporal_clustering == 0.0
 
@@ -131,5 +124,4 @@ class TestScoreCommunity:
             ReviewRecord(reviewer_id="b", rating=5, day_index=10, category="kitchen"),
             ReviewRecord(reviewer_id="c", rating=5, day_index=10, category="kitchen"),
         ]
-        # combined is 0.75 (see above); a threshold above that flips it
         assert score_community(community, edges, reviews, flag_threshold=0.9).flagged is False

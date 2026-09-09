@@ -9,9 +9,6 @@ export interface VerificationConcentrationResult {
   baseCount: number;
 }
 
-// SPEC.md 5.3: lift = P(unverified | 5 star and inside burst) / P(unverified). reviews whose
-// verified status is unknown are excluded from both probabilities rather than guessed either way.
-// null means there was not enough data in the five star, inside burst stratum to compute a lift.
 export function verificationConcentration(
   reviews: readonly ReviewForVerification[],
 ): VerificationConcentrationResult {

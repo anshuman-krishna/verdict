@@ -4,18 +4,6 @@ from typing import Any
 
 from verdict_research.canary.check import CanaryTarget
 
-# which listings to watch is a data choice, so targets live in a json file and nothing here supplies
-# a default. every parse failure is loud: a target skipped quietly is a locale nobody is watching,
-# reported as a locale with no problems. canary-targets.example.json shows the shape:
-#
-#   site                    the storefront, matching rules.json's "site"
-#   locale                  the suffix, so com, fr, de or co.uk
-#   url                     the listing, https only, stable and long lived
-#   minimumExpectedReviews  a positive integer floor for this page alone,
-#                           read off what extraction has reliably found
-#                           there. Not a signal threshold and not a claim
-#                           about any other listing.
-
 
 class TargetsError(ValueError):
     pass

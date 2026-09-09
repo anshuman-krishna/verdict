@@ -2,8 +2,6 @@ import { browser } from "wxt/browser";
 import { getGraphContributionEnabled, setReputationLookupEnabled } from "../storage/settings";
 import { DEFAULT_REPUTATION_ENDPOINT } from "./endpoint";
 
-// optional rather than declared, so nobody is asked at install. the prompt happens inside the
-// checkbox's own change event, which permissions.request requires
 
 export interface PermissionApi {
   request: (origins: string[]) => Promise<boolean>;
@@ -24,12 +22,9 @@ export interface SetReputationLookupOptions {
   endpoint?: string;
   permissionApi?: PermissionApi;
   setEnabled?: (enabled: boolean) => Promise<unknown>;
-  // contribution shares this origin, so the permission is only released when neither toggle needs it
   isGraphContributionStillEnabled?: () => Promise<boolean>;
 }
 
-// on persists only if the permission was granted; off releases it unless contribution still needs it.
-// returns what was actually stored, since a denied request means the toggle did not turn on
 export async function setReputationLookupWithPermission(
   enabled: boolean,
   options: SetReputationLookupOptions = {},

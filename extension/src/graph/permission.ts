@@ -2,11 +2,6 @@ import { browser } from "wxt/browser";
 import { getReputationLookupEnabled, setGraphContributionEnabled } from "../storage/settings";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "./endpoint";
 
-// mirrors reputation/permission.ts's own pattern (same reasoning, same origin, deliberately a
-// separate copy: see edge.ts's comment on why this feature's own files do not import from
-// reputation/). The host permission itself is genuinely shared, though: graph/endpoint.ts and
-// reputation/endpoint.ts both point at api.verdict.tools, so wxt.config.ts declares it once, under
-// optional_host_permissions, and either toggle can request or release it.
 
 export interface PermissionApi {
   request: (origins: string[]) => Promise<boolean>;
@@ -27,8 +22,6 @@ export interface SetGraphContributionOptions {
   endpoint?: string;
   permissionApi?: PermissionApi;
   setEnabled?: (enabled: boolean) => Promise<unknown>;
-  // reputation lookup shares this origin's permission; releasing it here
-  // while that toggle is still on would silently break it.
   isReputationLookupStillEnabled?: () => Promise<boolean>;
 }
 

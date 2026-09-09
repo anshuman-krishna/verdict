@@ -9,9 +9,6 @@ from verdict_service.graph.community_scoring import (
 from verdict_service.graph.contribution_store import ContributionEdge
 from verdict_service.graph.hashing import reviewer_hash
 
-# SPEC.md section 5.6 steps 1 through 4. takes reviewer_products and reviews as given: how they are
-# pseudonymised before the server sees a reviewer-product link is a privacy decision, not a default
-
 
 def compute_flagged_hashes(
     reviewer_products: dict[str, set[str]],
@@ -34,10 +31,6 @@ def compute_flagged_hashes(
     return flagged_hashes
 
 
-# edges arrive already hashed client side, so hashing again would give sha256(sha256(id+salt)+salt)
-# and no lookup would ever match. membership is added directly. category is absent because
-# PRIVACY.md never sends it; category_incoherence degrades to 0.0 for that. minhash_signature is
-# stored but unused: cross product clustering server side is not attempted here
 _DAYS_PER_WEEK = 7
 
 

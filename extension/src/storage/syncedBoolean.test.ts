@@ -22,7 +22,6 @@ describe("getSyncedBoolean", () => {
   it("adopts a synced value, and persists it locally, when there is no local value yet", async () => {
     const sync = fakeSyncStore({ freshKey2: true });
     await expect(getSyncedBoolean("freshKey2", false, sync)).resolves.toBe(true);
-    // adopted locally: a second read does not need sync again
     const secondSync = fakeSyncStore();
     await expect(getSyncedBoolean("freshKey2", false, secondSync)).resolves.toBe(true);
   });

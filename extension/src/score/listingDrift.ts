@@ -1,7 +1,5 @@
 import { cosineSimilarity, EMBEDDING_DIMENSIONS, embedText } from "./textEmbedding";
 
-// SPEC.md 5.4. two detectors over one embedding: how far each review sits from the current product
-// title and category, and where in time the centroid of those embeddings moves.
 
 export interface ReviewForDrift {
   text: string | null;
@@ -10,19 +8,15 @@ export interface ReviewForDrift {
 export interface ListingDriftOptions {
   dimensions?: number;
   offTopicDistance?: number;
-  // keyed by object identity, the same trade textNearDuplication.ts's signatureCache makes: a
-  // bootstrap resample draws the same review objects repeatedly
   embeddingCache?: WeakMap<ReviewForDrift, number[]>;
 }
 
 export interface ChangePoint {
-  // the day the later segment starts on, in the day index space the caller passed in
   day: number;
   afterCount: number;
 }
 
 export interface ListingDriftResult {
-  // null when nothing could be embedded, which is not the same as zero
   offTopicShare: number | null;
   offTopicCount: number;
   meanDistance: number | null;
@@ -31,18 +25,11 @@ export interface ListingDriftResult {
   embeddedCount: number;
 }
 
-// cosine 0 means the review shares no more with the title than an unrelated text would. measured on
-// synthetic pairs an unrelated review sits at 1.00 to 1.07 and a matching one at 0.44, so this cut
-// undercounts rather than over: a review has to align with the listing not at all to be counted.
-// SPEC.md 5.4 names no threshold and setting it is anshuman's, so it lives in one place.
 export const DEFAULT_OFF_TOPIC_DISTANCE = 1;
 
-// below this the split scan is fitting noise
 export const MINIMUM_CHANGE_POINT_REVIEWS = 12;
 export const MINIMUM_SEGMENT_REVIEWS = 5;
 
-// on the same synthetic pairs a listing that never changed subject scores 0.008 and one that swapped
-// products halfway scores 1.008. a date is only worth showing above this, and it is anshuman's.
 export const MINIMUM_REPORTABLE_DRIFT = 0.5;
 
 const ABSENT: ListingDriftResult = {
@@ -73,8 +60,6 @@ function embeddingFor(
   return embedding;
 }
 
-// days is parallel to reviews, null where a review carries no date. the change point runs over the
-// dated subset; the distance to the product runs over everything embeddable.
 export function listingIdentityDrift(
   reviews: readonly ReviewForDrift[],
   days: readonly (number | null)[],
@@ -125,10 +110,6 @@ export function listingIdentityDrift(
   };
 }
 
-// SPEC.md 5.4's cumulative sum test, over the centroid rather than over a scalar reduction of it:
-// scan every split with enough reviews either side and take the cosine distance between the two
-// segment centroids. bounded in zero to two and needs no variance term, which matters because a
-// listing whose reviews are all alike has almost no variance to divide by.
 export function centroidChangePoint(
   dated: readonly { embedding: number[]; day: number }[],
 ): { changePoint: ChangePoint | null; driftStatistic: number } {
@@ -138,7 +119,6 @@ export function centroidChangePoint(
   }
   const dimensions = (dated[0] as { embedding: number[] }).embedding.length;
 
-  // prefix sums, so this stays linear: buildReport.ts runs it once per bootstrap resample
   const total = new Array<number>(dimensions).fill(0);
   for (const entry of dated) {
     for (let i = 0; i < dimensions; i++) {
@@ -157,8 +137,6 @@ export function centroidChangePoint(
     if (k < MINIMUM_SEGMENT_REVIEWS || k > count - MINIMUM_SEGMENT_REVIEWS) {
       continue;
     }
-    // the cosine of the two segment centroids without materialising either: one pass over the
-    // dimensions rather than three, and no allocation inside a loop the bootstrap runs 200 times
     let dot = 0;
     let beforeSquares = 0;
     let afterSquares = 0;

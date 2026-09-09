@@ -41,8 +41,6 @@ function deps(): OrchestratorDeps {
     priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] },
     isHistoryEnabled: vi.fn().mockResolvedValue(false),
     saveHistory: vi.fn().mockResolvedValue(undefined),
-    // these tests exercise mounting and the check-more-deeply flow, not
-    // the confidence interval, so a small resample count keeps them fast.
     bootstrapResamples: 5,
   };
 }
@@ -138,9 +136,6 @@ describe("mountResult", () => {
     }
   });
 
-  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms without showing partial
-  // results underneath." A review fetch is spaced at least 800ms per page, so the busy notice has
-  // to carry something from the moment it appears, and has to keep it current as pages land.
   it("shows partial results under the busy notice from the moment checking starts", async () => {
     const reviews = Array.from({ length: 4 }, (_, i) => ({
       rating: 5,
@@ -161,8 +156,6 @@ describe("mountResult", () => {
     );
 
     const result: AnalysisResult = {
-      // fetchReviewPages caches by product id and fake-indexeddb keeps that
-      // cache for the whole file, so every test that fetches needs its own.
       page: { ...PAGE, productId: "B0PROGRESS1" },
       product: PRODUCT,
       reviews: [],
@@ -175,7 +168,6 @@ describe("mountResult", () => {
     const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
     root.querySelector<HTMLButtonElement>(".action")?.click();
 
-    // synchronously after the click, before any page has come back
     expect(root.querySelector(".progress")?.textContent).toBe(
       "Reading up to 2 more pages of reviews.",
     );
@@ -206,8 +198,6 @@ describe("mountResult", () => {
       `Reading up to ${DEFAULT_MAX_PAGES} more pages of reviews.`,
     );
 
-    // every page came back empty, so the run ends back on a fresh notice. waited on rather than
-    // left running, so the chain cannot settle into a later test's document.
     await vi.waitFor(() => {
       expect(document.body.querySelector("verdict-notice")).not.toBe(notice);
     });
@@ -246,7 +236,6 @@ describe("mountResult", () => {
     const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
     root.querySelector<HTMLButtonElement>(".action")?.click();
 
-    // let the checkMoreDeeply promise chain settle
     await vi.waitFor(() => {
       expect(document.body.querySelector("verdict-panel")).not.toBeNull();
     });

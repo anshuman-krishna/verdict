@@ -7,29 +7,12 @@ from pydantic.alias_generators import to_camel
 
 from verdict_service.graph.contribution_store import ContributionEdge, ContributionEdgeStore
 
-# PRIVACY.md section 5, the opt in contribution endpoint. extension/src/graph batches edges client
-# side and sends them with no cookie, no session, and no client identifier, so this handler, like
-# api/reputation.py, reads nothing from the request except the validated body: no cookie, no header,
-# no client address.
-
 _HEX_DIGITS = set("0123456789abcdef")
 _SHA256_HEX_LENGTH = 64
-# extension/src/score/textNearDuplication.ts's DEFAULT_NUM_PERMUTATIONS.
-# a signature longer than this could not have come from that pipeline.
 MAX_MINHASH_LENGTH = 128
-# a defensive cap on one request's cost, not a number PRIVACY.md sets, and comfortably above what
-# one page's review count would ever produce in a single batch.
 MAX_EDGES_PER_BATCH = 500
 
 
-# the wire format is camelCase, because the sender is javascript and every other json this project
-# exchanges is camelCase too (the canary status document, the release manifest, model.json). Without
-# this the fields below were only reachable by their python names, so every batch the extension
-# actually sent was rejected as malformed while every test here passed: the tests wrote snake_case
-# because the model did.
-#
-# tests/contract/contributionEdge.json is the shape both sides now read, so the two cannot drift
-# apart again without one of them failing.
 class ContributionEdgeIn(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

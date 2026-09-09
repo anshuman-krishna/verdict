@@ -1,29 +1,15 @@
-// a reader, never a writer: expectation files are ground truth and written by hand.
-// every parse failure is loud. one skipped quietly would shrink the pass rate's denominator, so a
-// corpus with half its files broken would score better than a corpus with none
-
 export type Layout = "modern" | "legacy";
 
 const LAYOUTS: readonly string[] = ["modern", "legacy"];
 
 export interface FixtureExpectation {
-  // the page this html was saved from. The harness parses site and locale back out of it rather
-  // than asking for them twice and risking a pair that disagrees.
   url: string;
   layout: Layout;
-  // what the listing claims, read off the page by eye, not the number of
-  // reviews the page happens to carry markup for
   reviewCount: number | null;
   claimedRating: number | null;
-  // optional, and checked only when present, because a long amazon title retyped by hand is a
-  // likelier source of a false failure than the extractor is
   title?: string;
   category?: string;
-  // a floor, not an equality: nobody is asked to count review blocks by
-  // hand. Absent means the extracted count is reported and not judged.
   minimumExtractedReviews?: number;
-  // a documented failure still counts against the pass rate but does not fail the per commit run,
-  // so a known gap stays visible instead of being deleted to keep the suite green
   knownFailure?: string;
   notes?: string;
 }
@@ -64,8 +50,6 @@ export function parseExpectation(name: string, raw: string): FixtureExpectation 
   };
 }
 
-// present but null is a real answer (a listing with no rating yet) and is
-// kept distinct from absent, which is a file nobody finished.
 function requireNullableNumber(
   name: string,
   record: Record<string, unknown>,

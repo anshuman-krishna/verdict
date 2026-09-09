@@ -3,8 +3,6 @@ import { applyModel, selectModel, type ModelSet } from "./combine";
 import type { FeatureVector } from "./featureVector";
 import type { Band } from "./report";
 
-// SPEC.md section 10's stored vector, scored again.
-// no interval: the bootstrap needs the reviews.
 
 export interface StoredScore {
   featureVector?: FeatureVector;
@@ -15,6 +13,7 @@ export interface Rescored {
   probability: number;
 }
 
+// no interval, the bootstrap needs reviews
 export function rescore(entry: StoredScore, models: ModelSet | null): Rescored | null {
   const vector = entry.featureVector;
   if (vector === undefined || models === null) {
@@ -27,7 +26,6 @@ export function rescore(entry: StoredScore, models: ModelSet | null): Rescored |
   return { band: bandFromProbability(result.probability), probability: result.probability };
 }
 
-// an unscorable entry is kept, not dropped
 export function rescoreAll<T extends StoredScore>(
   entries: readonly T[],
   models: ModelSet | null,

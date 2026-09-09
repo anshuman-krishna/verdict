@@ -1,12 +1,4 @@
-// SPEC.md section 6: "bootstrap the feature vector over 200 resamples of the extracted review set
-// and report the interquartile range of the resulting probability." this is a generic resampler,
-// applicable to whatever the combiner eventually produces, since the combiner itself waits on
-// ground truth (SPEC.md section 6 and week 4 of PLAN.md).
-//
-// this runs at analysis time in the extension, not in the research pipeline, so unlike the six
-// signals in SPEC.md section 7 it has no python mirror and no parity requirement: nothing requires
-// the two languages' random resampling to agree with each other.
-
+// extension only, no parity mirror
 const DEFAULT_RESAMPLES = 200;
 
 export function resample<T>(items: readonly T[], random: () => number = Math.random): T[] {
@@ -45,8 +37,6 @@ export interface ConfidenceInterval {
   high: number;
 }
 
-// linear interpolation between the two nearest ranks, the method most
-// statistics packages (numpy included) use for quartiles by default.
 function percentile(sorted: readonly number[], p: number): number {
   if (sorted.length === 1) {
     return sorted[0] as number;

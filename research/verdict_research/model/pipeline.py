@@ -12,18 +12,6 @@ from verdict_research.model.train import (
     predict_probability,
 )
 
-# PLAN.md week 5, "model trained, calibrated, exported, evaluated", as one ordered run rather than
-# four functions a caller has to sequence correctly. The order is the part that is easy to get
-# wrong: SPEC.md section 6 wants the calibration curve fitted on a slice the coefficients never saw,
-# and SPEC.md section 12 wants the test set untouched until the final report. Both are structural,
-# so they live here instead of in a docstring.
-#
-# which features belong in the model is the calibration target's other half and is anshuman's, so
-# feature_names is required and has no default. This module fits what it is given and reports what
-# it measured.
-
-# SPEC.md section 14's acceptance criteria for version 0.1, verbatim: "held out precision above 0.80
-# at recall above 0.50 on the manipulated class" and "expected calibration error below 0.05".
 MINIMUM_PRECISION = 0.80
 MINIMUM_RECALL = 0.50
 MAXIMUM_EXPECTED_CALIBRATION_ERROR = 0.05
@@ -36,9 +24,6 @@ class OperatingPoint:
     recall: float
 
 
-# section 14 names a point on the curve, not a fixed cutoff: the strongest precision among the
-# thresholds that still clear the recall floor. None when no threshold reaches that floor at all,
-# which is a real answer and not a zero.
 def best_operating_point(
     curve: list[ThresholdPoint], minimum_recall: float = MINIMUM_RECALL
 ) -> OperatingPoint | None:
@@ -59,8 +44,6 @@ class SplitSizes:
     train: int
     calibration: int
     test: int
-    # rows dropped because a chosen feature was null on them. Never imputed: filling a missing
-    # signal with a mean is a modelling decision and this module does not make those.
     dropped_incomplete: int
 
 
@@ -107,8 +90,7 @@ def train_pipeline(
         )
 
     developing, held_out = train_test_split(examples, test_fraction=test_fraction, seed=seed)
-    # the calibration slice comes out of the development half, never out of
-    # the held out set, so the test set stays untouched until evaluation.
+    # calibrated off the development half only
     fitting, calibrating = train_test_split(
         developing, test_fraction=calibration_fraction, seed=seed + 1
     )
@@ -150,7 +132,6 @@ def train_pipeline(
     )
 
 
-# one string per unmet criterion, empty when shippable
 def report_problems(report: EvalReport, point: OperatingPoint | None) -> list[str]:
     problems: list[str] = []
     if point is None:

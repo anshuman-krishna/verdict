@@ -13,12 +13,6 @@ from verdict_research.eval.metrics import (
 )
 from verdict_research.model.combine import CombinerModel, apply_calibration
 
-# PLAN.md week 5: "model trained, calibrated, exported, evaluated." Ties together
-# corpus/dataset.py's stored examples, model/train.py's fitted model, and this package's metrics.py
-# into the one report SPEC.md section 14's acceptance criteria (precision, recall, expected
-# calibration error) and the method page's "how well it works" section both need. Never sees a
-# label's meaning or a corpus's provenance, only already labelled examples handed to it.
-
 
 def _sigmoid(x: float) -> float:
     if x >= 0:
@@ -27,10 +21,7 @@ def _sigmoid(x: float) -> float:
     return e / (1 + e)
 
 
-# mirrors combine.py's apply_model, but starting from an already flat feature dict
-# (LabeledExample.features) rather than a FeatureVector, since a stored example has no raw reviews
-# to rebuild one from. Returns None, never a guess, when a coefficient the model needs is missing or
-# null, the same "never confident on thin data" rule apply_model follows.
+# a missing feature returns none
 def predict_probability(model: CombinerModel, features: dict[str, float | None]) -> float | None:
     missing = [key for key in model.coefficients if features.get(key) is None]
     if missing:
@@ -42,10 +33,6 @@ def predict_probability(model: CombinerModel, features: dict[str, float | None])
     return apply_calibration(model.calibration, _sigmoid(linear))
 
 
-# SPEC.md section 14's own criterion is "precision above 0.80 at recall above 0.50", a point on the
-# curve, not a fixed cutoff; 0.5 here is only a conventional default for this report's single
-# headline row, and `curve` carries every threshold so the actual operating point SPEC.md describes
-# can be read off it directly.
 DEFAULT_DECISION_THRESHOLD = 0.5
 
 

@@ -11,8 +11,6 @@ import {
   type OrchestratorDeps,
 } from "./orchestrator";
 
-// DESIGN.md wants this below the star rating, which needs a selector the fixture corpus has not
-// verified yet. a corner overlay until then, rather than a guess at amazon's dom
 function pinToCorner(element: HTMLElement): void {
   element.style.position = "fixed";
   element.style.bottom = "16px";
@@ -24,7 +22,6 @@ function defaultOpenTab(url: string): void {
   window.open(url, "_blank");
 }
 
-// the popup's history holds this report already; there is no per-report page for a server to key on
 function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
   const panel = document.createElement("verdict-panel") as VerdictPanelElement;
   pinToCorner(panel);
@@ -36,7 +33,6 @@ function mountPanel(document: Document, report: Report, openTab: (url: string) =
   });
 }
 
-// SPEC.md section 13. the one action offered is the only thing that can resolve this state
 function mountNotEnoughDataNotice(
   document: Document,
   result: AnalysisResult,
@@ -77,7 +73,6 @@ function mountNotEnoughDataNotice(
       notice.remove();
       mountResult(document, next, deps, checkOptions, openTab);
     } catch {
-      // degrades silently, leaving the action available to retry
       renderIdle();
     }
   };
@@ -85,7 +80,6 @@ function mountNotEnoughDataNotice(
   renderIdle();
 }
 
-// replaced by a real count as soon as the first page lands, before the 800ms gap allows a second
 function startingProgressLine(maxPages: number): string {
   return `Reading up to ${maxPages} more pages of reviews.`;
 }
@@ -95,8 +89,6 @@ function progressLine(progress: FetchProgress): string {
   return `${progress.pagesFetched} of ${progress.maxPages} pages read, ${reviews} so far.`;
 }
 
-// missing-features and no-model render nothing: SPEC.md specifies no copy for either, and the
-// wording is not ours to invent
 export function mountResult(
   document: Document,
   result: AnalysisResult,

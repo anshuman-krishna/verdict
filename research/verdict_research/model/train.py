@@ -3,10 +3,6 @@ from dataclasses import dataclass
 
 from verdict_research.model.combine import CalibrationPoint, CombinerModel
 
-# fits what SPEC.md section 6 names, given rows the caller already labelled. what a positive label
-# means, how the corpus was split, and which features belong are anshuman's; gradient descent and
-# pava are not judgement calls, so they are safe to build ahead of the corpus
-
 
 @dataclass
 class LogisticFit:
@@ -19,17 +15,12 @@ def _dot(coefficients: dict[str, float], row: dict[str, float], feature_names: l
 
 
 def _sigmoid(x: float) -> float:
-    # avoids OverflowError on a very negative x; math.exp(-x) for a large
-    # negative x is what would overflow, not the branch that is skipped.
     if x >= 0:
         return 1 / (1 + math.exp(-x))
     e = math.exp(x)
     return e / (1 + e)
 
 
-# batch gradient descent on mean binary cross entropy, with optional L2 weight decay to keep
-# coefficients finite on separable data (plain, unregularised logistic regression has no finite
-# optimum there, the weights simply grow without bound as the loss keeps shrinking).
 def fit_logistic_regression(
     rows: list[dict[str, float]],
     labels: list[int],
@@ -73,8 +64,6 @@ def predict_probability(fit: LogisticFit, row: dict[str, float]) -> float:
 
 @dataclass
 class _Block:
-    # weight is the pava averaging weight; count is how many distinct x values the block spans, and
-    # the two differ whenever one x carried duplicate ys
     x: float
     y_sum: float
     weight: float
@@ -85,7 +74,6 @@ class _Block:
         return self.y_sum / self.weight
 
 
-# pool adjacent violators. ties on x are merged by weighted average first, since pava expects one y
 def fit_isotonic_regression(pairs: list[tuple[float, float]]) -> list[CalibrationPoint]:
     if not pairs:
         return []
@@ -112,8 +100,6 @@ def fit_isotonic_regression(pairs: list[tuple[float, float]]) -> list[Calibratio
                 )
             )
 
-    # each block spans a run of the original, deduplicated xs; every x in
-    # that run gets the block's pooled mean as its calibrated value.
     points: list[CalibrationPoint] = []
     x_iter = iter(xs)
     for block in blocks:
@@ -122,7 +108,6 @@ def fit_isotonic_regression(pairs: list[tuple[float, float]]) -> list[Calibratio
     return points
 
 
-# fitting the calibration curve on a held out slice is the caller's job: only it knows which rows
 def export_model(fit: LogisticFit, calibration: list[CalibrationPoint]) -> CombinerModel:
     return CombinerModel(
         intercept=fit.intercept, coefficients=dict(fit.coefficients), calibration=calibration

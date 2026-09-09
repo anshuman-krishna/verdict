@@ -1,6 +1,6 @@
 import coefficients from "../../../schema/minhash-coefficients.json";
 
-// a mersenne prime: negligible reduction bias, and a*h stays exact in bigint
+// mersenne prime, so a*h stays exact
 const MODULUS = (1n << 61n) - 1n;
 
 const FNV_OFFSET_BASIS = 14695981039346656037n;
@@ -29,14 +29,12 @@ export interface TextNearDuplicationOptions {
   bands?: number;
   rows?: number;
   jaccardThreshold?: number;
-  // keyed by object identity, so bootstrap resamples reuse a signature instead of recomputing it.
-  // caller's job to share a cache only across calls with the same shingleSize and numPermutations.
-  // also how a cached review scores without its text (PRIVACY.md section 2)
+  // keyed by identity, never by text
   signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
   linkCache?: DuplicateLinkCache;
 }
 
-// a pair links or not, whoever else was drawn
+// a pair links regardless of draw
 export interface DuplicateLinks {
   population: object;
   bands: number;
@@ -47,7 +45,6 @@ export interface DuplicateLinks {
 
 export type DuplicateLinkCache = WeakMap<readonly bigint[], DuplicateLinks>;
 
-// fnv-1a, 64 bit, over the utf-8 bytes of the string
 export function fnv1a64(input: string): bigint {
   let hash = FNV_OFFSET_BASIS;
   const bytes = new TextEncoder().encode(input);
@@ -58,7 +55,6 @@ export function fnv1a64(input: string): bigint {
   return hash;
 }
 
-// text shorter than the shingle size becomes one shingle rather than none
 export function shingle(text: string, shingleSize: number): Set<string> {
   const normalized = text.toLowerCase().trim().replace(/\s+/g, " ");
   if (normalized.length <= shingleSize) {
@@ -71,8 +67,6 @@ export function shingle(text: string, shingleSize: number): Set<string> {
   return shingles;
 }
 
-// exact jaccard similarity of two shingle sets, independent of minhash. used
-// to sanity check the minhash estimate in tests, never at runtime.
 export function exactJaccard(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   if (a.size === 0 && b.size === 0) {
     return 1;
@@ -98,8 +92,6 @@ export function minhashSignature(
     if (pair === undefined) {
       throw new Error(`numPermutations exceeds the ${coefficients.length} shared coefficients`);
     }
-    // coefficients are stored as decimal strings because they exceed
-    // Number.MAX_SAFE_INTEGER and a plain json import would round them
     const a = BigInt(pair[0]);
     const b = BigInt(pair[1]);
     let min: bigint | null = null;
@@ -124,9 +116,6 @@ export function estimateJaccard(signatureA: readonly bigint[], signatureB: reado
   return matches / signatureA.length;
 }
 
-// a resample draws the same signature arrays repeatedly, and converting 128 bigints to strings for
-// every band on every draw was two thirds of the whole analysis budget. keyed by the signature
-// array, which the caller's signatureCache already keeps alive for exactly as long as it is useful.
 const bandKeyCache = new WeakMap<readonly bigint[], { bands: number; rows: number; keys: string[] }>();
 
 function bandKeys(signature: readonly bigint[], bands: number, rows: number): string[] {
@@ -174,7 +163,6 @@ class UnionFind {
   }
 }
 
-// SPEC.md 5.5's minhash and threshold; the band and row split is a proposal, not a ratified line
 export function textNearDuplication(
   reviews: readonly ReviewForNearDuplication[],
   options: TextNearDuplicationOptions = {},
@@ -185,7 +173,6 @@ export function textNearDuplication(
   const rows = options.rows ?? DEFAULT_ROWS;
   const threshold = options.jaccardThreshold ?? DEFAULT_JACCARD_THRESHOLD;
 
-  // estimateJaccard compares position by position, so a signature of the wrong length is not trusted
   const seeded = (review: ReviewForNearDuplication): bigint[] | undefined => {
     const cached = options.signatureCache?.get(review);
     return cached !== undefined && cached.length === numPermutations ? cached : undefined;
@@ -222,7 +209,7 @@ export function textNearDuplication(
 
   const unionFind = new UnionFind(signatures.length);
 
-  // same array means same text, join it
+  // same array means same text
   const firstIndexOf = new Map<readonly bigint[], number>();
   const distinct: number[] = [];
   for (let i = 0; i < signatures.length; i++) {
@@ -316,8 +303,8 @@ function findLinks(
     }
   }
 
-  // a pair is one number, not a string
   const width = signatures.length;
+  // a pair is one number
   const candidatePairs = new Set<number>();
   for (const bucket of buckets.values()) {
     if (bucket.length < 2) {

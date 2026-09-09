@@ -17,8 +17,6 @@ class TestConfigureLogging:
 
 
 def test_importing_main_disables_the_access_logger():
-    # main.py calls configure_logging() at import time, so the guarantee holds for anything that
-    # imports app, not only a caller that remembers to invoke configure_logging() itself.
     logging.getLogger("uvicorn.access").disabled = False
     import verdict_service.main  # noqa: F401
 

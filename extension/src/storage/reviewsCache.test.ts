@@ -41,8 +41,6 @@ async function writeStaleRecord(productId: string, site: string, cachedAt: numbe
   });
 }
 
-// a record written by an older build, before the text was dropped and
-// before the signature parameters were recorded alongside it
 async function writeLegacyRecord(productId: string, site: string) {
   const key = await cacheKey(productId, site);
   const db = await openDatabase();
@@ -98,9 +96,6 @@ describe("reviews cache", () => {
   });
 });
 
-// PRIVACY.md section 2: "review text is never persisted. It is parsed, hashed for the duplication
-// signal, embedded for the drift signal, and dropped. The MinHash signature and the embedding
-// centroid are kept, and neither can reconstruct the text."
 describe("what the cache is allowed to persist", () => {
   async function storedRecord(productId: string): Promise<Record<string, unknown>> {
     const key = await cacheKey(productId, "amazon");
@@ -115,8 +110,6 @@ describe("what the cache is allowed to persist", () => {
     });
   }
 
-  // reads the raw stored record rather than what getCachedReviews returns,
-  // since the question is what is on disk, not what is handed back.
   it("writes no review text to the database at all", async () => {
     await setCachedReviews("p-text", "amazon", [review]);
     const serialised = JSON.stringify(await storedRecord("p-text"), (_key, value) =>
@@ -167,9 +160,6 @@ describe("what the cache is allowed to persist", () => {
     expect(cached?.signatures.get(cached.reviews[0] as Review)).toBeUndefined();
   });
 
-  // a signature is only meaningful under the parameters that produced it,
-  // and a shingle size change would leave the length unchanged and the
-  // meaning wrong, which is the failure that would not announce itself.
   it("discards a record whose signature parameters are not this build's", async () => {
     const key = await cacheKey("p-params", "amazon");
     const db = await openDatabase();

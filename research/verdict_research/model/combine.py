@@ -3,13 +3,6 @@ from dataclasses import dataclass, field
 
 from verdict_research.features.feature_vector import FeatureVector
 
-# SPEC.md section 6: logistic regression on the feature vector, calibrated by isotonic regression on
-# a held out slice. this module applies a model, it does not fit one. fitting needs ground truth
-# (PLAN.md week 4) and its output artefact, model.json, is what training/calibration/export produce
-# elsewhere in this package once that corpus exists. nothing here invents coefficients, a
-# calibration curve, or which features matter, since choosing those is the calibration target
-# SPEC.md section 6 leaves to anshuman.
-
 FlatFeatures = dict[str, float | None]
 
 
@@ -50,12 +43,6 @@ class CombinerModel:
     calibration: list[CalibrationPoint] = field(default_factory=list)
 
 
-# SPEC.md 5.6 runs only for users who opted in and only while the service answers, and SPEC.md
-# section 13 requires the other path to keep working with no visible difference. one model cannot do
-# both: a model carrying a coefficient for the graph feature reports missing-features on every
-# default analysis, and one trained without it and then handed the feature anyway is uncalibrated
-# for what it was just given. so the artefact carries two, each fitted and calibrated on its own,
-# and select_model picks by what the vector actually has.
 @dataclass
 class ModelSet:
     local: CombinerModel
@@ -95,8 +82,6 @@ def _sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x))
 
 
-# clamped linear interpolation over sorted control points, mirroring
-# extension/src/score/combine.ts's applyCalibration exactly.
 def apply_calibration(points: list[CalibrationPoint], x: float) -> float:
     if not points:
         return x
@@ -115,9 +100,6 @@ def apply_calibration(points: list[CalibrationPoint], x: float) -> float:
     return last.y
 
 
-# never guesses a value for a feature the model needs but this review set
-# did not produce. a missing required feature is reported, not imputed,
-# per SPEC.md section 6's own rule: never confident on thin data.
 def apply_model(feature_vector: FeatureVector, model: CombinerModel) -> CombinerResult:
     if not feature_vector.meets_minimum_data:
         return InsufficientData()

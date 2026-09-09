@@ -119,7 +119,6 @@ describe("applyModel", () => {
   });
 
   it("combines a linear score through a sigmoid, then the calibration curve", () => {
-    // linear = -2 + 3*0.5 + 2*0.25 = 0, sigmoid(0) = 0.5 exactly
     const result = applyModel(featureVector(), {
       intercept: -2,
       coefficients: {
@@ -184,13 +183,11 @@ describe("selectModel", () => {
     expect(selectModel({ local: LOCAL, reviewerGraph: GRAPH }, vector)).toBe(GRAPH);
   });
 
-  // SPEC.md section 13: the service being unreachable degrades to local signals, silently
   it("falls back to local when the artefact carries no graph model", () => {
     const vector = featureVector({ reviewerGraph: GRAPH_RESULT });
     expect(selectModel(localModelSet(LOCAL), vector)).toBe(LOCAL);
   });
 
-  // a listing where nobody is identifiable has no share to score against, flagged or not
   it("falls back to local when the lookup ran but found no identifiable reviewer", () => {
     const vector = featureVector({
       reviewerGraph: { ...GRAPH_RESULT, flaggedReviewShare: null, identifiedReviewCount: 0 },
@@ -216,7 +213,6 @@ describe("the reviewer graph feature", () => {
     expect(flat["reviewerGraph.flaggedReviewShare"]).toBe(0.4);
   });
 
-  // a model naming the feature on a default analysis is a gap, never a zero
   it("reports missing-features rather than scoring a lookup that never ran", () => {
     expect(applyModel(featureVector(), GRAPH)).toEqual({
       status: "missing-features",

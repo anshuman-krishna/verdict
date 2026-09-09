@@ -1,9 +1,6 @@
 import type { ReportOutcome } from "../score/buildReport";
 import type { ReportSummary } from "../score/report";
 
-// SPEC.md section 11. every message the website can send the extension, and every response the
-// extension can send back. the message names are a proposal, not a ratified spec line (SPEC.md only
-// shows "verdict:history:list" as an example), kept in the same "verdict:noun:verb" shape.
 
 export interface HistoryListRequest {
   type: "verdict:history:list";
@@ -28,9 +25,6 @@ export interface HistoryClearResponse {
   ok: true;
 }
 
-// SITE.md's /history copy promises "export it as json or csv", and the page had only a delete. the
-// strings come from storage/history.ts rather than being rebuilt on the site, so a file downloaded
-// from the website is byte identical to one from the options page.
 export type HistoryExportFormat = "json" | "csv";
 
 export interface HistoryExportRequest {
@@ -49,13 +43,6 @@ export interface AnalyzeRequest {
   url: string;
 }
 
-// bridge/analyzeViaTab.ts runs the same analysis amazon.content.ts always runs, in a background tab
-// opened for this url, and relays its result back. "unsupported-domain" is decided before any tab
-// opens, by the bridge's own domain check. "not-a-product-page" and "timed-out" are the two ways
-// that relay itself can come back with nothing. Every other status is ReportOutcome, unchanged:
-// whether this went through a real visit or this relay, SPEC.md non negotiable 5 (never confident
-// on thin data) applies identically, since BUNDLED_AMAZON_RULES and score/model.ts's BUNDLED_MODEL
-// are the same ones either path uses.
 export type AnalyzeResponse =
   | { status: "unsupported-domain" }
   | { status: "not-a-product-page" }

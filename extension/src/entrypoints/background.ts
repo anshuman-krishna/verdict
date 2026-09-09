@@ -11,7 +11,6 @@ import { flushDueContributions } from "../graph/submit";
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
 
-// content scripts report from every page, not only ones opened here, so this is always installed
 browser.runtime.onMessage.addListener((message, sender) => {
   if (isAnalysisResultMessage(message) && sender.tab?.id !== undefined) {
     const tabId = sender.tab.id;
@@ -26,7 +25,6 @@ function addResultListener(listener: ResultListener): () => void {
   return () => resultListeners.delete(listener);
 }
 
-// a background tab, not a second extractor: a service worker has no DOM to run selectors against
 function analyzeUrl(url: string) {
   return analyzeViaHiddenTab(url, {
     createTab: async (tabUrl) => {
@@ -41,7 +39,6 @@ function analyzeUrl(url: string) {
   });
 }
 
-// firefox has historically set only sender.url, so fall back rather than refusing every message
 function senderOrigin(sender: { origin?: string; url?: string }): string | undefined {
   if (sender.origin !== undefined && sender.origin !== "") {
     return sender.origin;
@@ -57,19 +54,13 @@ function senderOrigin(sender: { origin?: string; url?: string }): string | undef
 }
 
 const CONTRIBUTION_ALARM_NAME = "verdict:flush-graph-contributions";
-// how often the queue is checked, not PRIVACY.md section 5's hold, which graph/queue.ts applies per edge.
-// an alarm rather than setInterval because mv3 kills the worker freely
 const CONTRIBUTION_ALARM_PERIOD_MINUTES = 30;
 
-// one limiter per worker lifetime; a restart forgives an earlier burst rather than blocking anyone
 const rateLimiter = new BridgeRateLimiter();
 
-// PRIVACY.md section 6: the only moment the browser gives us to say history dies with the extension.
-// no query string, so the page learns nothing but that somebody left
 const UNINSTALL_URL = "https://verdict.tools/uninstalled";
 
 export default defineBackground(() => {
-  // a missing api skips the notice rather than failing to install the listeners below
   browser.runtime.setUninstallURL?.(UNINSTALL_URL);
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -89,7 +80,6 @@ export default defineBackground(() => {
     if (alarm.name !== CONTRIBUTION_ALARM_NAME) {
       return;
     }
-    // flushDueContributions never throws; this only stops something unexpected taking the worker down
     flushDueContributions({ endpoint: DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT }).catch(() => {});
   });
 });

@@ -59,8 +59,6 @@ class TestRunOnce:
         )
         assert len(run.alerts) == 2
 
-    # a locale broken for a week is already known; re-sending it every run
-    # is how a canary gets filtered out of an inbox.
     def test_a_locale_broken_again_does_not_alert_twice(self):
         now = clock()
         targets = parse_targets(TARGETS)
@@ -71,8 +69,6 @@ class TestRunOnce:
         assert second.alerts == []
 
     def test_a_recovery_alerts(self):
-        # one clock across both runs, so the second run's checks are
-        # genuinely later than the first's and summarize picks them
         now = clock()
         targets = parse_targets(TARGETS)
         broken = run_once(targets, [], lambda url: "<html></html>", broken_extract, now)
@@ -194,7 +190,6 @@ class TestMain:
             extract=healthy_extract,
             now=clock(),
         )
-        # the median spans both the stored check and this run's
         row = next(
             r
             for r in json.loads(status.read_text(encoding="utf-8"))["rows"]

@@ -19,10 +19,6 @@ import {
   setCachedReviews,
 } from "../src/storage/reviewsCache";
 
-// this is the build gate from PRIVACY.md section 3: the five ways the default analysis path could
-// reach the network are stubbed to throw, and every currently existing module that runs on that
-// path is exercised against them. a future module that calls out unexpectedly fails this test
-// instead of shipping silently.
 
 function throwingStub(name: string) {
   return vi.fn(() => {
@@ -134,9 +130,6 @@ describe("the default analysis path makes no network requests", () => {
       priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
-      // this test checks the outcome is ok and nothing touched the
-      // network, not the confidence interval, so a small resample count
-      // keeps it fast without weakening what it actually verifies.
       bootstrapResamples: 5,
     });
 
@@ -181,8 +174,6 @@ describe("the default analysis path makes no network requests", () => {
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
       bootstrapResamples: 5,
-      // the real settings.ts lookup, which defaults to false with nothing ever stored: this proves
-      // the production wiring, not just a test double that happens to say false.
       reputation: {
         isEnabled: getReputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,
@@ -232,9 +223,6 @@ describe("the default analysis path makes no network requests", () => {
       isHistoryEnabled: async () => true,
       saveHistory: async () => undefined,
       bootstrapResamples: 5,
-      // enqueueContributionEdges only ever writes to IndexedDB, never the network; the real
-      // settings lookup defaults to false anyway, so this proves nothing enqueues, not just that
-      // nothing would have been sent if it had.
       graphContribution: {
         isEnabled: getGraphContributionEnabled,
         salt: REPUTATION_SALT,

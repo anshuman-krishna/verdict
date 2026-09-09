@@ -57,9 +57,6 @@ function deps(overrides: Partial<Parameters<typeof analyzePage>[2]> = {}) {
     priors: PRIORS,
     isHistoryEnabled: vi.fn().mockResolvedValue(true),
     saveHistory: vi.fn().mockResolvedValue(undefined),
-    // these tests check outcome status and history wiring, not the confidence interval, so a small
-    // resample count keeps them fast. bootstrap.ts's default of 200 (SPEC.md section 6's number) is
-    // worth keeping only where the interval itself is under test, as in buildReport.test.ts.
     bootstrapResamples: 5,
     ...overrides,
   };
@@ -145,9 +142,6 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
         endpoint: "https://api.verdict.tools/v1/reputation/lookup",
         salt: "test-salt",
         fetchImpl,
-        // real production behaviour waits out PRIVACY.md's random request
-        // delay (up to a few seconds) before firing; this test only cares
-        // that the lookup happens, not how long it waits first.
         delay: () => Promise.resolve(),
       },
     });
@@ -166,8 +160,6 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
     expect(row).toMatchObject({ strength: "weak", value: 0 });
   });
 
-  // the whole point of SPEC.md 5.6: the flagged share is a feature, not a note pinned on beside a
-  // band computed without it
   it("scores with the reviewer graph model once the lookup has run", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ matches: {} }) });
     const models = {
@@ -199,7 +191,6 @@ describe("analyzePage, reputation lookup (SPEC.md section 4, opt in)", () => {
     expect(withLookup.outcome.report.band).not.toBe(withoutLookup.outcome.report.band);
   });
 
-  // SPEC.md section 13: an unreachable service is local signals only, with nothing said about it
   it("still scores with the local model when the service does not answer", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("unreachable"));
     const testDeps = deps({

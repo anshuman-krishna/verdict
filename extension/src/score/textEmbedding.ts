@@ -1,18 +1,11 @@
 import { fnv1a64 } from "./textNearDuplication";
 
-// SPEC.md 5.4 asks for a quantised sentence embedding model in wasm. that model does not exist in
-// this repository and section 16 open question 2 is still open on whether 0.1 pays its bundle cost,
-// so this is the bundled default: a signed hashing projection over word unigrams and bigrams,
-// deterministic in both languages and costing no megabytes. it is lexical, not semantic, and
-// listingDrift.ts's wording is what that supports.
 
 export const EMBEDDING_DIMENSIONS = 256;
 
 const MASK_64 = (1n << 64n) - 1n;
 const SIGN_BIT = 63n;
 
-// unicode letter or number, matching python's str.isalnum. anything else separates tokens, so
-// punctuation, whitespace, and emoji do not become vocabulary
 const ALPHANUMERIC = /[\p{L}\p{N}]/u;
 
 export function tokenize(text: string): string[] {
@@ -34,8 +27,6 @@ export function tokenize(text: string): string[] {
   return tokens;
 }
 
-// bigrams as well as unigrams: "phone case" and "case phone" are different products, and a bag of
-// single words cannot tell them apart
 export function terms(tokens: readonly string[]): string[] {
   const result = [...tokens];
   for (let i = 0; i + 1 < tokens.length; i++) {
@@ -44,9 +35,6 @@ export function terms(tokens: readonly string[]): string[] {
   return result;
 }
 
-// a review fills well under half its buckets, so this is what reviewsCache.ts persists: the same
-// numbers as the dense vector at a fraction of the bytes, and integers, so a cache hit normalises
-// to bit identical floats. flat pairs of bucket and signed count, ascending by bucket.
 export type TermCounts = number[];
 
 export function hashTerms(text: string, dimensions = EMBEDDING_DIMENSIONS): TermCounts {
@@ -64,8 +52,6 @@ export function hashTerms(text: string, dimensions = EMBEDDING_DIMENSIONS): Term
   return flat;
 }
 
-// null when nothing hashed, or when every term cancelled against a collision of the opposite sign,
-// so a caller never divides by a zero norm
 export function embedTermCounts(
   counts: TermCounts,
   dimensions = EMBEDDING_DIMENSIONS,
@@ -85,7 +71,6 @@ export function embedText(text: string, dimensions = EMBEDDING_DIMENSIONS): numb
   return embedTermCounts(hashTerms(text, dimensions), dimensions);
 }
 
-// both arguments are unit vectors from embedText, so this is a plain dot product
 export function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
   let total = 0;
   for (let i = 0; i < a.length; i++) {

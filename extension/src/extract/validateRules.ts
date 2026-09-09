@@ -1,18 +1,10 @@
 import type { FieldRule, RulesDocument } from "./rules";
 
-// a signature says who wrote a document, not that it is well formed. a malformed rule degrades to
-// zero matches, which is indistinguishable from a page that changed.
-// an unusable field is dropped so the rest of a document still delivers its fixes; a document with
-// none left is refused, since that is an outage rather than a fix
 
-// fallback chains are a handful deep in practice. The cap is here so a pathological document cannot
-// make validation walk as far as the file is long.
 const MAX_FALLBACK_DEPTH = 10;
 
 export interface SanitisedRules {
   rules: RulesDocument;
-  // one line per field that was dropped and why, for the canary and for
-  // whoever is looking at why a fix did not take
   problems: string[];
 }
 
@@ -59,7 +51,6 @@ export function sanitiseRulesDocument(value: unknown): SanitisedRules | null {
   };
 }
 
-// null when the rule is usable, otherwise why it is not.
 function fieldProblem(value: unknown, depth: number): string | null {
   if (depth > MAX_FALLBACK_DEPTH) {
     return `fallback chain deeper than ${MAX_FALLBACK_DEPTH}`;
@@ -110,8 +101,6 @@ function compositeProblem(rule: Record<string, unknown>): string | null {
     return "fields is empty, so every container would yield an empty record";
   }
   for (const [name, sub] of entries) {
-    // a composite's own fields start a fresh chain: they are resolved against a container, not
-    // against the page, so their depth is not the outer chain's depth.
     const problem = fieldProblem(sub, 0);
     if (problem !== null) {
       return `field ${name} ${problem}`;

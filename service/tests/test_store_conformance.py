@@ -12,11 +12,6 @@ from verdict_service.graph.sqlite_store import (
     connect,
 )
 
-# every test in this repository runs against the in memory stores and every deployment runs against
-# the sqlite ones. That is exactly the arrangement where the two quietly stop agreeing, and where
-# the difference is only ever observed in production. So the behaviour both are relied on for is
-# asserted against both, from one set of assertions.
-
 
 @pytest.fixture(params=["memory", "sqlite"])
 def stores(request, tmp_path):
@@ -82,8 +77,6 @@ class TestBothStoresAgree:
         flagged.add("abcd1111")
         assert flagged.matches("abcd") == ["abcd1111"]
 
-    # recompute.py hands a persisted store the whole batch and an in memory
-    # one the hashes one at a time. Both have to end up in the same place.
     def test_a_recompute_over_no_edges_flags_nobody(self, stores):
         edges, flagged = stores
         assert recompute_flagged_hashes(edges, flagged, now=lambda: 1000.0) == 0

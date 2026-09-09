@@ -36,8 +36,6 @@ describe("extractOnce", () => {
     });
   });
 
-  // the canary's whole job is noticing this, so it has to come back as a
-  // number rather than as an exception or an absent field.
   it("reports zero reviews rather than failing when the rules match nothing", () => {
     const result = extractOnce(page("<div>a page that changed</div>"), "https://www.amazon.com/dp/B0ABCDEF12", RULES);
     expect(result.reviewCount).toBe(0);

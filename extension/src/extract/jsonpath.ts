@@ -25,8 +25,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// resolves a small dot/bracket subset of JSONPath ($.a.b, $.a[*], $.a[2].b)
-// against a parsed JSON value, always returning an array of matches.
 export function queryJsonPath(root: unknown, path: string): unknown[] {
   let current: unknown[] = [root];
   for (const segment of parseJsonPath(path)) {

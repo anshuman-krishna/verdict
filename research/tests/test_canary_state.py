@@ -78,8 +78,6 @@ class TestPrune:
         kept = prune(results, retained=3)
         assert [r.checked_at for r in kept] == [7.0, 8.0, 9.0]
 
-    # adding a locale must not push the others' history out, or the median
-    # review count resets for every page whenever a target is added.
     def test_retains_per_site_and_locale_not_overall(self):
         results = [result(checked_at=float(i)) for i in range(5)]
         results += [result(locale="fr", checked_at=float(i)) for i in range(5)]

@@ -52,8 +52,6 @@ describe("buildReleaseManifest", () => {
     expect(manifest.artifacts.map((entry) => entry.target)).toEqual(["chrome-mv3", "firefox-mv2"]);
   });
 
-  // SPEC.md section 14: "bundle under 8 MB including the quantised
-  // embedding model". This is the one place that number is enforced.
   it("refuses a build over the 8 mb bundle budget", () => {
     expect(() =>
       buildReleaseManifest({
@@ -74,8 +72,6 @@ describe("buildReleaseManifest", () => {
     ).not.toThrow();
   });
 
-  // the sources zip AMO asks for is a release artifact but not an
-  // installed bundle, so the cap does not apply to it.
   it("exempts an artifact with no unpacked size from the budget", () => {
     expect(() =>
       buildReleaseManifest({
@@ -107,8 +103,6 @@ describe("buildReleaseManifest", () => {
     ).toThrow(/chrome-mv3.*firefox-mv2/);
   });
 
-  // a manifest whose commit is missing or abbreviated cannot be used to check a download against
-  // the repository, which is the only reason it exists.
   it("refuses anything but a full commit sha", () => {
     for (const commit of ["", "abc1234", "A".repeat(40), undefined]) {
       expect(() =>

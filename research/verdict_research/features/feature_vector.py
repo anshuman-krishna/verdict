@@ -33,8 +33,6 @@ from verdict_research.features.verification_concentration import (
 )
 from verdict_research.schema import Review
 
-# SPEC.md section 6, "minimum data thresholds". below any of these the
-# report says "not enough data" and shows no score at all.
 MINIMUM_REVIEW_COUNT = 30
 MINIMUM_DATED_REVIEW_COUNT = 20
 MINIMUM_HISTORY_DAYS = 21
@@ -45,15 +43,8 @@ _ISO_DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 _HAS_EXPLICIT_ZONE = re.compile(r"Z$|[+-]\d{2}:\d{2}$")
 
 
-# a zone-less datetime string ("2024-03-15T10:00:00") is ambiguous about which timezone it means,
-# while a date-only string ("2024-03-15") is not, by convention utc midnight. rather than let that
-# ambiguity make this function's output depend on the machine's timezone, a datetime with a time
-# component must carry an explicit "Z" or offset, and anything else raises.
 def day_index(iso: str) -> int:
     if "T" not in iso:
-        # the same shape check extension/src/score/featureVector.ts makes. Without it a page's own
-        # date string ("3 janvier 2026") reaches the int() calls below and raises a slicing error
-        # that says nothing about what was actually wrong.
         if not _ISO_DATE_ONLY.fullmatch(iso):
             raise ValueError(f"day_index requires an iso date with no ambiguous zone: {iso}")
         year, month, day = int(iso[0:4]), int(iso[5:7]), int(iso[8:10])
@@ -74,9 +65,6 @@ def meets_minimum_data_thresholds(reviews: list[Review]) -> bool:
     return max(dated_days) - min(dated_days) >= MINIMUM_HISTORY_DAYS
 
 
-# buckets star ratings 1 through 5 into proportions, matching the five bin
-# convention rating_deconvolution's organic_prior and injection_kernel use.
-# none when no review carries a rating at all.
 def build_rating_histogram(reviews: list[Review]) -> list[float] | None:
     rated = [r for r in reviews if r.rating is not None]
     if not rated:
@@ -88,8 +76,6 @@ def build_rating_histogram(reviews: list[Review]) -> list[float] | None:
     return [count / len(rated) for count in bins]
 
 
-# parallel to reviews, none where a review carries no date. listing_drift.py needs the undated
-# reviews in place rather than filtered out, since they still carry text.
 def derive_day_indices(reviews: list[Review]) -> list[int | None]:
     return [None if r.date is None else day_index(r.date) for r in reviews]
 
@@ -100,8 +86,6 @@ class DailyCounts:
     min_day: int
 
 
-# a dense, gap filled daily series, day 0 being the earliest dated review,
-# which is what detect_temporal_bursts expects. none when no review is dated.
 def build_daily_counts(reviews: list[Review]) -> DailyCounts | None:
     days = [day_index(r.date) for r in reviews if r.date is not None]
     if not days:
@@ -113,8 +97,6 @@ def build_daily_counts(reviews: list[Review]) -> DailyCounts | None:
     return DailyCounts(daily_counts=daily_counts, min_day=min_day)
 
 
-# whether each review's date falls inside one of the given bursts. a review
-# with no date is never inside a burst, since it has no day to place it in.
 def derive_inside_burst(reviews: list[Review], min_day: int, bursts: list[Burst]) -> list[bool]:
     result = []
     for review in reviews:
@@ -128,19 +110,11 @@ def derive_inside_burst(reviews: list[Review], min_day: int, bursts: list[Burst]
 
 @dataclass
 class FeatureVectorInputs:
-    # per SPEC.md 5.1, estimated per product category from the negative corpus, which does not exist
-    # yet. supplied by the caller rather than computed here.
     organic_prior: list[float]
     injection_kernel: list[float]
     window_days: int = 28
     percentile: float = 0.99
-    # SPEC.md 5.4 measures reviews against "the current product title and category". absent it the
-    # signal still reports its change point, which compares the reviews only against each other.
     product_text: str = ""
-    # SPEC.md 5.6, and only ever present when the user opted into the lookup and the service
-    # answered. absent is the default path and the SPEC.md section 13 row for an unreachable service
-    # alike: the signal is None rather than zero, so combine.py scores with the local model instead
-    # of reading "nobody flagged" off a lookup that never happened.
     flagged_reviewer_ids: set[str] | None = None
 
 
@@ -155,9 +129,6 @@ class FeatureVector:
     reviewer_graph: ReviewerGraphResult | None
 
 
-# wires the five local signals against raw extracted reviews, plus SPEC.md 5.6 when a lookup
-# supplied its input. the combiner that turns this into a probability and a band waits on ground
-# truth, that is SPEC.md section 6.
 def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> FeatureVector:
     meets_minimum_data = meets_minimum_data_thresholds(reviews)
 

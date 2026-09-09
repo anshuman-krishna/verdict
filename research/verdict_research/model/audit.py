@@ -7,9 +7,8 @@ from verdict_research.model.artifact import LOCAL_SLOT, SLOTS, ArtifactError, pa
 from verdict_research.model.combine import CombinerModel, ModelSet
 from verdict_research.model.pipeline import OperatingPoint, best_operating_point, report_problems
 
+
 # scores the shipped model, never refits
-
-
 @dataclass(frozen=True)
 class Audit:
     slot: str
@@ -17,7 +16,6 @@ class Audit:
     report: EvalReport
     operating_point: OperatingPoint | None
     problems: list[str]
-    # other priors would measure two changes
     corpus_priors: list[str]
     priors_match: bool
 

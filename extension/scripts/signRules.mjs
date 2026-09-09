@@ -1,12 +1,7 @@
 import { canonicalJson } from "../src/extract/canonicalJson.ts";
 import { sanitiseRulesDocument } from "../src/extract/validateRules.ts";
 
-// separate from the signing itself so it is testable without a keypair. imports the extension's own
-// modules: a second copy of the canonical encoding would drift, and a drift there silently
-// invalidates every signature
 
-// stricter than the loader on purpose: signing a field that will be discarded ships a fix that does
-// not apply
 export function publishProblems(document, previouslyPublishedVersion) {
   const problems = [];
   const sanitised = sanitiseRulesDocument(document);
@@ -20,8 +15,6 @@ export function publishProblems(document, previouslyPublishedVersion) {
   if (Object.keys(sanitised.rules.fields).length === 0) {
     problems.push("no fields, so this document would extract nothing");
   }
-  // against what is on the site, which is knowable, not the bundled version, which is whatever the
-  // last store release carried. republishing at or below it looks published and never applies
   if (
     typeof previouslyPublishedVersion === "number" &&
     document.version <= previouslyPublishedVersion

@@ -24,13 +24,8 @@ import Layout from "../../layouts/Layout.astro";
   <div id="app" hidden></div>
 
   <script>
-    // one of the two islands SITE.md allows. the presence content script sets the dataset attributes
-    // at document_start, so there is no polling and no hardcoded extension id
 
-    // DESIGN.md section 4, provisional band scale, mirrored from
-    // extension/src/score/report.ts so the two never quietly disagree.
     import { BAND_COLORS, BAND_LABELS, ROSETTE, UNKNOWN_BAND_COLOR } from "../../lib/rosette";
-    // SITE.md's own definition of "doubtful or worse".
     const DOUBTFUL_OR_WORSE = new Set(["doubtful", "heavily-manipulated"]);
 
     interface HistorySummaryEntry {
@@ -79,9 +74,6 @@ import Layout from "../../layouts/Layout.astro";
       return div.innerHTML;
     }
 
-    // simplified: a history entry carries no burst or duplicate share, so the harmonics are fixed and
-    // only the amplitude and colour vary. the amplitude range is the panel's, from the vocabulary
-
     function rosetteThumbnail(band: string | null, share: number | null): string {
       const color = band !== null ? (BAND_COLORS[band] ?? UNKNOWN_BAND_COLOR) : UNKNOWN_BAND_COLOR;
       const clampedShare = Math.min(1, Math.max(0, share ?? 0));
@@ -101,8 +93,6 @@ import Layout from "../../layouts/Layout.astro";
       </svg>`;
     }
 
-    // the extension serialises it, not this page: the file downloaded here is the same bytes the
-    // options page writes, and the csv format lives in one place.
     async function download(format: "json" | "csv"): Promise<void> {
       const response = await sendToExtension("verdict:history:export", { format });
       if (typeof response?.content !== "string") {

@@ -9,9 +9,8 @@ export interface HistoryEntry {
   timestamp: number;
   title: string;
   thumbnailUrl: string | null;
-  // unknown, because an entry written by an older build is still an entry
   report: unknown;
-  // SPEC.md section 10. no text, no reviewer id
+  // no text, no reviewer id
   featureVector?: FeatureVector;
 }
 
@@ -36,8 +35,6 @@ export async function listHistory(): Promise<HistoryEntry[]> {
     STORE_NAMES.history,
   );
   const entries = await requestToPromise<HistoryEntry[]>(store.getAll());
-  // id is a strictly increasing insertion order, used to break ties when two
-  // entries share a millisecond timestamp
   return entries.sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
 }
 

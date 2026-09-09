@@ -16,11 +16,6 @@ from verdict_research.features.feature_vector import FeatureVectorInputs
 from verdict_research.features.priors import placeholder_priors, priors_digest
 from verdict_research.shipped_extractor import NodeReviewExtractor
 
-# turns anshuman's labels plus the saved pages they name into the corpus.jsonl `just train` reads.
-# it writes features and labels only: no url, no title, no reviewer id, nothing that identifies a
-# listing. The fixture to row mapping is printed rather than stored, so tracing a row back needs
-# this run's output and the corpus alone is not a list of products.
-
 DEFAULT_FIXTURES = Path(__file__).resolve().parents[3] / "extension" / "fixtures"
 
 
@@ -76,9 +71,6 @@ def main(argv: list[str] | None = None, extract: Extract | None = None) -> int:
     if args.print_mapping:
         for label in labels:
             print(f"{label.fixture} -> {example_id_for(label.fixture)}")
-    # the priors are still the flat placeholders from schema/priors.json, and every feature in this
-    # corpus was computed against them. said on every run rather than in a docstring, because a
-    # model trained on one set of priors and shipped against another is not visible in model.json.
     print(
         "these features were computed against the provisional priors in schema/priors.json; "
         "SPEC.md 5.1 wants per category priors from the negative corpus, and this corpus has to be "

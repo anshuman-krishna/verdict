@@ -1,9 +1,5 @@
 import type { FixtureResult } from "./harness";
 
-// SPEC.md section 14, first acceptance criterion for version 0.1: "correct extraction on 95 percent
-// of the fixture corpus across at least four locales". Both halves are gates, and both are here
-// rather than in the test that calls this, so the number lives in one place and the standalone
-// runner and the vitest run cannot disagree about it.
 export const REQUIRED_PASS_RATE = 0.95;
 export const REQUIRED_LOCALE_COUNT = 4;
 
@@ -16,17 +12,12 @@ export interface LocaleTally {
 export interface CorpusReport {
   total: number;
   passed: number;
-  // null on an empty corpus. Zero would read as a measured failure, and an
-  // absent corpus has measured nothing at all.
   passRate: number | null;
   locales: LocaleTally[];
   meetsPassRate: boolean;
   meetsLocaleCoverage: boolean;
   meetsCriterion: boolean;
   failures: FixtureResult[];
-  // failures with no documented reason in their expectation file. These are
-  // the ones a per commit run fails on, since a fixture nobody wrote a
-  // reason for is a regression until somebody says otherwise.
   unexpectedFailures: FixtureResult[];
 }
 
@@ -105,9 +96,6 @@ export function formatReport(report: CorpusReport): string {
   return lines.join("\n");
 }
 
-// the distinction PLAN.md week 1 task 6 is verified on: a rule that ran and
-// matched nothing is a broken selector and reads as one, while no rule at
-// all is a gap in rules.json and says so instead.
 function describeStrategies(check: { strategies: FixtureResult["checks"][number]["strategies"] }): string {
   const strategies = check.strategies;
   if (strategies === null || strategies.length === 0) {

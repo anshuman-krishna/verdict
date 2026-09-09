@@ -121,7 +121,6 @@ class TestSummarize:
         summaries = summarize(first + second + third)
         assert len(summaries) == 1
         assert summaries[0].median_reviews_extracted == 30
-        # the most recent check wins for last verified, status, and version
         assert summaries[0].last_verified == 3000.0
         assert summaries[0].rules_version == 4
 

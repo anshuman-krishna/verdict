@@ -89,7 +89,6 @@ def test_the_reviewer_graph_slot_hangs_off_a_local_model():
     assert parsed.reviewer_graph == GRAPH_MODEL
 
 
-# every default analysis scores with the local model, so there is nothing to attach one to yet
 def test_a_graph_model_alone_is_refused():
     with pytest.raises(ArtifactError, match="train that first"):
         place_in_slot(
@@ -101,7 +100,6 @@ def test_a_graph_model_alone_is_refused():
         )
 
 
-# the two are fitted on different corpora, so retraining one must not silently drop the other
 def test_retraining_the_local_model_keeps_the_graph_model():
     with_graph = place_in_slot(
         local_artifact(), REVIEWER_GRAPH_SLOT, GRAPH_MODEL, trained_at=2.0, acceptance={}
@@ -120,7 +118,6 @@ def test_an_unknown_slot_is_refused():
         place_in_slot(local_artifact(), "elsewhere", MODEL, trained_at=1.0, acceptance={})
 
 
-# a build that predates SPEC.md 5.6 reads the top level keys and ignores the block it does not know
 def test_the_local_model_stays_at_the_top_level():
     artifact = place_in_slot(
         local_artifact(), REVIEWER_GRAPH_SLOT, GRAPH_MODEL, trained_at=2.0, acceptance={}

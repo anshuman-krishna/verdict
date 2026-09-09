@@ -11,15 +11,6 @@ from verdict_research.model.combine import flatten_feature_vector
 from verdict_research.schema import ProductSnapshot
 from verdict_research.shipped_extractor import ExtractorError, FullExtraction
 
-# the missing half of PLAN.md week 4. anshuman labels listings; model/pipeline.py trains on rows of
-# flat feature names; nothing turned one into the other, so a corpus.jsonl had to be produced by
-# hand or not at all.
-#
-# every row here comes out of the same two functions the extension runs, driven through the shipped
-# extractor rather than a python copy of it, so a feature in the corpus is the feature the product
-# computes. the labels are read, never derived: SPEC.md section 12's ground truth is anshuman's, and
-# a featuriser that could invent one would make the whole corpus measure itself.
-
 Extract = Callable[[str, str], FullExtraction]
 
 VALID_LABELS = (0, 1)
@@ -31,11 +22,8 @@ class LabelFileError(ValueError):
 
 @dataclass(frozen=True)
 class LabeledFixture:
-    # the base name shared by <name>.html and <name>.json in the fixture corpus
     fixture: str
     label: int
-    # SPEC.md section 12 names four sources and they are not equally strong, so a corpus that mixes
-    # them has to say which row came from which
     source: str | None = None
     notes: str | None = None
 
@@ -70,8 +58,6 @@ def read_label_file(path: Path) -> list[LabeledFixture]:
                 raise LabelFileError(f"{path}:{number} has no fixture name")
             if label not in VALID_LABELS:
                 raise LabelFileError(f"{path}:{number} labels {fixture} {label!r}, expected 0 or 1")
-            # two rows for one page is a disagreement about ground truth, and picking one of them
-            # here would bury it
             if fixture in seen:
                 raise LabelFileError(f"{path}:{number} labels {fixture} a second time")
             seen.add(fixture)
@@ -86,8 +72,6 @@ def read_label_file(path: Path) -> list[LabeledFixture]:
     return labels
 
 
-# mirrors extension/src/canary/extractOnce.ts's pairing rule: a page with no expectation file is an
-# unfinished fixture, not a skip, so it stops the run rather than quietly shrinking the corpus
 def read_fixture_url(fixtures: Path, fixture: str) -> str:
     page = fixtures / f"{fixture}.html"
     expectation = fixtures / f"{fixture}.json"
@@ -103,14 +87,10 @@ def read_fixture_url(fixtures: Path, fixture: str) -> str:
     return url
 
 
-# a truncated hash rather than the fixture name, which is an asin. dataset.py's example_id is
-# opaque on purpose: a corpus row identifies a row, never a product. the run prints the mapping so
-# a surprising row can still be traced back while the file itself carries none of it.
 def example_id_for(fixture: str) -> str:
     return hashlib.sha256(fixture.encode("utf-8")).hexdigest()[:16]
 
 
-# the same string extension/src/contentScript/orchestrator.ts passes to buildReport
 def product_text(product: ProductSnapshot) -> str:
     if product.category is None:
         return product.title
@@ -132,8 +112,6 @@ def featurise_extraction(
         product_text=product_text(extraction.product),
     )
     vector = build_feature_vector(extraction.reviews, inputs)
-    # SPEC.md section 6 refuses to score a listing under the minimum thresholds, so training on one
-    # would fit the model to listings the product will never show a number for
     if not vector.meets_minimum_data:
         return Skipped(labeled.fixture, "below the minimum data thresholds")
 
@@ -166,8 +144,6 @@ def featurise(
         html = (fixtures / f"{labeled.fixture}.html").read_text(encoding="utf-8")
         try:
             extraction = extract(html, url)
-        # one page the extractor cannot read is a gap in the corpus, not the end of the run: the
-        # summary names it, and forty pages do not have to be re-extracted to see the next failure
         except ExtractorError as error:
             run.skipped.append(Skipped(labeled.fixture, f"extraction failed: {error}"))
             continue

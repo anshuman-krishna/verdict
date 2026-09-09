@@ -1,11 +1,5 @@
 import type { Review } from "../extract/types";
 
-// load for the timing harness, not data. Nothing here is a fixture and nothing here carries a
-// label: the corpus in extension/fixtures and the labelled corpus in research/ are both hand built
-// (SPEC.md section 12). What this has to be realistic about is only the shape that costs time: how
-// many reviews, how much text each carries, how many of them are near duplicates of each other, and
-// how far apart their dates are, since those four are what the minhash, the burst detector, and the
-// bootstrap all scale on.
 
 const WORDS = [
   "arrived", "quickly", "quality", "feels", "solid", "battery", "lasts", "about",
@@ -14,8 +8,6 @@ const WORDS = [
   "expected", "instructions", "unclear", "works", "as", "described",
 ];
 
-// a small deterministic generator, so a slow run is reproducible and a
-// timing regression can be re-measured against the same load.
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -30,8 +22,6 @@ function mulberry32(seed: number): () => number {
 export interface SyntheticLoadOptions {
   count: number;
   seed?: number;
-  // share of reviews that repeat an earlier review's text, which is what
-  // gives the near duplication clustering something to do
   duplicateShare?: number;
   wordsPerReview?: number;
   daysSpanned?: number;
@@ -70,8 +60,6 @@ function sentence(random: () => number, words: number): string {
   return parts.join(" ");
 }
 
-// the same reviews as an embedded json block, so the timing run goes through the real extraction
-// path rather than starting from objects the extractor never had to find.
 export function syntheticProductPageHtml(reviews: readonly Review[], title: string): string {
   const payload = JSON.stringify({
     title,

@@ -1,17 +1,8 @@
-import { parseAmazonProductUrl } from "../extract/productPage";
+import { parseProductUrl } from "../extract/sites";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
 
-// PLAN.md week 7's canary needs one number from a live page: how many reviews the shipped extractor
-// finds on it today. PLAN.md week 4's corpus needs the reviews themselves, off a saved page. The
-// extractor is this package's own, and re-implementing it in python to answer either would put two
-// versions of the thing being watched in the repository, one of which nobody uses. So the python
-// side drives this instead.
-//
-// everything here runs the same two functions the content script runs. It deliberately adds no
-// fallback, no retry, and no leniency: a canary that is more forgiving than the product reports
-// health the product does not have.
 
 export interface CanaryExtraction {
   url: string;
@@ -19,13 +10,9 @@ export interface CanaryExtraction {
   locale: string | null;
   rulesVersion: number;
   reviewCount: number;
-  // null when the page did not identify itself, which is the same thing
-  // that makes the content script render nothing at all
   title: string | null;
 }
 
-// what a corpus row is built from. kept out of CanaryExtraction because the canary alerts on what
-// it finds, and an alert path is the last place review text belongs.
 export interface FullExtraction extends CanaryExtraction {
   product: ProductSnapshot | null;
   reviews: Review[];
@@ -36,7 +23,7 @@ export function extractFull(
   url: string,
   rules: RulesDocument,
 ): FullExtraction {
-  const page = parseAmazonProductUrl(url);
+  const page = parseProductUrl(url);
   const base = {
     url,
     site: page?.site ?? null,

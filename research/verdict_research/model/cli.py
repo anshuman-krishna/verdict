@@ -25,17 +25,7 @@ from verdict_research.model.pipeline import (
     train_pipeline,
 )
 
-# PLAN.md week 5's outcome as one command. SPEC.md section 4 calls model.json "a small parameter
-# file bundled into the extension at build time", so the default output path is the file
-# extension/src/score/model.ts imports; there is no separate copy step to forget.
-#
-# the corpus this reads is anshuman's (SPEC.md section 12) and so is the choice of features, which
-# is why --features is required rather than inferred. --list-features exists so the choice can be
-# made from what the corpus actually carries rather than from memory.
-
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2].parent / "extension/src/score/model.json"
-# written from the same run, because a second command to remember is a /method page that eventually
-# publishes numbers from a different model than the one that shipped
 DEFAULT_METHOD_OUTPUT = (
     Path(__file__).resolve().parents[2].parent / "site/src/data/methodEvaluation.json"
 )
@@ -82,8 +72,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--eval-output", help="write the full evaluation report as json")
     parser.add_argument("--method-output", default=str(DEFAULT_METHOD_OUTPUT))
-    # SPEC.md 5.6's model is fitted on a different corpus from the local one, so it is a separate
-    # run into a separate slot rather than a second half of this one. the other slot is preserved.
     parser.add_argument(
         "--slot",
         default=LOCAL_SLOT,
@@ -96,8 +84,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--iterations", type=int, default=2000)
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--l2", type=float, default=0.0)
-    # a model that misses section 14 is still worth inspecting, but it does not get bundled by
-    # accident: writing one takes saying so, and the file then records that it missed.
     parser.add_argument(
         "--write-below-criteria",
         action="store_true",
@@ -168,8 +154,6 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     write_model_artifact_file(args.output, artifact)
     print(f"wrote {args.output} ({args.slot})")
-    # the published accuracy describes the model every default analysis uses, and SPEC.md 5.6's is
-    # not that model: an opt in signal must not move a number the site states for everyone
     if args.slot == LOCAL_SLOT:
         write_method_document_file(build_method_document(run, trained_at), args.method_output)
         print(f"wrote {args.method_output}")
@@ -178,8 +162,6 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-# a run writes one slot and preserves the other, so it has to read what is there. an unreadable or
-# missing file is the absent form, which place_in_slot then refuses to hang a graph model on.
 def _existing_artifact(path: str) -> dict:
     try:
         with open(path, encoding="utf-8") as handle:

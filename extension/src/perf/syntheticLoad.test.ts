@@ -7,8 +7,6 @@ describe("syntheticReviews", () => {
     expect(syntheticReviews({ count: 25 })).toHaveLength(25);
   });
 
-  // a timing regression has to be re-measurable against the same load, or
-  // the measurement is just noise about which reviews happened to be built.
   it("is deterministic for a seed", () => {
     expect(syntheticReviews({ count: 20, seed: 7 })).toEqual(syntheticReviews({ count: 20, seed: 7 }));
   });

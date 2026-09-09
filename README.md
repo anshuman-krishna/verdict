@@ -24,7 +24,13 @@ extension/   typescript, wxt, manifest v3, chrome and firefox from one codebase
 research/    python, uv managed, feature extraction and model training
 service/     python, fastapi, the optional reviewer graph backend
 site/        astro, static output, no client framework
+schema/      constants both languages read, so neither can drift from the other
 ```
+
+Which storefronts are supported is data, not code. `schema/sites.json` carries each site's
+hosts, product URL shape, and review page template, and the extension derives its URL parsing,
+its manifest matches, and the website bridge's allowlist from that one file. Adding a
+storefront is an entry there plus a rules file in `extension/src/extract/rules/`.
 
 `research/` and `extension/` implement the same scoring maths twice, once in Python and
 once in TypeScript, checked against each other by a parity test over shared vectors. A

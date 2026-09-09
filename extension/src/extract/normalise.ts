@@ -1,14 +1,7 @@
-// parseFloat reads "8,043" as 8 and "4,6" as 4, and v8's Date.parse reads "3 janvier 2026" as local
-// midnight, so the same review lands on a different day per timezone. both fail silently.
-// null rather than a guess for anything a locale cannot read. an unknown locale normalises nothing.
-// in code, not rules.json: selectors change constantly, month names and separators do not.
-
 export interface LocaleFormat {
   groupSeparators: readonly string[];
   decimalSeparator: string;
-  // lowercased month name or abbreviation to its 1 based number
   months: ReadonlyMap<string, number>;
-  // how to read a date written only in digits
   numericOrder: "dmy" | "mdy";
 }
 
@@ -67,7 +60,6 @@ const GERMAN_MONTHS = monthTable([
   ["dezember", "dez"],
 ]);
 
-// plain, no break, and narrow no break: the three amazon emits as fr and de group separators
 const SPACES = [" ", " ", " "] as const;
 
 export const LOCALE_FORMATS: Readonly<Record<string, LocaleFormat>> = {
@@ -107,7 +99,6 @@ function escapeClass(characters: readonly string[]): string {
   return characters.map((character) => character.replace(/[\\\]^-]/g, "\\$&")).join("");
 }
 
-// a group separator counts only with three digits after it, so french "4.6" is four, not forty six
 function numberPattern(format: LocaleFormat): RegExp {
   const group = escapeClass(format.groupSeparators);
   const decimal = escapeClass([format.decimalSeparator]);
@@ -116,7 +107,6 @@ function numberPattern(format: LocaleFormat): RegExp {
   );
 }
 
-// null rather than a partial read: "8,043" resolving to 8 is the failure this exists to remove
 export function normaliseNumber(raw: string, locale: string): number | null {
   const format = localeFormat(locale);
   if (format === null) {
@@ -148,7 +138,6 @@ function tokenise(raw: string): Token[] {
   return tokens;
 }
 
-// a date the scorer cannot place beats one placed in the wrong month, so anything unreadable is null
 export function normaliseDate(raw: string, locale: string): string | null {
   const trimmed = raw.trim();
   const iso = ISO_DATE.exec(trimmed);
@@ -172,7 +161,6 @@ function fromMonthName(raw: string, format: LocaleFormat): string | null {
   }
   const month = format.months.get((tokens[monthIndex] as Token).text) as number;
 
-  // nearest to the month, so "5 out of 5 stars, reviewed on 3 January 2026" does not read as the 5th
   const yearIndex = nearestNumber(tokens, monthIndex, (text) => text.length === 4);
   if (yearIndex === null) {
     return null;
@@ -229,12 +217,10 @@ function fromDigits(raw: string, format: LocaleFormat): string | null {
   return buildDate(year, month, day);
 }
 
-// amazon does not write two digit years; if one appears, this century is the less strange guess
 function expandYear(year: number, digits: number): number {
   return digits === 2 ? 2000 + year : year;
 }
 
-// round trips through Date.UTC so 31 february comes back null instead of rolling into march
 function buildDate(year: number, month: number, day: number): string | null {
   if (!Number.isInteger(year) || year < 1000 || year > 9999) {
     return null;

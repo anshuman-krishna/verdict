@@ -7,9 +7,6 @@ import {
   reviewerHash,
 } from "./lookup";
 
-// deterministic in the sense that it never repeats and every call is a
-// different value, which is all buildLookupRequest's dedup/shuffle logic
-// needs to be exercised meaningfully, unlike a fixed constant.
 function sequentialRandom(): () => number {
   let n = 0;
   return () => {
@@ -80,8 +77,6 @@ describe("matchFlaggedReviewers", () => {
   it("does not flag a reviewer merely sharing a prefix with a flagged hash", async () => {
     const salt = "salt";
     const cleanHash = await reviewerHash("clean-user", salt);
-    // a bucket that happens to share this reviewer's prefix, but whose
-    // listed full hash is someone else's
     const response = {
       matches: { [cleanHash.slice(0, PREFIX_LENGTH)]: ["not-actually-this-users-hash"] },
     };

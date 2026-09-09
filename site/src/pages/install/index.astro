@@ -82,9 +82,6 @@ import Layout from "../../layouts/Layout.astro";
   </section>
 
   <script>
-    // progressive enhancement only: every section above is already in the
-    // page and readable without javascript, this just reorders the matching
-    // block to the top so it is the first thing a visitor sees
     const isFirefox = navigator.userAgent.includes("Firefox");
     const matchId = isFirefox ? "firefox" : "chromium";
     const match = document.getElementById(matchId);

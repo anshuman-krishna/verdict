@@ -130,7 +130,6 @@ describe("the reviewer network row", () => {
     identifiedReviewCount: 10,
   };
 
-  // a lookup that never ran is one row fewer, not a row saying nothing was found
   it("is absent when no lookup supplied a result", () => {
     const signals = buildEvidence(baseVector()).map((row) => row.signal);
     expect(signals).not.toContain("reviewer network");
@@ -162,7 +161,6 @@ describe("the reviewer network row", () => {
     expect(row?.value).toBe(0);
   });
 
-  // DESIGN.md section 10: statistical, never accusatory
   it("describes a pattern rather than an accusation", () => {
     const detail = buildEvidence(baseVector({ reviewerGraph: graph })).at(-1)?.detail ?? "";
     for (const word of ["fake", "fraud", "scam", "paid", "lying"]) {

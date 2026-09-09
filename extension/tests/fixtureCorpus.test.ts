@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { ExpectationError } from "../src/fixtures/expectation";
 import { CorpusError, loadCorpus } from "./fixtureCorpus";
 
-// synthetic directories, never the real corpus in extension/fixtures.
 
 function corpusDir(files: Record<string, string>): string {
   const directory = mkdtempSync(join(tmpdir(), "verdict-corpus-"));

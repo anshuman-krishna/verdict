@@ -10,10 +10,6 @@ from verdict_research.model.pipeline import (
     train_pipeline,
 )
 
-# synthetic examples, built to exercise the pipeline's ordering and its
-# refusals. They are not a corpus and carry no claim about any real listing:
-# SPEC.md section 12's corpus and its labels are anshuman's.
-
 
 def example(index: int, signal: float, label: int, *, missing: bool = False) -> LabeledExample:
     return LabeledExample(
@@ -79,7 +75,6 @@ def test_acceptance_summary_reports_what_was_measured():
 
 
 def test_acceptance_problems_names_each_unmet_criterion():
-    # a corpus with no relationship between the feature and the label
     noise = [example(index, 0.5, index % 2) for index in range(200)]
     run = train_pipeline(noise, ["signal"], seed=2)
     problems = acceptance_problems(run)

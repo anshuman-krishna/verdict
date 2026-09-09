@@ -6,8 +6,6 @@ import { renderPopup, type PopupCallbacks } from "./historyList";
 function entry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
   return {
     id: 1,
-    // noon utc, so the formatted local date stays "Jan 15" across any
-    // realistic timezone offset rather than rolling to the previous day
     timestamp: Date.parse("2026-01-15T12:00:00Z"),
     title: "a product",
     thumbnailUrl: null,

@@ -92,7 +92,6 @@ class TestReadLabelFile:
         with pytest.raises(LabelFileError, match="expected 0 or 1"):
             read_label_file(path)
 
-    # two rows for one page is a disagreement about ground truth
     def test_rejects_the_same_fixture_twice(self, tmp_path):
         path = write_labels(
             tmp_path / "labels.jsonl",
@@ -129,7 +128,6 @@ class TestReadFixtureUrl:
 
 
 class TestExampleId:
-    # the corpus must not be a list of products
     def test_the_row_id_is_not_the_fixture_name(self):
         assert "B0ABCDEF12" not in example_id_for("B0ABCDEF12")
 
@@ -168,7 +166,6 @@ class TestFeaturiseExtraction:
         assert result.metadata["source"] == "solicitation"
         assert "amazon.com" not in json.dumps(result.metadata)
 
-    # SPEC.md section 6 shows no score under the thresholds, so the model must not be fitted there
     def test_skips_a_listing_under_the_minimum_data_thresholds(self):
         result = featurise_extraction(
             extraction(reviews(5), snapshot()), LabeledFixture("one", 1), PRIORS
@@ -202,7 +199,6 @@ class TestFeaturise:
         assert len(run.examples) == 2
         assert run.skipped == []
 
-    # one unreadable page is a gap in the corpus, not the end of the run
     def test_an_extractor_failure_skips_one_page_and_keeps_going(self, tmp_path):
         write_fixture(tmp_path, "one", "https://www.amazon.com/dp/B0ABCDEF12")
         write_fixture(tmp_path, "two", "https://www.amazon.fr/dp/B0ABCDEF13")

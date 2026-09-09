@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { ReportOutcome } from "../score/buildReport";
 import { analyzeViaHiddenTab, type TabRelayDeps } from "./analyzeViaTab";
 
-// a controllable stand in for setTimeout/clearTimeout, so timeout
-// behaviour is deterministic instead of racing real timers.
 function fakeTimer() {
   let scheduled: (() => void) | null = null;
   let cleared = false;
@@ -48,7 +46,6 @@ describe("analyzeViaHiddenTab", () => {
       addResultListener,
     });
 
-    // let createTab's promise settle before the listener fires
     await Promise.resolve();
     await Promise.resolve();
     listener?.(42, { status: "no-model" });
@@ -137,9 +134,7 @@ describe("analyzeViaHiddenTab", () => {
     await Promise.resolve();
     await Promise.resolve();
     listener?.(1, { status: "no-model" });
-    // a late, spurious second message for the same tab after settling
     listener?.(1, { status: "not-enough-data" });
-    // and a timeout firing after settling too
     timer.fire();
 
     await expect(promise).resolves.toEqual({ status: "no-model" });

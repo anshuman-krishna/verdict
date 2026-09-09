@@ -2,9 +2,6 @@
 import Layout from "../../layouts/Layout.astro";
 import evaluation from "../../data/methodEvaluation.json";
 
-// the numbers below are generated from the evaluation run that produced the shipped model
-// (research/verdict_research/eval/method_document.py), never typed here: a published accuracy claim
-// that nothing checks against the model is how a page ends up describing last month's model.
 const published = evaluation.published === true;
 const accuracy = (evaluation as Record<string, any>).accuracy;
 const criteria = (evaluation as Record<string, any>).criteria;

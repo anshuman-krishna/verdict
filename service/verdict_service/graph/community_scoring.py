@@ -4,9 +4,6 @@ from dataclasses import dataclass
 
 from verdict_service.graph.backbone import BackboneEdge
 
-# SPEC.md section 5.6 step 4. the four statistics below have no judgement call in them; combining
-# them and the flagging threshold are anshuman's, offered here as proposals so the pipeline runs
-
 
 @dataclass
 class ReviewRecord:
@@ -29,8 +26,6 @@ def graph_density(community: list[str], edges: list[BackboneEdge]) -> float:
     return internal_edges / max_edges
 
 
-# normalised against the widest spread on a 1 to 5 scale. under two ratings returns 0, not
-# "homogeneous": no evidence is not the same claim as agreement
 def rating_homogeneity(ratings: list[float]) -> float:
     if len(ratings) < 2:
         return 0.0
@@ -40,9 +35,6 @@ def rating_homogeneity(ratings: list[float]) -> float:
     return max(0.0, 1 - stddev / 2)
 
 
-# 1 minus the observed date range normalised against a year: reviews all landing on the same day
-# score 1, reviews spread across a year or more score near 0. A year is a round, defensible
-# reference span for "spread out", not a fitted or measured constant.
 _TEMPORAL_REFERENCE_SPAN_DAYS = 365
 
 
@@ -53,7 +45,6 @@ def temporal_clustering(day_indices: list[int]) -> float:
     return max(0.0, 1 - spread / _TEMPORAL_REFERENCE_SPAN_DAYS)
 
 
-# normalised shannon entropy. one category is not coherence measured, it is no evidence either way
 def category_incoherence(categories: list[str]) -> float:
     if not categories:
         return 0.0
@@ -78,8 +69,6 @@ class CommunityScore:
     flagged: bool
 
 
-# the combined score is an unweighted mean of the four components: a
-# proposal, not a fitted or ratified weighting.
 def score_community(
     community: list[str],
     edges: list[BackboneEdge],

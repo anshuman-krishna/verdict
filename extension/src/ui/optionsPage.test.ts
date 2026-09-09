@@ -160,8 +160,6 @@ describe("renderOptions", () => {
   });
 });
 
-// PRIVACY.md section 6: history is local, so uninstalling takes it with it,
-// "and it is avoidable with one sentence".
 describe("the history loss notice", () => {
   it("warns that uninstalling deletes history, beside the export buttons", () => {
     const container = document.createElement("div");

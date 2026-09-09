@@ -49,14 +49,10 @@ describe("BridgeRateLimiter", () => {
     }
     expect(limiter.allow("https://verdict.tools", "verdict:analyze")).toBe(false);
 
-    // one tick past the oldest hit's window, so exactly one allowance
-    // comes back and no more
     time.advance(windowMs + 1);
     expect(limiter.allow("https://verdict.tools", "verdict:analyze")).toBe(true);
   });
 
-  // a rejected caller that still spent an allowance could hold itself out
-  // indefinitely by retrying, which is a worse failure than the limit.
   it("consumes nothing on a rejected request", () => {
     const time = clock();
     const limiter = new BridgeRateLimiter(time.now);
@@ -77,8 +73,6 @@ describe("BridgeRateLimiter", () => {
     );
   });
 
-  // externally_connectable allows every localhost port, so the map of
-  // tracked origins has to be bounded.
   it("stops tracking the least recently seen origin past its cap", () => {
     const time = clock();
     const limiter = new BridgeRateLimiter(time.now);
@@ -86,8 +80,6 @@ describe("BridgeRateLimiter", () => {
       time.advance(1);
       limiter.allow(`http://localhost:${port}`, "verdict:analyze");
     }
-    // the earliest origin was evicted, so it starts fresh rather than
-    // being remembered forever
     expect(limiter.allow("http://localhost:0", "verdict:analyze")).toBe(true);
   });
 

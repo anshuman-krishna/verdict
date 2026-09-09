@@ -1,15 +1,10 @@
 import { resolveField } from "./interpreter";
 import { normaliseDate, normaliseNumber } from "./normalise";
 import type { RulesDocument } from "./rules";
-import type { ParsedProductPage } from "./productPage";
+import type { ParsedProductPage } from "./sites";
 import type { ProductSnapshot, Review } from "./types";
 
-// coercion here is generic: no amazon field names, they live in the rules file.
-// a bare selector yields one string per element and so cannot be a review source; composite can,
-// and it yields the strings the page wrote, which is why every coercion below accepts a string
 
-// an unreadable date becomes null rather than one placed in the wrong month, or a different month
-// for every reader's timezone
 function coerceReview(value: unknown, locale: string): Review | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -24,7 +19,6 @@ function coerceReview(value: unknown, locale: string): Review | null {
   };
 }
 
-// json carries a real number, a selector never does, so only the string needs the locale's separators
 function coerceNumber(value: unknown, locale: string): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -52,7 +46,6 @@ function firstString(root: ParentNode, rules: RulesDocument, field: string): str
   return typeof first === "string" ? first : null;
 }
 
-// parseFloat reads "8,043 global ratings" as 8 and "4,6 von 5" as 4
 function firstNumber(
   root: ParentNode,
   rules: RulesDocument,
@@ -63,7 +56,6 @@ function firstNumber(
   return raw === null ? null : normaliseNumber(raw, locale);
 }
 
-// title has no honest fallback, so it decides whether extraction produced a usable snapshot
 export function extractProductSnapshot(
   root: ParentNode,
   rules: RulesDocument,

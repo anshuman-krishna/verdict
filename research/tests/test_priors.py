@@ -22,8 +22,6 @@ def test_carries_the_product_text_the_drift_signal_needs():
     assert placeholder_priors("a knife set kitchen").product_text == "a knife set kitchen"
 
 
-# a corpus built against one set of priors and a model shipped against another is invisible in
-# model.json, so the digest is what tells the two apart
 def test_the_digest_changes_when_the_priors_do():
     base = placeholder_priors()
     changed = placeholder_priors()

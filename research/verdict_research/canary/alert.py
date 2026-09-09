@@ -4,19 +4,6 @@ from typing import Literal
 
 from verdict_research.canary.check import CanarySummary, Health
 
-# SPEC.md section 13's failure table, the row that has no code behind it: "selectors broken: silent
-# fallback chain, then [not enough data], plus a canary alert to the maintainer." check.py already
-# classifies health per site and locale; this decides which of those classifications are worth
-# waking somebody for.
-#
-# only transitions alert. A locale that has been failing for a week is already known, and re-sending
-# it every run is how a canary becomes something its maintainer filters out of their inbox, which is
-# worse than not having one. Recoveries are sent too, for the same reason in reverse: whoever was
-# told it broke should not have to poll the status page to find out it stopped.
-#
-# transport is injected. Where an alert goes (email, a webhook, a phone) is a deployment decision,
-# and one that needs credentials this repository does not hold.
-
 Direction = Literal["broke", "worsened", "recovered", "appeared"]
 
 BROKEN: tuple[Health, ...] = ("degraded", "failed")
@@ -28,8 +15,6 @@ class CanaryAlert:
     locale: str
     previous: Health | None
     current: Health
-    # "broke", "worsened", "recovered", or "appeared" for a target whose
-    # first ever run was already unhealthy.
     direction: Direction
 
 
@@ -42,14 +27,9 @@ def _direction(previous: Health | None, current: Health) -> Direction | None:
         return "broke"
     if current == "healthy":
         return "recovered"
-    # degraded to failed is worth sending, failed to degraded is a partial
-    # recovery and is not: the maintainer already knows this one is broken.
     return "worsened" if current == "failed" else None
 
 
-# compares the run that just finished against the last one, by site and locale. A target present in
-# the previous run and absent from this one is not alerted on: that means somebody removed it from
-# the target list, which is a deliberate act, not a fault.
 def decide_alerts(previous: list[CanarySummary], current: list[CanarySummary]) -> list[CanaryAlert]:
     previous_by_target = {(row.site, row.locale): row for row in previous}
     alerts = []
@@ -77,8 +57,6 @@ def format_alert_message(alerts: list[CanaryAlert]) -> str:
     return "\n".join(lines)
 
 
-# sends at most one message per run rather than one per alert, so a layout
-# change that breaks all four locales at once is one notification.
 def send_alerts(alerts: list[CanaryAlert], send: Callable[[str], None]) -> bool:
     if not alerts:
         return False

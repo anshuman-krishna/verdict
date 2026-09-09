@@ -35,15 +35,11 @@ describe("sanitiseRulesDocument", () => {
     expect(sanitiseRulesDocument(value)).toBeNull();
   });
 
-  // a document that extracts nothing is an outage delivered over the
-  // network, and the bundled rules are strictly better than that.
   it("refuses a document with no usable field left", () => {
     expect(sanitiseRulesDocument(document({}))).toBeNull();
     expect(sanitiseRulesDocument(document({ title: { strategy: "telepathy" } }))).toBeNull();
   });
 
-  // a rules version using a strategy this build predates should still deliver every other fix in
-  // it, so one unusable field is dropped rather than costing the whole document.
   it("drops an unusable field and keeps the rest, saying which", () => {
     const result = sanitiseRulesDocument(
       document({ title: SELECTOR, reviews: { strategy: "from-the-future" } }),
@@ -91,8 +87,6 @@ describe("sanitiseRulesDocument", () => {
       expect(result?.problems[0]).toMatch(/container/);
     });
 
-    // every container would produce an empty record, which the interpreter
-    // then drops, so this is an extraction of zero dressed as a rule.
     it("drops a composite with no fields", () => {
       const result = sanitiseRulesDocument(
         document({ title: SELECTOR, reviews: { ...composite, fields: {} } }),
@@ -127,8 +121,6 @@ describe("sanitiseRulesDocument", () => {
       expect(sanitiseRulesDocument(document({ title: rule }))?.problems).toEqual([]);
     });
 
-    // a cap so validation cannot be made to walk as far as the file is
-    // long by a document built to do exactly that.
     it("drops a chain deeper than the cap", () => {
       let rule: unknown = SELECTOR;
       for (let index = 0; index < 40; index += 1) {

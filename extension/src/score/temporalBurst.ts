@@ -11,9 +11,6 @@ export interface TemporalBurstResult {
   largestBurstShare: number;
 }
 
-// smallest k such that P(Poisson(lambda) <= k) >= p, via direct cumulative
-// summation. fine for the small counts a review timeline produces; lambda=0
-// is a degenerate distribution with all mass at 0.
 export function poissonQuantile(lambda: number, p: number): number {
   if (lambda === 0) {
     return 0;
@@ -38,10 +35,6 @@ function median(values: readonly number[]): number {
   return sorted[mid] ?? 0;
 }
 
-// SPEC.md 5.2. dailyCounts[i] is the number of reviews that arrived on day i of a dense, gap filled
-// daily series. the baseline for day i is the median of the windowDays days strictly before it
-// (never including day i itself, so a burst is never partly measured against its own count); day 0
-// has no preceding history and is never flagged. adjacent flagged days merge into one burst.
 export function detectTemporalBursts(
   dailyCounts: readonly number[],
   windowDays = 28,

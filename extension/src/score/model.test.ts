@@ -36,8 +36,6 @@ describe("parseModelArtifact", () => {
     expect(parseModelArtifact({ ...PRESENT, artifactVersion: ARTIFACT_VERSION + 1 })).toBeNull();
   });
 
-  // every one of these would otherwise become a model that quietly predicts
-  // something, which is worse than no model at all.
   it("refuses a present artifact missing its intercept", () => {
     const { intercept: _omitted, ...withoutIntercept } = PRESENT;
     expect(parseModelArtifact(withoutIntercept)).toBeNull();
@@ -86,7 +84,6 @@ describe("parseModelArtifact", () => {
     expect(parsed?.local.intercept).toBe(-1.5);
   });
 
-  // an opt in almost nobody turns on must not be able to take the score away from everybody
   it("drops a malformed reviewer graph block and keeps the local model", () => {
     const parsed = parseModelArtifact({ ...PRESENT, reviewerGraph: { intercept: "no" } });
     expect(parsed?.reviewerGraph).toBeNull();
@@ -101,8 +98,6 @@ describe("parseModelArtifact", () => {
 });
 
 describe("the committed model.json", () => {
-  // guards the file itself, not the parser: a malformed artifact would otherwise reach the bundle
-  // as a silent null and every report would say "no model" with nothing explaining why.
   it("is either the stated absent form or a model that parses", () => {
     const record = committed as Record<string, unknown>;
     expect(record.artifactVersion).toBe(ARTIFACT_VERSION);

@@ -51,8 +51,6 @@ def test_refuses_a_plain_http_url():
         parse_targets(VALID.replace("https://", "http://"))
 
 
-# a floor of zero would make every page healthy forever, which is the one
-# value that turns the canary off without looking like it is off.
 def test_refuses_a_floor_below_one():
     with pytest.raises(TargetsError, match="positive integer"):
         parse_targets(VALID.replace("20", "0"))
@@ -80,8 +78,6 @@ def test_reading_a_missing_file_is_an_error_not_an_empty_list(tmp_path):
 
 
 def test_the_example_file_parses():
-    # it ships with placeholder ids, but its shape has to stay valid or it
-    # is documentation for a format nothing accepts
     from pathlib import Path
 
     example = Path(__file__).resolve().parents[1] / "canary-targets.example.json"

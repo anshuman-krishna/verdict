@@ -43,8 +43,6 @@ describe("the composite strategy", () => {
     expect(resolveField(parse(REVIEW_BLOCKS), COMPOSITE)).toHaveLength(2);
   });
 
-  // the failure a per page selector would produce: every field taking the
-  // first match on the page, so every review looks like the first one.
   it("scopes each field to its own container", () => {
     const records = resolveField(parse(REVIEW_BLOCKS), COMPOSITE) as Record<string, unknown>[];
     expect(records[0]?.text).toBe("a genuine review with real detail");
@@ -67,8 +65,6 @@ describe("the composite strategy", () => {
     expect(records[0]).toEqual({ text: "only a body", verified: false });
   });
 
-  // an empty record is not a review, and counting one would inflate the
-  // count SPEC.md section 6's thresholds are measured against.
   it("drops a container that matched no field at all", () => {
     expect(resolveField(parse(`<div data-hook="review"></div>`), COMPOSITE)).toEqual([]);
   });
@@ -110,8 +106,6 @@ describe("the presence strategy", () => {
     expect(resolveField(parse(`<b class="badge"></b>`), { strategy: "presence", value: ".badge" })).toEqual([true]);
   });
 
-  // false is an answer, so it must not look like a failed match, or a
-  // fallback would fire and report someone else's badge.
   it("is false when it does not, rather than falling through", () => {
     const rule: FieldRule = {
       strategy: "presence",
@@ -146,9 +140,6 @@ describe("tracing the new strategies", () => {
   });
 });
 
-// SPEC.md section 9's own rules.json example falls back from an embedded json path to a selector
-// for the reviews field. Before the composite strategy that fallback extracted nothing, so the most
-// important field in the document was the one field with no working fallback.
 describe("reviews through a fallback chain", () => {
   const RULES: RulesDocument = {
     version: 1,

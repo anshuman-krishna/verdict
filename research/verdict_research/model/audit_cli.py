@@ -8,8 +8,6 @@ from verdict_research.model.artifact import LOCAL_SLOT, SLOTS, ArtifactError
 from verdict_research.model.audit import Audit, audit_artifact
 from verdict_research.model.cli import DEFAULT_OUTPUT
 
-# reads model.json, never writes it
-
 
 def _print(audit: Audit, corpus: str) -> None:
     point = audit.operating_point

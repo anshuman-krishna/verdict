@@ -4,11 +4,6 @@ import { describe, expect, it } from "vitest";
 import { buildContributionEdge } from "../src/graph/edge";
 import type { Review } from "../src/extract/types";
 
-// the other half of service/tests/test_contribution_contract.py. Both read
-// tests/contract/contributionBatch.json, the way both scorers read tests/parity/vectors.jsonl,
-// because the two sides disagreeing about field names is a failure that shows up only in
-// production: the service was rejecting every real batch with a 422 while both suites passed, since
-// each was asserting against the shape it had built itself.
 
 const CONTRACT = resolve(import.meta.dirname, "..", "..", "tests", "contract", "contributionBatch.json");
 

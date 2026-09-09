@@ -1,12 +1,6 @@
 import type { FeatureVector } from "./featureVector";
 import type { EvidenceRow, EvidenceStrength } from "./report";
 
-// SPEC.md section 2 promises "the evidence, one expandable row per signal, in plain language", and
-// DESIGN.md's panel mock names the four rows this produces: rating shape, arrival timing, duplicate
-// text, different product. Neither document sets the weak/moderate/strong cut points, so the
-// thresholds below are a proposal, in the same spirit as rosette.ts's harmonic mapping: not a
-// ratified spec line, and expected to move once SPEC.md section 16's open questions are settled.
-// DESIGN.md section 10 governs the wording: statistical, never accusatory.
 
 function strengthFromRatio(value: number, weak: number, moderate: number): EvidenceStrength {
   if (value < weak) {
@@ -73,9 +67,6 @@ function duplicateTextRow(vector: FeatureVector): EvidenceRow {
     signal: "duplicate text",
     strength: strengthFromRatio(result.duplicateReviewShare, 0.05, 0.15),
     value: result.duplicateReviewShare,
-    // SPEC.md 5.5: "review farms increasingly generate text with language
-    // models, so near duplication is a decaying signal", stated in the
-    // methodology page copy, not repeated here per row.
     detail: `${result.clusterCount} ${result.clusterCount === 1 ? "cluster" : "clusters"} of near duplicate text, about ${percent} percent of reviews with text.`,
   };
 }
@@ -86,9 +77,6 @@ function isoDay(day: number): string {
   return new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
-// SPEC.md 5.4 proposes "412 of these reviews describe a different product". the bundled embedder is
-// lexical, not the sentence model that line assumes, so this says what it can actually defend: no
-// shared wording. SPEC.md section 13's row for the model failing to load is the null case here.
 function differentProductRow(vector: FeatureVector): EvidenceRow {
   const result = vector.listingDrift;
   if (result.embeddedCount === 0) {
@@ -108,10 +96,6 @@ function differentProductRow(vector: FeatureVector): EvidenceRow {
   };
 }
 
-// SPEC.md 5.6, and section 4: opt in, off by default, version 0.2. what makes a community flagged
-// is step 4 of 5.6 and is anshuman's, decided on the service and not here. absent when the lookup
-// never ran, which is one row fewer rather than a row saying nothing was found: those are different
-// facts and the panel must not report the first as the second.
 function reviewerNetworkRow(result: NonNullable<FeatureVector["reviewerGraph"]>): EvidenceRow {
   if (result.identifiedReviewCount === 0) {
     return { signal: "reviewer network", strength: "none", value: null, detail: "No reviewer identifiers to check against the network." };

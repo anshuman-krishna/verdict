@@ -11,9 +11,6 @@ from verdict_research.eval.method_document import (
 )
 from verdict_research.model.pipeline import train_pipeline
 
-# synthetic, like test_model_pipeline.py: this checks what the document carries, never any claim
-# about a real listing. what the numbers mean, and the words around them, stay anshuman's.
-
 
 def corpus(count: int = 400, separable: bool = True) -> list[LabeledExample]:
     return [
@@ -66,7 +63,6 @@ def test_the_targets_travel_with_the_measurements(run):
     assert criteria["problems"] == []
 
 
-# a page that only ever publishes runs that passed would make the passes worth less.
 def test_a_run_that_misses_is_still_published_and_says_so():
     run = train_pipeline(corpus(separable=False), ["signal"], seed=2)
     criteria = build_method_document(run, trained_at=1.0)["criteria"]
@@ -89,7 +85,6 @@ def test_written_file_sorts_keys_and_ends_in_a_newline(tmp_path, run):
 
 
 def test_the_committed_document_is_the_absent_form():
-    # a synthetic model's accuracy numbers must never be what the site publishes
     from pathlib import Path
 
     path = Path(__file__).resolve().parents[2] / "site" / "src" / "data" / "methodEvaluation.json"

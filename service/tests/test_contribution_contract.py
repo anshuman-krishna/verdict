@@ -7,11 +7,6 @@ from fastapi.testclient import TestClient
 from verdict_service.api.contribution import create_contribution_router
 from verdict_service.graph.contribution_store import InMemoryContributionEdgeStore
 
-# tests/contract/contributionBatch.json is written the way the extension actually puts a batch on
-# the wire. This file reads it rather than restating it, which is the whole point: the service used
-# to reject every real batch with a 422 while every test here passed, because the tests wrote the
-# field names the python model declared and nobody compared them against what javascript sends.
-
 CONTRACT = Path(__file__).resolve().parents[2] / "tests" / "contract" / "contributionBatch.json"
 
 
@@ -43,8 +38,6 @@ def test_every_field_arrives_with_its_value_intact():
     assert stored[1].minhash_signature == ["1043", "77", "9182"]
 
 
-# "not stated" is not the same claim as "not verified", and a null that
-# arrived as false would be a claim the page never made.
 def test_a_null_verified_flag_stays_null():
     store = InMemoryContributionEdgeStore()
     client(store).post("/v1/graph/contribute", json=batch())
@@ -53,8 +46,6 @@ def test_a_null_verified_flag_stays_null():
 
 
 def test_the_fixture_is_camel_case_throughout():
-    # a snake_case key creeping into the fixture would make this file agree
-    # with the model and still not describe what the extension sends
     for edge in batch()["edges"]:
         for key in edge:
             assert "_" not in key, key

@@ -1,0 +1,17 @@
+{
+  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, and the bridge allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules, not a code change.",
+  "sites": [
+    {
+      "id": "amazon",
+      "locales": {
+        "com": { "host": "www.amazon.com", "domain": "amazon.com" },
+        "fr": { "host": "www.amazon.fr", "domain": "amazon.fr" },
+        "de": { "host": "www.amazon.de", "domain": "amazon.de" },
+        "co.uk": { "host": "www.amazon.co.uk", "domain": "amazon.co.uk" }
+      },
+      "productPath": "/(?:dp|gp/product)/([A-Za-z0-9]{10})(?:[/?]|$)",
+      "productId": "^[A-Z0-9]{10}$",
+      "reviewPath": "/product-reviews/{productId}/?pageNumber={pageNumber}"
+    }
+  ]
+}

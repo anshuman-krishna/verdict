@@ -27,9 +27,7 @@ describe("fnv1a64", () => {
 
 describe("shingle", () => {
   it("produces every overlapping 5 character window", () => {
-    // "hello" is exactly 5 characters, so it is a single shingle
     expect(shingle("hello", 5)).toEqual(new Set(["hello"]));
-    // "helloo" (6 chars) produces two overlapping windows
     expect(shingle("helloo", 5)).toEqual(new Set(["hello", "elloo"]));
   });
 
@@ -45,7 +43,6 @@ describe("shingle", () => {
 
 describe("exactJaccard", () => {
   it("hand computed: two sets sharing 2 of 4 union members", () => {
-    // {a,b,c} union {b,c,d} = {a,b,c,d}, intersection = {b,c}, 2/4 = 0.5
     expect(exactJaccard(new Set(["a", "b", "c"]), new Set(["b", "c", "d"]))).toBe(0.5);
   });
 
@@ -83,7 +80,6 @@ describe("textNearDuplication", () => {
       review("nothing at all like the others, unique wording throughout this one"),
     ];
     const result = textNearDuplication(reviews);
-    // 3 identical reviews out of 5 eligible reviews form the one cluster
     expect(result.clusterCount).toBe(1);
     expect(result.duplicateReviewShare).toBeCloseTo(3 / 5, 10);
     expect(result.largestClusterShare).toBeCloseTo(3 / 5, 10);
@@ -109,7 +105,6 @@ describe("textNearDuplication", () => {
       review("a second, entirely different genuine review here"),
     ];
     const result = textNearDuplication(reviews);
-    // only the two non-null, non-empty reviews are eligible
     expect(result.clusterCount).toBe(0);
     expect(result.duplicateReviewShare).toBe(0);
   });
@@ -164,23 +159,15 @@ describe("textNearDuplication", () => {
       const signatureAfterFirstCall = cache.get(shared);
       expect(signatureAfterFirstCall).toBeDefined();
 
-      // mutating the cached entry proves the second call reads it back rather than recomputing: a
-      // freshly computed signature would never match this corrupted value. It keeps the real
-      // permutation count, since a signature of the wrong length is deliberately not trusted.
       const corrupted = Array.from({ length: DEFAULT_NUM_PERMUTATIONS }, () => 999999n);
       cache.set(shared, corrupted);
       const result = textNearDuplication([shared, review("a third, different review text")], {
         signatureCache: cache,
       });
       expect(cache.get(shared)).toEqual(corrupted);
-      // a signature of a single repeated value shares no position with a
-      // real one, so similarity drops to zero and nothing clusters
       expect(result.clusterCount).toBe(0);
     });
 
-    // PRIVACY.md section 2: review text is never persisted, but its minhash
-    // signature is. A review restored from the reviews cache arrives with
-    // no text and its signature seeded, and has to score identically.
     it("scores a review with no text but a seeded signature exactly as if it had its text", () => {
       const texts = [
         "group one duplicate text appears here word for word",
@@ -208,7 +195,6 @@ describe("textNearDuplication", () => {
       const seeded = new WeakMap<ReviewForNearDuplication, bigint[]>();
       seeded.set(a, [1n, 2n, 3n]);
 
-      // a recomputes from its text, so the two identical texts still cluster
       expect(textNearDuplication([a, b], { signatureCache: seeded }).clusterCount).toBe(1);
     });
 

@@ -20,9 +20,6 @@ describe("lookupFlaggedReviewers", () => {
       json: () => Promise.resolve({ matches: { [prefix]: [flaggedHash] } }),
     });
 
-    // buildLookupRequest pads up to 32 distinct prefixes and needs a
-    // random source that actually varies to terminate; a constant like
-    // () => 0.5 makes every padded prefix identical and hangs forever.
     let counter = 0;
     const varyingRandom = () => {
       counter += 1;
@@ -82,9 +79,6 @@ describe("lookupFlaggedReviewers", () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ matches: {} }) });
     });
 
-    // a constant random source makes buildLookupRequest's padding loop spin forever, since
-    // randomHexPrefix keeps producing the same prefix and the padded set never reaches
-    // BUCKET_COUNT; it has to vary, same as the "posts a request" test above.
     let counter = 0;
     const varyingRandom = () => {
       counter += 1;

@@ -19,8 +19,6 @@ def summary(locale: str, status: str, last_verified: float = 1000.0) -> CanarySu
 
 
 class TestDecideAlerts:
-    # SPEC.md section 13: "selectors broken: ... plus a canary alert to the
-    # maintainer."
     def test_alerts_when_a_healthy_locale_starts_failing(self):
         alerts = decide_alerts([summary("com", "healthy")], [summary("com", "failed")])
         assert alerts == [
@@ -33,9 +31,6 @@ class TestDecideAlerts:
         alerts = decide_alerts([summary("com", "healthy")], [summary("com", "degraded")])
         assert [alert.direction for alert in alerts] == ["broke"]
 
-    # the whole point of comparing against the previous run: a locale that
-    # has been broken for a week is already known, and re-sending it every
-    # run is how a canary gets filtered out of an inbox.
     def test_stays_quiet_while_a_locale_is_still_broken(self):
         assert decide_alerts([summary("com", "failed")], [summary("com", "failed")]) == []
 
@@ -46,7 +41,6 @@ class TestDecideAlerts:
         alerts = decide_alerts([summary("com", "degraded")], [summary("com", "failed")])
         assert [alert.direction for alert in alerts] == ["worsened"]
 
-    # a partial recovery is not news to somebody who already knows it broke.
     def test_stays_quiet_when_failed_becomes_degraded(self):
         assert decide_alerts([summary("com", "failed")], [summary("com", "degraded")]) == []
 
@@ -65,7 +59,6 @@ class TestDecideAlerts:
     def test_stays_quiet_when_a_targets_first_run_is_healthy(self):
         assert decide_alerts([], [summary("de", "healthy")]) == []
 
-    # dropping a target from the list is a deliberate act, not a fault.
     def test_stays_quiet_about_a_target_that_is_no_longer_checked(self):
         assert decide_alerts([summary("com", "healthy")], []) == []
 
@@ -87,8 +80,6 @@ class TestSendAlerts:
             "amazon com: broke, healthy to failed\namazon de: appeared, no previous run to degraded"
         )
 
-    # a layout change breaks every locale at once, and that is one thing
-    # that happened, not four.
     def test_sends_a_single_message_for_the_whole_run(self):
         sent = []
         alerts = decide_alerts(

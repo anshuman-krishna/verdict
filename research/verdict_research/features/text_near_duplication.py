@@ -2,8 +2,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-# a mersenne prime, large enough that fnv1a64 hashes reduce into it with negligible bias, small
-# enough that a*h stays exact under python's arbitrary precision integers either way
 MODULUS = (1 << 61) - 1
 
 FNV_OFFSET_BASIS = 14695981039346656037
@@ -18,8 +16,6 @@ DEFAULT_JACCARD_THRESHOLD = 0.7
 
 _COEFFICIENTS_PATH = Path(__file__).parents[3] / "schema" / "minhash-coefficients.json"
 with open(_COEFFICIENTS_PATH) as f:
-    # coefficients are stored as decimal strings because they exceed a
-    # javascript safe integer, and a plain json import there would round them
     COEFFICIENTS: list[tuple[int, int]] = [(int(a), int(b)) for a, b in json.load(f)]
 
 
@@ -91,9 +87,6 @@ class _UnionFind:
             self.parent[root_x] = root_y
 
 
-# SPEC.md 5.5: minhash with 128 permutations over character 5 grams, banded lsh, cluster reviews
-# above 0.7 jaccard similarity. bands and rows and the output shape are not specified there; this is
-# a proposal, not a ratified spec line.
 def text_near_duplication(
     reviews: list[ReviewForNearDuplication],
     shingle_size: int = DEFAULT_SHINGLE_SIZE,

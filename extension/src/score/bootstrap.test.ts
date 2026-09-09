@@ -25,7 +25,6 @@ describe("bootstrap", () => {
       resamples: 5,
       random: () => 0,
     });
-    // resample always draws index 0 (value 1), 3 times, so every sum is 3
     expect(results).toEqual([3, 3, 3, 3, 3]);
   });
 
@@ -41,7 +40,6 @@ describe("interquartileRange", () => {
   });
 
   it("hand computed: 1 through 4 gives fractional quartiles by linear interpolation", () => {
-    // numpy's default percentile method agrees: np.percentile([1,2,3,4], [25,75]) == [1.75, 3.25]
     const result = interquartileRange([1, 2, 3, 4]);
     expect(result.low).toBeCloseTo(1.75, 10);
     expect(result.high).toBeCloseTo(3.25, 10);

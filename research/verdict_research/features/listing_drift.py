@@ -7,21 +7,11 @@ from verdict_research.features.text_embedding import (
     embed_text,
 )
 
-# SPEC.md 5.4. two detectors over one embedding: how far each review sits from the current product
-# title and category, and where in time the centroid of those embeddings moves.
-
-# cosine 0 means the review shares no more with the title than an unrelated text would. measured on
-# synthetic pairs an unrelated review sits at 1.00 to 1.07 and a matching one at 0.44, so this cut
-# undercounts rather than over: a review has to align with the listing not at all to be counted.
-# SPEC.md 5.4 names no threshold and setting it is anshuman's, so it lives in one place.
 DEFAULT_OFF_TOPIC_DISTANCE = 1.0
 
-# below these the split scan is fitting noise
 MINIMUM_CHANGE_POINT_REVIEWS = 12
 MINIMUM_SEGMENT_REVIEWS = 5
 
-# on the same synthetic pairs a listing that never changed subject scores 0.008 and one that swapped
-# products halfway scores 1.008. a date is only worth showing above this, and it is anshuman's.
 MINIMUM_REPORTABLE_DRIFT = 0.5
 
 
@@ -32,14 +22,12 @@ class ReviewForDrift:
 
 @dataclass
 class ChangePoint:
-    # the day the later segment starts on, in the same day index space the caller passed in
     day: int
     after_count: int
 
 
 @dataclass
 class ListingDriftResult:
-    # none when nothing could be embedded, which is not the same as zero
     off_topic_share: float | None
     off_topic_count: int
     mean_distance: float | None
@@ -58,8 +46,6 @@ _ABSENT = ListingDriftResult(
 )
 
 
-# days is parallel to reviews, none where a review carries no date. the change point test runs over
-# the dated subset; the distance to the product runs over everything embeddable.
 def listing_identity_drift(
     reviews: list[ReviewForDrift],
     days: list[int | None],
@@ -105,10 +91,6 @@ def listing_identity_drift(
     )
 
 
-# SPEC.md 5.4's cumulative sum test, over the centroid rather than over a scalar reduction of it:
-# scan every split with enough reviews either side and take the cosine distance between the two
-# segment centroids. bounded in zero to two and needs no variance term, which matters because a
-# listing whose reviews are all alike has almost no variance to divide by.
 def centroid_change_point(
     dated: list[tuple[list[float], int]],
 ) -> tuple[ChangePoint | None, float]:
@@ -117,7 +99,6 @@ def centroid_change_point(
         return None, 0.0
     dimensions = len(dated[0][0])
 
-    # prefix sums, so this stays linear: the extension runs it once per bootstrap resample
     total = [0.0] * dimensions
     for embedding, _ in dated:
         for i in range(dimensions):
@@ -132,8 +113,6 @@ def centroid_change_point(
             before[i] += embedding[i]
         if k < MINIMUM_SEGMENT_REVIEWS or k > count - MINIMUM_SEGMENT_REVIEWS:
             continue
-        # the cosine of the two segment centroids without materialising either: one pass over the
-        # dimensions rather than three, and no allocation inside a loop the bootstrap runs 200 times
         dot = 0.0
         before_squares = 0.0
         after_squares = 0.0

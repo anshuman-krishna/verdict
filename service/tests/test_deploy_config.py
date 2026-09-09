@@ -9,11 +9,6 @@ from verdict_service.deploy_config import (
     read_proxy_guarantees,
 )
 
-# PRIVACY.md section 4: "the reverse proxy is configured with IP logging disabled, and that
-# configuration file is in the public repository. If we ever cannot demonstrate this, the feature
-# comes out." These assert the published file, not a copy of it, so the demonstration cannot drift
-# away from what is deployed.
-
 
 def test_the_published_configuration_exists():
     assert CADDYFILE.exists(), "PRIVACY.md section 4 promises this file is in the repository"
@@ -39,8 +34,6 @@ def test_no_client_address_header_reaches_the_application(header):
 
 
 def test_only_the_two_documented_endpoints_are_reachable():
-    # SPEC.md section 8's lookup and PRIVACY.md section 5's contribution. A third path appearing
-    # here is a new thing the internet can reach and is a deliberate act, not a refactor.
     assert read_proxy_guarantees().allowed_paths == {
         "/v1/reputation/lookup",
         "/v1/graph/contribute",
@@ -70,8 +63,6 @@ def test_a_commented_out_guarantee_does_not_count(tmp_path):
     assert not guarantees.admin_api_disabled
 
 
-# a log that names a file is still a log, and the point of the guarantee is
-# that there is not one.
 def test_a_log_written_to_a_file_is_not_a_discarded_log(tmp_path):
     path = _write(tmp_path, "reverse_proxy app:8000\nlog { output file /var/log/access.log }\n")
     assert not read_proxy_guarantees(path).access_log_discarded

@@ -2,10 +2,6 @@ from verdict_service.api.store import InMemoryFlaggedHashStore
 from verdict_service.graph.contribution_store import ContributionEdge, InMemoryContributionEdgeStore
 from verdict_service.graph.recompute import RETENTION_SECONDS, recompute_flagged_hashes
 
-# same hand checked tight_group / pad shape test_pipeline.py's
-# testComputeFlaggedHashesFromContributions already establishes flags
-# f1 and f2 and never g1 or g2. Reused here because this module is only
-# wiring that pipeline to the two stores, not re-deriving its scoring.
 TIGHT_GROUP = ["f1", "f2"]
 
 
@@ -66,9 +62,6 @@ def test_recompute_excludes_edges_older_than_the_retention_window():
 
 
 def test_a_previously_flagged_hash_survives_a_later_run_with_no_matching_edges():
-    # PRIVACY.md section 8: raw edges are deleted after 90 days, but "only the derived community
-    # assignments are kept". A later run computing over a shrunken or reshaped edge set must never
-    # cause an earlier flag to disappear, since flagged_store only ever grows.
     contributions = InMemoryContributionEdgeStore()
     for e in scenario_edges(received_at=1_000.0):
         contributions.add(e)

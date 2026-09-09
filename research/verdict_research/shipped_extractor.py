@@ -12,16 +12,6 @@ from verdict_research.schema import (
     review_from_json,
 )
 
-# canary/check.py explains why extraction is injected rather than reimplemented in python: a second,
-# parallel copy of the rules interpreter would put two versions of the thing being watched in the
-# repository, one of which nobody ships. This is the adapter that closes that gap by driving the
-# real one, for the canary and for the corpus builder both.
-#
-# extension/src/canary/cli.ts is bundled to extension/.output/canary/extract.mjs by `just canary-
-# extractor`. It reads html on stdin and writes one json object on stdout. One process per page: a
-# canary run is a handful of urls already spaced 800ms apart, and a corpus run is forty saved pages,
-# so the spawn cost is invisible next to what it follows.
-
 EXTRACTOR = Path(__file__).resolve().parents[2] / "extension" / ".output" / "canary" / "extract.mjs"
 
 Runner = Callable[[Sequence[str], str, float], subprocess.CompletedProcess[str]]
@@ -48,7 +38,6 @@ class _NodeBridge:
     extractor_path: Path = EXTRACTOR
     node: str = "node"
     timeout_seconds: float = 60.0
-    # injected so a test can drive this without a built artefact present
     run: Runner | None = None
 
     def invoke(self, url: str, html: str, extra: Sequence[str] = ()) -> str:
@@ -106,9 +95,6 @@ def _one_object(stdout: str) -> dict:
         raise ExtractorError(f"the extractor wrote something that is not json: {error}") from error
 
 
-# a malformed or partial line is an error, never a zero: check.py reads a
-# review count of zero as "the page changed and extraction broke", which is
-# a claim about amazon, and a broken extractor must not be able to make it.
 def parse_extractor_output(stdout: str) -> ExtractionOutcome:
     data = _one_object(stdout)
     try:

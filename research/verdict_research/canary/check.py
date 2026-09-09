@@ -3,9 +3,6 @@ from dataclasses import dataclass
 from statistics import median
 from typing import Literal
 
-# fetch_html and extract are injected so this owns scheduling, health and aggregation only. a second
-# python copy of the rules interpreter would be the thing being watched, written twice
-
 Health = Literal["healthy", "degraded", "failed"]
 
 
@@ -14,7 +11,6 @@ class CanaryTarget:
     site: str
     locale: str
     url: str
-    # a floor for this page alone, from what extraction has found there. not a signal threshold
     minimum_expected_reviews: int
 
 
@@ -44,7 +40,6 @@ def _classify(outcome: ExtractionOutcome, target: CanaryTarget) -> Health:
     return "healthy"
 
 
-# never raises: one target failing becomes its own result, so a broken locale cannot hide the others
 def run_canary(
     targets: list[CanaryTarget],
     fetch_html: Callable[[str], str],
@@ -88,7 +83,6 @@ def run_canary(
 
 @dataclass(frozen=True)
 class CanarySummary:
-    # SITE.md's /status columns, in order
     site: str
     locale: str
     last_verified: float
@@ -97,7 +91,6 @@ class CanarySummary:
     median_reviews_extracted: float | None
 
 
-# the median spans every recorded check: a dropping median warns before a run outright fails
 def summarize(results: list[CanaryResult]) -> list[CanarySummary]:
     groups: dict[tuple[str, str], list[CanaryResult]] = {}
     for result in results:

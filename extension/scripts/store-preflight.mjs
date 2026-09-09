@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-// store removal is the main operational risk for this project, not lawsuits.
-// this reads a built bundle and refuses it if it would earn one.
-//
-// usage:
-//   just preflight
-//   node scripts/store-preflight.mjs [--target chrome-mv3] [--output .output]
-//
-// Reads the built output rather than the source, because the bundle is what
-// gets reviewed and what ships. Run after `just ext build`.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -58,8 +49,6 @@ function main() {
   }
 
   const files = walk(bundle)
-    // the manifest is the thing being checked against, not a thing to
-    // check: its own declared hosts are not evidence of anything.
     .filter((path) => path !== join(bundle, "manifest.json"))
     .map((path) => ({ path: relative(bundle, path), text: readFileSync(path, "utf8") }));
 

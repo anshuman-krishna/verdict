@@ -1,6 +1,6 @@
 import { fetchReviewPages, type FetchProgress } from "../extract/fetchReviewPages";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
-import { parseAmazonProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/productPage";
+import { parseProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/sites";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
@@ -10,14 +10,12 @@ import type { FeatureVector } from "../score/featureVector";
 import type { ModelSet } from "../score/combine";
 import type { FeatureVectorInputs } from "../score/featureVector";
 
-// isEnabled is read per analysis so the options toggle takes effect on the next check, not a reload
 export interface ReputationLookupDeps {
   isEnabled: () => Promise<boolean>;
   endpoint: string;
   salt: string;
   fetchImpl?: typeof fetch;
   random?: () => number;
-  // exposed only so a test can skip PRIVACY.md section 4's random request delay
   delay?: (ms: number) => Promise<void>;
 }
 
@@ -37,15 +35,10 @@ export interface OrchestratorDeps {
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
-  // omitted entirely (not just disabled) is also valid: analyzePage never
-  // attempts a reputation lookup unless a caller supplies this.
   reputation?: ReputationLookupDeps;
-  // omitted entirely is also valid, same as reputation above: analyzePage
-  // never queues a contribution unless a caller supplies this.
   graphContribution?: GraphContributionDeps;
 }
 
-// PRIVACY.md section 5: a second, separate opt in, read per analysis like reputation above
 export interface GraphContributionDeps {
   isEnabled: () => Promise<boolean>;
   salt: string;
@@ -59,13 +52,12 @@ export interface AnalysisResult {
   outcome: ReportOutcome;
 }
 
-// every early exit here is a SPEC.md section 13 row: render nothing at all
 export async function analyzePage(
   document: ParentNode,
   url: string,
   deps: OrchestratorDeps,
 ): Promise<AnalysisResult | null> {
-  const page = parseAmazonProductUrl(url);
+  const page = parseProductUrl(url);
   if (page === null) {
     return null;
   }
@@ -78,7 +70,6 @@ export async function analyzePage(
   return { page, product, reviews, outcome };
 }
 
-// SPEC.md 5.4 compares each review against "the current product title and category"
 function productText(product: ProductSnapshot): string {
   return product.category === null ? product.title : `${product.title} ${product.category}`;
 }
@@ -91,13 +82,10 @@ async function scoreAndMaybeSave(
   signatureCache?: WeakMap<Review, bigint[]>,
   embeddingCache?: WeakMap<Review, number[]>,
 ): Promise<ReportOutcome> {
-  // nothing to adjust against, so not a report SPEC.md section 2 promises
   if (product.claimedRating === null) {
     return { status: "not-enough-data" };
   }
 
-  // before scoring, not after: SPEC.md 5.6 is a signal in the feature vector, so a flagged share
-  // that arrived once the report was built could only be pinned on beside a band computed without it
   const flaggedReviewerIds = deps.reputation && (await deps.reputation.isEnabled())
     ? await flaggedReviewers(reviews, deps.reputation)
     : undefined;
@@ -133,7 +121,6 @@ async function scoreAndMaybeSave(
   return outcome;
 }
 
-// best effort: an edge that cannot be built is not contributed, never a reason to fail the analysis
 async function queueGraphContribution(
   page: ParsedProductPage,
   reviews: readonly Review[],
@@ -148,8 +135,6 @@ async function queueGraphContribution(
   }
 }
 
-// an unreachable service degrades to an empty set, never an error: SPEC.md section 13 wants the
-// analysis to carry on with local signals only and say nothing about it
 async function flaggedReviewers(
   reviews: readonly Review[],
   reputation: ReputationLookupDeps,
@@ -166,7 +151,6 @@ async function flaggedReviewers(
   });
 }
 
-// dedupes on reviewerId plus date; a review missing either is kept, risking a double count over a drop
 export function mergeReviews(existing: readonly Review[], fetched: readonly Review[]): Review[] {
   const seen = new Set(
     existing
@@ -194,12 +178,9 @@ export interface CheckMoreDeeplyOptions {
   fetchImpl?: typeof fetch;
   delay?: (ms: number) => Promise<void>;
   random?: () => number;
-  // SPEC.md section 13's spinner rule: this run takes seconds, so whoever
-  // is showing a busy state needs something to put underneath it.
   onProgress?: (progress: FetchProgress) => void;
 }
 
-// SPEC.md section 9: user action only, never on page load, hence separate from analyzePage
 export async function checkMoreDeeply(
   page: ParsedProductPage,
   product: ProductSnapshot,

@@ -42,13 +42,6 @@ import Layout from "../../layouts/Layout.astro";
       type RosetteParams,
     } from "../../lib/rosette";
 
-    // one of the two islands SITE.md allows. the presence content script sets the dataset attributes
-    // at document_start, so there is no polling and no hardcoded extension id.
-    // rules and model are both still placeholders, so this usually resolves to no-model today
-
-    // DESIGN.md section 4, provisional band scale, mirrored from
-    // extension/src/score/report.ts so the two never quietly disagree.
-
     const root = document.documentElement;
 
     function sendToExtension(type: string, extra: Record<string, unknown>): Promise<any> {
@@ -100,8 +93,6 @@ import Layout from "../../layouts/Layout.astro";
       return div.innerHTML;
     }
 
-    // reimplemented so this island does not depend on the extension package; the numbers it draws
-    // with come from the generated vocabulary, so only the code is duplicated, not the values
     const BASE_HARMONIC = 3;
     const MAX_HARMONIC_SPREAD = 4;
 

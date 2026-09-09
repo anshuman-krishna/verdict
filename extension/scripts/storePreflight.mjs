@@ -1,16 +1,3 @@
-// store removal is this project's main operational risk, ahead of anything legal: the tool is
-// worthless the day it stops being installable. The causes are well known and mostly mechanical:
-// remote code, undeclared data collection, a privacy policy that does not match behaviour,
-// background fetching, obfuscated bundles, and permissions the description does not justify.
-//
-// tests/no-network.spec.ts proves the default analysis path makes no request. It says nothing about
-// what the shipped bundle is *able* to reach: a stray fetch to somewhere new would pass every check
-// this repository had, ship, and contradict the privacy page. These checks read the built output
-// rather than the source, because what gets reviewed is the bundle.
-
-// every permission the manifest may declare, with why it is there. The check runs both ways: a
-// permission with no entry here fails, and an entry here that the manifest does not ask for fails
-// too, so this cannot drift into a list of things that used to be true.
 export const PERMISSION_REASONS = {
   alarms:
     "background.ts checks the graph contribution queue periodically, and an mv3 " +
@@ -22,8 +9,6 @@ export const PERMISSION_REASONS = {
     "IndexedDB, never here",
 };
 
-// hosts the bundle may name without the manifest granting access to them,
-// each because the browser reaches them without a host permission.
 export const UNGRANTED_HOSTS = {
   "verdict.tools":
     "the site itself: the once a day rules fetch (a static signed file, PRIVACY.md " +
@@ -39,8 +24,6 @@ const REMOTE_CODE_PATTERNS = [
   { pattern: /<script[^>]+src\s*=\s*["']https?:/i, name: "a remote <script src>" },
 ];
 
-// a template literal like `https://${host}/x` survives minification as the
-// fragment "https://$", which is not a host and must not be reported as one.
 const HOST_PATTERN = /https?:\/\/([a-z0-9.*-]+\.[a-z]{2,}|localhost)(?::\d+)?/gi;
 
 export function hostsIn(text) {
@@ -51,8 +34,6 @@ export function hostsIn(text) {
   return hosts;
 }
 
-// every host the manifest grants the extension, in any of the four places a
-// manifest can name one.
 export function declaredHosts(manifest) {
   const patterns = [
     ...(manifest.host_permissions ?? []),
@@ -69,8 +50,6 @@ export function declaredHosts(manifest) {
   return hosts;
 }
 
-// "*.amazon.com" covers "www.amazon.com". Matching is deliberately narrow: a wildcard only ever
-// stands in for one leading label, so a declaration cannot quietly cover a host nobody meant.
 function covers(declared, host) {
   if (declared === host) {
     return true;
@@ -104,8 +83,6 @@ export function permissionProblems(manifest) {
   return problems;
 }
 
-// a grant this broad is one of the surest ways to be refused, and the
-// manifest already scopes to four storefronts.
 export function breadthProblems(manifest) {
   const problems = [];
   const all = [...(manifest.host_permissions ?? []), ...(manifest.optional_host_permissions ?? [])];
@@ -150,7 +127,6 @@ export function hostProblems(manifest, files) {
   return [...new Set(problems)];
 }
 
-// one string per problem, empty when the bundle is shippable.
 export function preflightProblems(manifest, files) {
   return [
     ...permissionProblems(manifest),

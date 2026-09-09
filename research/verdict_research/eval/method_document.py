@@ -10,19 +10,10 @@ from verdict_research.model.pipeline import (
     acceptance_problems,
 )
 
-# SITE.md's /method wants precision, recall and a calibration curve "as absolute numbers, not
-# adjectives". typing those into the astro page by hand would put published accuracy claims in a
-# file nothing checks against the model that shipped, which is the drift this repository has already
-# removed for the band scale and the canary status.
-#
-# what the numbers mean, and every word around them, stays anshuman's. this only carries measured
-# values from an evaluation run to the page that publishes them.
-
 METHOD_DOCUMENT_VERSION = 1
 
 
 def absent_method_document(reason: str) -> dict[str, Any]:
-    # the committed state until a corpus exists. the page keeps its "not published yet" copy.
     return {"documentVersion": METHOD_DOCUMENT_VERSION, "published": False, "reason": reason}
 
 
@@ -32,7 +23,6 @@ def build_method_document(run: TrainingRun, trained_at: float) -> dict[str, Any]
         "documentVersion": METHOD_DOCUMENT_VERSION,
         "published": True,
         "trainedAt": trained_at,
-        # every coefficient, so "every coefficient is explainable" is checkable rather than claimed
         "intercept": run.model.intercept,
         "coefficients": dict(sorted(run.model.coefficients.items())),
         "accuracy": {
@@ -50,7 +40,6 @@ def build_method_document(run: TrainingRun, trained_at: float) -> dict[str, Any]
             "met": not acceptance_problems(run),
             "problems": acceptance_problems(run),
         },
-        # the fitted isotonic curve, which is what a calibration chart plots
         "calibration": [{"x": p.x, "y": p.y} for p in run.model.calibration],
     }
 

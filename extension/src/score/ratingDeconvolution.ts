@@ -3,10 +3,6 @@ export interface RatingDeconvolutionResult {
   residualError: number;
 }
 
-// SPEC.md 5.1: observed = (1 - a) * organicPrior + a * injectionKernel, over the
-// five star bins. organicPrior and injectionKernel are supplied by the caller,
-// this function only fits the scalar mixture weight `a` by constrained least
-// squares (a clamped to [0, 1]) and reports the residual as an RMSE.
 export function ratingDeconvolution(
   observed: readonly number[],
   organicPrior: readonly number[],

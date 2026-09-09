@@ -19,7 +19,6 @@ SUMMARY = CanarySummary(
 
 
 class TestBuildStatusDocument:
-    # SITE.md's /status columns, in the shape the astro page reads.
     def test_carries_one_row_per_summary_with_the_status_pages_columns(self):
         document = build_status_document([SUMMARY], generated_at=1_700_000_100.0)
         assert document == {
@@ -37,8 +36,6 @@ class TestBuildStatusDocument:
             ],
         }
 
-    # a target whose every run failed has no review count to take a median
-    # of, and the page has to render that rather than showing a zero.
     def test_carries_a_null_median_and_rules_version_through(self):
         failed = CanarySummary(
             site="amazon",
@@ -52,8 +49,6 @@ class TestBuildStatusDocument:
         assert row["rulesVersion"] is None
         assert row["medianReviewsExtracted"] is None
 
-    # the state the site ships in before the canary has ever run, which is
-    # a normal document rather than a missing file.
     def test_the_empty_document_has_no_rows_and_still_parses(self):
         assert empty_status_document() == {
             "documentVersion": 1,
@@ -69,8 +64,6 @@ class TestWriteStatusDocumentFile:
         write_status_document_file(document, path)
         assert read_status_document(path) == document
 
-    # committed into the site, so a run that changed nothing has to produce
-    # no diff at all.
     def test_writes_byte_identical_output_for_the_same_document(self, tmp_path):
         first = tmp_path / "a.json"
         second = tmp_path / "b.json"

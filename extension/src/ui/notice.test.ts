@@ -30,8 +30,6 @@ describe("VerdictNoticeElement", () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  // SPEC.md section 13: "verdict never shows a spinner longer than 400 ms
-  // without showing partial results underneath."
   it("renders a progress row under the message when one is given", () => {
     const notice = new VerdictNoticeElement();
     notice.render({ message: "Not enough data to judge yet.", busy: true, progress: "1 of 5 pages read." });

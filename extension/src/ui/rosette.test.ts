@@ -9,9 +9,7 @@ describe("rosetteParams", () => {
       estimatedInorganicShare: 0,
       band: "clean",
     });
-    // base harmonic 3, plus round(0 * 4) = 0
     expect(params.harmonicA).toBe(3);
-    // harmonicA + 1 + round(0 * 4) = 4
     expect(params.harmonicB).toBe(4);
     expect(params.amplitude).toBeCloseTo(0.15, 10);
     expect(params.strokeColor).toBe("#2E6B4E");
@@ -24,9 +22,7 @@ describe("rosetteParams", () => {
       estimatedInorganicShare: 1,
       band: "heavily-manipulated",
     });
-    // base harmonic 3, plus round(1 * 4) = 4 -> 7
     expect(params.harmonicA).toBe(7);
-    // harmonicA + 1 + round(1 * 4) = 7 + 1 + 4 = 12
     expect(params.harmonicB).toBe(12);
     expect(params.amplitude).toBeCloseTo(0.8, 10);
     expect(params.strokeColor).toBe("#9C382F");
@@ -66,10 +62,8 @@ describe("rosettePath", () => {
       estimatedInorganicShare: 0.5,
       band: "clean",
     });
-    // amplitude * (cos(0) - cos(0)) / 2 = amplitude * 0 / 2 = 0, so r = radius * 1
     const path = rosettePath(params, 100, 4);
     const firstPoint = path.split(" ").slice(1, 3).map(Number);
-    // t=0: x = r*cos(0) = r = 100, y = r*sin(0) = 0
     expect(firstPoint[0]).toBeCloseTo(100, 3);
     expect(firstPoint[1]).toBeCloseTo(0, 3);
   });
@@ -81,8 +75,6 @@ describe("rosettePath", () => {
       estimatedInorganicShare: 0,
       band: "clean",
     });
-    // sampleCount clamped to 1: i=0 (t=0) and i=1 (t=2pi) land on the same
-    // point, since cos and sin are both 2pi periodic
     expect(rosettePath(params, 100, 0)).toBe("M 100.000 0.000 L 100.000 -0.000 Z");
   });
 });

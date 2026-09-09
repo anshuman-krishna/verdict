@@ -53,7 +53,6 @@ def test_names_every_skipped_page_and_why(tmp_path, capsys):
     assert "skipped one: below the minimum data thresholds" in capsys.readouterr().out
 
 
-# a corpus whose priors nobody recorded is a corpus nobody can retrain against
 def test_says_which_priors_the_run_used(tmp_path, capsys):
     write_fixture(tmp_path, "one", "https://www.amazon.com/dp/B0ABCDEF12")
     run(tmp_path, [{"fixture": "one", "label": 1}])

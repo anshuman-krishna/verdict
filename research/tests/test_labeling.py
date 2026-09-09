@@ -11,10 +11,6 @@ from verdict_research.corpus.labeling import (
     weak_labels,
 )
 
-# the functions here are deliberately meaningless: they read a made up field and vote on it. What a
-# real labelling function says about a listing is anshuman's to decide, and these exist only to
-# drive the mechanics.
-
 
 def votes_on(key: str, threshold: float) -> LabelingFunction:
     def vote(features):
@@ -36,8 +32,6 @@ class TestApplyLabelingFunctions:
             [ABSTAIN, ABSTAIN],
         ]
 
-    # a set of functions is developed incrementally, and one half written
-    # function should not cost the whole matrix.
     def test_a_function_that_raises_abstains_rather_than_aborting_the_run(self):
         def explode(features):
             raise ValueError("not finished yet")
@@ -56,8 +50,6 @@ class TestApplyLabelingFunctions:
 
 class TestLabelingFunctionStats:
     def test_measures_coverage_overlap_and_conflict(self):
-        # first function votes on three of four, second on two of four, and
-        # they disagree on exactly one of the two they share.
         matrix = [
             [POSITIVE, POSITIVE],
             [POSITIVE, NEGATIVE],
@@ -74,8 +66,6 @@ class TestLabelingFunctionStats:
         assert second.overlap == 0.5
         assert second.conflict == 0.25
 
-    # the reason these statistics exist: a function with high coverage and
-    # chance accuracy is worse than no function at all.
     def test_measures_accuracy_against_the_labelled_seed(self):
         matrix = [[POSITIVE], [POSITIVE], [NEGATIVE], [ABSTAIN]]
         stats = labeling_function_stats(matrix, [votes_on("a", 0.5)], gold_labels=[1, 0, 0, 1])
@@ -86,8 +76,6 @@ class TestLabelingFunctionStats:
         stats = labeling_function_stats(matrix, [votes_on("a", 0.5)], gold_labels=[1, None])
         assert stats[0].empirical_accuracy == 1.0
 
-    # never voting on a labelled example is not the same as being wrong,
-    # and reporting it as zero would read as the opposite of the truth.
     def test_reports_no_accuracy_rather_than_zero_when_it_never_votes_on_a_label(self):
         matrix = [[ABSTAIN], [ABSTAIN]]
         stats = labeling_function_stats(matrix, [votes_on("a", 0.5)], gold_labels=[1, 0])
@@ -109,8 +97,6 @@ class TestMajorityVote:
         assert majority_vote([POSITIVE, POSITIVE, NEGATIVE]).label == POSITIVE
         assert majority_vote([NEGATIVE, NEGATIVE, POSITIVE]).label == NEGATIVE
 
-    # SPEC.md section 6's rule: an example the functions disagree evenly about is not a training
-    # example, and a tiebreak here would encode a preference nothing measured.
     def test_abstains_on_a_tie(self):
         assert majority_vote([POSITIVE, NEGATIVE]).label == ABSTAIN
 
