@@ -150,11 +150,9 @@ def train_pipeline(
     )
 
 
-# one string per unmet criterion, empty when the run is shippable. Reported
-# rather than raised, because a run that misses is still worth looking at.
-def acceptance_problems(run: TrainingRun) -> list[str]:
+# one string per unmet criterion, empty when shippable
+def report_problems(report: EvalReport, point: OperatingPoint | None) -> list[str]:
     problems: list[str] = []
-    point = run.operating_point
     if point is None:
         problems.append(f"no threshold reaches recall above {MINIMUM_RECALL}")
     elif point.precision <= MINIMUM_PRECISION:
@@ -162,14 +160,18 @@ def acceptance_problems(run: TrainingRun) -> list[str]:
             f"precision {point.precision:.3f} at recall {point.recall:.3f} "
             f"does not clear {MINIMUM_PRECISION}"
         )
-    if run.report.expected_calibration_error >= MAXIMUM_EXPECTED_CALIBRATION_ERROR:
+    if report.expected_calibration_error >= MAXIMUM_EXPECTED_CALIBRATION_ERROR:
         problems.append(
-            f"expected calibration error {run.report.expected_calibration_error:.3f} "
+            f"expected calibration error {report.expected_calibration_error:.3f} "
             f"is not below {MAXIMUM_EXPECTED_CALIBRATION_ERROR}"
         )
-    if run.report.evaluated_count == 0:
+    if report.evaluated_count == 0:
         problems.append("nothing in the held out set could be evaluated")
     return problems
+
+
+def acceptance_problems(run: TrainingRun) -> list[str]:
+    return report_problems(run.report, run.operating_point)
 
 
 def acceptance_summary(run: TrainingRun) -> dict[str, object]:

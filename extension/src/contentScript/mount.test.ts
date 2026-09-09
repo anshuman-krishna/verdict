@@ -72,6 +72,7 @@ describe("mountResult", () => {
           evidence: [],
           generatedAt: 0,
         },
+        featureVector: {} as never,
       },
     };
     mountResult(document, result, deps());
@@ -98,6 +99,7 @@ describe("mountResult", () => {
           evidence: [],
           generatedAt: 0,
         },
+        featureVector: {} as never,
       },
     };
     const openTab = vi.fn();

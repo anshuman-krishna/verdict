@@ -1,3 +1,5 @@
+import type { FeatureVector } from "../score/featureVector";
+import { summarizeReport } from "../score/report";
 import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } from "./database";
 
 const HISTORY_CAP = 500;
@@ -7,8 +9,10 @@ export interface HistoryEntry {
   timestamp: number;
   title: string;
   thumbnailUrl: string | null;
-  // the report shape is not defined yet, no signal or scoring code exists
+  // unknown, because an entry written by an older build is still an entry
   report: unknown;
+  // SPEC.md section 10. no text, no reviewer id
+  featureVector?: FeatureVector;
 }
 
 export async function addHistoryEntry(
@@ -52,10 +56,17 @@ export async function exportHistoryAsJson(): Promise<string> {
 
 export async function exportHistoryAsCsv(): Promise<string> {
   const entries = await listHistory();
-  const header = "timestamp,title,thumbnailUrl";
-  const rows = entries.map((entry) =>
-    [entry.timestamp, csvField(entry.title), csvField(entry.thumbnailUrl ?? "")].join(","),
-  );
+  const header = "timestamp,title,band,estimatedInorganicShare,thumbnailUrl";
+  const rows = entries.map((entry) => {
+    const summary = summarizeReport(entry.report);
+    return [
+      entry.timestamp,
+      csvField(entry.title),
+      csvField(summary.band ?? ""),
+      summary.estimatedInorganicShare ?? "",
+      csvField(entry.thumbnailUrl ?? ""),
+    ].join(",");
+  });
   return [header, ...rows].join("\n");
 }
 

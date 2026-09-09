@@ -2,7 +2,7 @@ import type { Review } from "../extract/types";
 import { bandFromProbability } from "./band";
 import { applyModel, selectModel, type ModelSet } from "./combine";
 import { buildEvidence } from "./evidence";
-import { buildFeatureVector, type FeatureVectorInputs } from "./featureVector";
+import { buildFeatureVector, type FeatureVector, type FeatureVectorInputs } from "./featureVector";
 import { bootstrap, interquartileRange } from "./bootstrap";
 import { generateSerial, type Report } from "./report";
 
@@ -13,7 +13,8 @@ export type ReportOutcome =
   | { status: "missing-features"; missing: string[] }
   // distinct from not-enough-data: the reviews may be fine, there is nothing to score them with
   | { status: "no-model" }
-  | { status: "ok"; report: Report };
+  // SPEC.md section 10 stores the vector too
+  | { status: "ok"; report: Report; featureVector: FeatureVector };
 
 export interface BuildReportOptions {
   reviews: readonly Review[];
@@ -34,7 +35,7 @@ export interface BuildReportOptions {
 }
 
 // SPEC.md 5.1's injected share, distinct from the combiner's probability which sets the band
-function estimatedInorganicShare(vector: ReturnType<typeof buildFeatureVector>): number {
+function estimatedInorganicShare(vector: FeatureVector): number {
   return vector.ratingDeconvolution?.injectedShare ?? 0;
 }
 
@@ -74,8 +75,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "no-model" };
   }
 
-  // picked once from the full review set, then held for every resample: a resample that happened to
-  // draw no identified reviewer would otherwise switch models mid bootstrap and mix two calibrations
+  // picked once, so the bootstrap cannot switch models
   const model = selectModel(options.model, vector);
   const result = applyModel(vector, model);
   if (result.status === "insufficient-data") {
@@ -85,9 +85,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "missing-features", missing: result.missing };
   }
 
-  // the two caches above are what make this affordable. a resample draws the same review objects
-  // repeatedly, so without them each of the 200 draws recomputed every minhash and then re-verified
-  // every candidate pair, which on 300 reviews was the whole 1500ms budget on its own
+  // the caches above keep 200 resamples affordable
   const samples = bootstrap(
     options.reviews,
     (sample) => {
@@ -121,5 +119,5 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     generatedAt,
   };
 
-  return { status: "ok", report };
+  return { status: "ok", report, featureVector: vector };
 }

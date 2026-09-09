@@ -49,6 +49,7 @@ Beyond the gate:
 just fixtures    judge the saved page corpus against the extraction criteria
 just featurise   build the training corpus from labelled fixtures
 just train       fit, calibrate, evaluate, and export the model
+just audit       score the exported model against a corpus it never saw
 just canary      check live extraction health against the canary targets
 just preflight   check the built bundle against what gets extensions removed
 just release     build the zips and write the release manifest

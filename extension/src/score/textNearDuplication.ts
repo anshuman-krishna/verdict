@@ -36,10 +36,7 @@ export interface TextNearDuplicationOptions {
   linkCache?: DuplicateLinkCache;
 }
 
-// whether two reviews are near duplicates is a property of the pair, so a resample that redraws them
-// cannot change the answer. the links are found once over the whole set and read back on every
-// later call whose reviews are all part of that same set, which is what takes the banding and the
-// 128 bigint comparison per candidate pair out of the bootstrap.
+// a pair links or not, whoever else was drawn
 export interface DuplicateLinks {
   population: object;
   bands: number;
@@ -194,9 +191,7 @@ export function textNearDuplication(
     return cached !== undefined && cached.length === numPermutations ? cached : undefined;
   };
 
-  // two reviews with the same text get the same signature array, not two equal ones. minhashing is
-  // most of the analysis and a listing with the same paragraph posted forty times is the case this
-  // signal exists for, so it pays for one. sharing the array is also what joins them below.
+  // one text, one signature array
   const byText = new Map<string, bigint[]>();
   const signatures: (readonly bigint[])[] = [];
   for (const review of reviews) {
@@ -227,9 +222,7 @@ export function textNearDuplication(
 
   const unionFind = new UnionFind(signatures.length);
 
-  // a resample draws the same review several times, and those draws share one signature array. they
-  // are the same text, so they join without comparison, and only one of them enters the banding: at
-  // 300 draws that is a third fewer entries and half the candidate pairs.
+  // same array means same text, join it
   const firstIndexOf = new Map<readonly bigint[], number>();
   const distinct: number[] = [];
   for (let i = 0; i < signatures.length; i++) {
@@ -282,8 +275,7 @@ export function textNearDuplication(
   };
 }
 
-// one shared population token rather than a per entry check, so a cache carried across two different
-// review sets is rebuilt rather than answering half of one set with links found in the other.
+// reuse only within one recorded set
 function linksCover(
   links: DuplicateLinkCache,
   signatures: readonly (readonly bigint[])[],
@@ -324,8 +316,7 @@ function findLinks(
     }
   }
 
-  // a pair is one number, not a string to allocate and parse back: the same pair surfaces in up to
-  // `bands` buckets, so this set is hit far more often than it is filled
+  // a pair is one number, not a string
   const width = signatures.length;
   const candidatePairs = new Set<number>();
   for (const bucket of buckets.values()) {

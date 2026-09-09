@@ -72,7 +72,7 @@ describe("analyzeViaHiddenTab", () => {
 
     await Promise.resolve();
     await Promise.resolve();
-    listener?.(999, { status: "ok", report: {} as never });
+    listener?.(999, { status: "ok", report: {} as never, featureVector: {} as never });
     listener?.(1, { status: "no-model" });
 
     await expect(promise).resolves.toEqual({ status: "no-model" });

@@ -6,6 +6,7 @@ import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
+import type { FeatureVector } from "../score/featureVector";
 import type { ModelSet } from "../score/combine";
 import type { FeatureVectorInputs } from "../score/featureVector";
 
@@ -25,7 +26,14 @@ export interface OrchestratorDeps {
   model: ModelSet | null;
   priors: FeatureVectorInputs;
   isHistoryEnabled: () => Promise<boolean>;
-  saveHistory: (entry: { title: string; thumbnailUrl: string | null; report: unknown }) => Promise<unknown>;
+  saveHistory: (
+    entry: {
+      title: string;
+      thumbnailUrl: string | null;
+      report: unknown;
+      featureVector: FeatureVector;
+    },
+  ) => Promise<unknown>;
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
@@ -118,6 +126,7 @@ async function scoreAndMaybeSave(
       title: product.title,
       thumbnailUrl: product.thumbnailUrl,
       report: outcome.report,
+      featureVector: outcome.featureVector,
     });
   }
 

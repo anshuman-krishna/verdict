@@ -7,6 +7,24 @@ import {
   exportHistoryAsJson,
   listHistory,
 } from "./history";
+import type { FeatureVector } from "../score/featureVector";
+
+const VECTOR: FeatureVector = {
+  meetsMinimumData: true,
+  ratingDeconvolution: { injectedShare: 0.4, residualError: 0.02 },
+  temporalBurst: { bursts: [], burstFraction: 0, burstCount: 0, largestBurstShare: 0 },
+  verificationConcentration: { lift: 1.2, baseCount: 8 },
+  textNearDuplication: { duplicateReviewShare: 0, clusterCount: 0, largestClusterShare: 0 },
+  listingDrift: {
+    offTopicShare: null,
+    offTopicCount: 0,
+    meanDistance: null,
+    changePoint: null,
+    driftStatistic: 0,
+    embeddedCount: 0,
+  },
+  reviewerGraph: null,
+};
 
 describe("history", () => {
   it("starts empty", async () => {
@@ -59,8 +77,42 @@ describe("history", () => {
     await addHistoryEntry({ title: "has, a comma", thumbnailUrl: null, report: {} });
     const csv = await exportHistoryAsCsv();
     const lines = csv.split("\n");
-    expect(lines[0]).toBe("timestamp,title,thumbnailUrl");
+    expect(lines[0]).toBe("timestamp,title,band,estimatedInorganicShare,thumbnailUrl");
     expect(lines).toHaveLength(3);
     expect(lines.some((line) => line.includes('"has, a comma"'))).toBe(true);
+  });
+  it("carries the band and the share into the csv, since a title alone judges nothing", async () => {
+    await addHistoryEntry({
+      title: "scored",
+      thumbnailUrl: null,
+      report: {
+        band: "doubtful",
+        claimedRating: 4.6,
+        adjustedRating: 3.8,
+        estimatedInorganicShare: 0.42,
+      },
+    });
+
+    const line = (await exportHistoryAsCsv()).split("\n")[1];
+
+    expect(line).toContain("doubtful");
+    expect(line).toContain("0.42");
+  });
+
+  it("leaves the band empty for an entry whose report it cannot read", async () => {
+    await addHistoryEntry({ title: "legacy", thumbnailUrl: null, report: null });
+
+    expect((await exportHistoryAsCsv()).split("\n")[1]).toMatch(/^\d+,legacy,,,$/);
+  });
+
+  it("round trips a stored feature vector", async () => {
+    await addHistoryEntry({
+      title: "vectored",
+      thumbnailUrl: null,
+      report: { band: "clean" },
+      featureVector: VECTOR,
+    });
+
+    expect((await listHistory())[0]?.featureVector).toEqual(VECTOR);
   });
 });

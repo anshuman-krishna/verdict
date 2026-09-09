@@ -264,8 +264,6 @@ describe("textNearDuplication", () => {
       );
     });
 
-    // the links found over one product say nothing about another, and a cache handed both must not
-    // answer half of the second set with them
     it("rebuilds rather than answering for reviews it never saw", () => {
       const cache: DuplicateLinkCache = new WeakMap();
       textNearDuplication(population, { linkCache: cache });

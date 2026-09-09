@@ -93,6 +93,16 @@ train corpus *args:
     # relative to where the command was typed
     uv --directory research run python -m verdict_research.model.cli "{{corpus}}" {{args}}
 
+# `just train` measures a model on its own corpus. this measures the one
+# that shipped, on rows it never saw. Reads model.json, never writes it,
+# and exits non zero when a criterion no longer holds.
+#
+# score the exported model.json against a corpus
+audit corpus *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv --directory research run python -m verdict_research.model.audit_cli "{{corpus}}" {{args}}
+
 # every report path already handles the absent form as "no score can be
 # computed yet".
 #
