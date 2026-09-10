@@ -25,6 +25,7 @@ def _model_body(model: CombinerModel) -> dict[str, Any]:
         "intercept": model.intercept,
         "coefficients": dict(sorted(model.coefficients.items())),
         "calibration": [{"x": point.x, "y": point.y} for point in model.calibration],
+        "featureQuantiles": {k: list(v) for k, v in sorted(model.feature_quantiles.items())},
     }
 
 
@@ -76,6 +77,10 @@ def _parse_model(data: dict[str, Any]) -> CombinerModel:
         calibration=[
             CalibrationPoint(x=float(p["x"]), y=float(p["y"])) for p in data["calibration"]
         ],
+        feature_quantiles={
+            str(k): [float(value) for value in v]
+            for k, v in data.get("featureQuantiles", {}).items()
+        },
     )
 
 

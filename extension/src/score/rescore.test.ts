@@ -95,3 +95,31 @@ describe("rescoreAll", () => {
     expect(results[1]?.rescored).toBeNull();
   });
 });
+
+describe("rescoring a stored vector missing a signal", () => {
+  const IMPUTING: CombinerModel = {
+    intercept: -2,
+    coefficients: {
+      "ratingDeconvolution.injectedShare": 3,
+      "listingDrift.offTopicShare": 2,
+    },
+    calibration: [],
+    featureQuantiles: { "listingDrift.offTopicShare": [0, 0.2, 0.4] },
+  };
+
+  it("scores at the median rather than dropping the entry", () => {
+    const result = rescore({ featureVector: vector() }, localModelSet(IMPUTING));
+    expect(result?.unavailableSignals).toEqual(["different product"]);
+    expect(result?.probability).toBeCloseTo(1 / (1 + Math.exp(-(-2 + 3 * 0.5 + 2 * 0.2))), 12);
+  });
+
+  it("names nothing when the stored vector carried every signal", () => {
+    const result = rescore({ featureVector: vector() }, localModelSet(MODEL));
+    expect(result?.unavailableSignals).toEqual([]);
+  });
+
+  it("still returns null when the model carries no sketch to impute from", () => {
+    const { featureQuantiles: _none, ...withoutSketch } = IMPUTING;
+    expect(rescore({ featureVector: vector() }, localModelSet(withoutSketch))).toBeNull();
+  });
+});

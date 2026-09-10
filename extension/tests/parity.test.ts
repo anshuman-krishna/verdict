@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { applyModel, type CombinerModel } from "../src/score/combine";
+import { applyModel, quantileValue, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
 import { listingIdentityDrift } from "../src/score/listingDrift";
@@ -190,11 +190,16 @@ function run(vector: Vector): unknown {
       };
     }
     case "combine": {
-      const { featureVector, model } = vector.input as {
+      const { featureVector, model, impute } = vector.input as {
         featureVector: FeatureVector;
         model: CombinerModel;
+        impute?: number;
       };
-      return applyModel(featureVector, model);
+      return applyModel(featureVector, model, { impute });
+    }
+    case "quantileValue": {
+      const { quantiles, fraction } = vector.input as { quantiles: number[]; fraction: number };
+      return { value: quantileValue(quantiles, fraction) };
     }
     default:
       throw new Error(`unknown signal in parity vectors: ${vector.signal}`);

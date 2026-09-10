@@ -21,6 +21,7 @@ describe("parseModelArtifact", () => {
         intercept: -1.5,
         coefficients: { "temporalBurst.burstFraction": 2.25 },
         calibration: PRESENT.calibration,
+        featureQuantiles: {},
       },
       reviewerGraph: null,
     });
@@ -108,5 +109,52 @@ describe("the committed model.json", () => {
       expect(typeof record.reason).toBe("string");
       expect(BUNDLED_MODEL).toBeNull();
     }
+  });
+});
+
+describe("feature quantiles in the artifact", () => {
+  const SKETCH = { "temporalBurst.burstFraction": [0, 0.25, 0.9] };
+
+  it("reads a sketch the trainer wrote", () => {
+    const parsed = parseModelArtifact({ ...PRESENT, featureQuantiles: SKETCH });
+    expect(parsed?.local.featureQuantiles).toEqual(SKETCH);
+  });
+
+  it("treats an artifact with no sketch as one that cannot impute", () => {
+    expect(parseModelArtifact(PRESENT)?.local.featureQuantiles).toEqual({});
+  });
+
+  it("refuses a sketch that is not sorted", () => {
+    expect(
+      parseModelArtifact({ ...PRESENT, featureQuantiles: { a: [0.5, 0.1] } }),
+    ).toBeNull();
+  });
+
+  it("refuses an empty sketch, which would be imputed as nothing", () => {
+    expect(parseModelArtifact({ ...PRESENT, featureQuantiles: { a: [] } })).toBeNull();
+  });
+
+  it("refuses a sketch carrying something that is not a number", () => {
+    expect(parseModelArtifact({ ...PRESENT, featureQuantiles: { a: [0, "1"] } })).toBeNull();
+  });
+});
+
+describe("a calibration curve that is not a probability", () => {
+  it("refuses a point mapping to more than one", () => {
+    expect(
+      parseModelArtifact({ ...PRESENT, calibration: [{ x: 0, y: 0 }, { x: 1, y: 1.4 }] }),
+    ).toBeNull();
+  });
+
+  it("refuses a negative point", () => {
+    expect(
+      parseModelArtifact({ ...PRESENT, calibration: [{ x: -0.1, y: 0 }] }),
+    ).toBeNull();
+  });
+
+  it("refuses a point that is not finite", () => {
+    expect(
+      parseModelArtifact({ ...PRESENT, calibration: [{ x: 0, y: Number.NaN }] }),
+    ).toBeNull();
   });
 });

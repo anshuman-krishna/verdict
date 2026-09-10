@@ -40,6 +40,7 @@ export interface Report {
   estimatedInorganicShare: number;
   confidence: ConfidenceInterval;
   evidence: EvidenceRow[];
+  unavailableSignals: string[];
   generatedAt: number;
 }
 

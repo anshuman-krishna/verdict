@@ -41,6 +41,7 @@ class CombinerModel:
     intercept: float
     coefficients: dict[str, float]
     calibration: list[CalibrationPoint] = field(default_factory=list)
+    feature_quantiles: dict[str, list[float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -72,6 +73,7 @@ class MissingFeatures:
 class CombinerOk:
     raw_probability: float
     probability: float
+    imputed: list[str] = field(default_factory=list)
     status: str = "ok"
 
 
@@ -79,7 +81,42 @@ CombinerResult = InsufficientData | MissingFeatures | CombinerOk
 
 
 def _sigmoid(x: float) -> float:
-    return 1 / (1 + math.exp(-x))
+    if x >= 0:
+        return 1 / (1 + math.exp(-x))
+    e = math.exp(x)
+    return e / (1 + e)
+
+
+MEDIAN_FRACTION = 0.5
+
+
+def quantile_value(quantiles: list[float], fraction: float) -> float:
+    if not quantiles:
+        raise ValueError("quantile_value needs at least one quantile")
+    position = min(max(fraction, 0.0), 1.0) * (len(quantiles) - 1)
+    lower = math.floor(position)
+    upper = min(lower + 1, len(quantiles) - 1)
+    weight = position - lower
+    return quantiles[lower] * (1 - weight) + quantiles[upper] * weight
+
+
+SIGNAL_NAMES = {
+    "ratingDeconvolution": "rating shape",
+    "temporalBurst": "arrival timing",
+    "verificationConcentration": "verification pattern",
+    "textNearDuplication": "duplicate text",
+    "listingDrift": "different product",
+    "reviewerGraph": "reviewer network",
+}
+
+
+def signals_for(feature_keys: list[str]) -> list[str]:
+    names: list[str] = []
+    for key in feature_keys:
+        name = SIGNAL_NAMES.get(key.split(".")[0])
+        if name is not None and name not in names:
+            names.append(name)
+    return names
 
 
 def apply_calibration(points: list[CalibrationPoint], x: float) -> float:
@@ -100,20 +137,37 @@ def apply_calibration(points: list[CalibrationPoint], x: float) -> float:
     return last.y
 
 
-def apply_model(feature_vector: FeatureVector, model: CombinerModel) -> CombinerResult:
-    if not feature_vector.meets_minimum_data:
-        return InsufficientData()
-
-    flat = flatten_feature_vector(feature_vector)
+def score_features(
+    model: CombinerModel, flat: FlatFeatures, *, impute: float | None = None
+) -> CombinerResult:
     required_keys = list(model.coefficients.keys())
     missing = [key for key in required_keys if flat.get(key) is None]
     if missing:
-        return MissingFeatures(missing=missing)
+        if impute is None:
+            return MissingFeatures(missing=missing)
+        unsketched = [key for key in missing if not model.feature_quantiles.get(key)]
+        if unsketched:
+            return MissingFeatures(missing=unsketched)
+        # all imputed is the prior
+        if len(missing) == len(required_keys):
+            return InsufficientData()
 
+    fraction = MEDIAN_FRACTION if impute is None else impute
     linear = model.intercept
     for key in required_keys:
-        linear += model.coefficients[key] * flat[key]
+        value = flat.get(key)
+        if value is None:
+            value = quantile_value(model.feature_quantiles[key], fraction)
+        linear += model.coefficients[key] * value
 
     raw_probability = _sigmoid(linear)
     probability = apply_calibration(model.calibration, raw_probability)
-    return CombinerOk(raw_probability=raw_probability, probability=probability)
+    return CombinerOk(raw_probability=raw_probability, probability=probability, imputed=missing)
+
+
+def apply_model(
+    feature_vector: FeatureVector, model: CombinerModel, *, impute: float | None = None
+) -> CombinerResult:
+    if not feature_vector.meets_minimum_data:
+        return InsufficientData()
+    return score_features(model, flatten_feature_vector(feature_vector), impute=impute)

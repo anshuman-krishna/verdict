@@ -4,7 +4,9 @@ import {
   applyModel,
   flattenFeatureVector,
   localModelSet,
+  quantileValue,
   selectModel,
+  signalsFor,
   type CombinerModel,
 } from "./combine";
 import type { FeatureVector } from "./featureVector";
@@ -218,5 +220,106 @@ describe("the reviewer graph feature", () => {
       status: "missing-features",
       missing: ["reviewerGraph.flaggedReviewShare"],
     });
+  });
+});
+
+describe("quantileValue", () => {
+  const SKETCH = [0, 0.25, 0.5, 0.75, 1];
+
+  it("interpolates between the two nearest quantiles", () => {
+    expect(quantileValue(SKETCH, 0.5)).toBeCloseTo(0.5, 12);
+    expect(quantileValue(SKETCH, 0.375)).toBeCloseTo(0.375, 12);
+  });
+
+  it("clamps a fraction outside the sketch to its ends", () => {
+    expect(quantileValue(SKETCH, -1)).toBe(0);
+    expect(quantileValue(SKETCH, 2)).toBe(1);
+  });
+
+  it("returns the only point of a one point sketch", () => {
+    expect(quantileValue([3], 0.9)).toBe(3);
+  });
+
+  it("throws on an empty sketch rather than inventing a value", () => {
+    expect(() => quantileValue([], 0.5)).toThrow();
+  });
+});
+
+describe("signalsFor", () => {
+  it("names each signal group once, in the order it was given", () => {
+    expect(
+      signalsFor([
+        "temporalBurst.burstFraction",
+        "temporalBurst.burstCount",
+        "listingDrift.offTopicShare",
+      ]),
+    ).toEqual(["arrival timing", "different product"]);
+  });
+
+  it("skips a key belonging to no signal", () => {
+    expect(signalsFor(["nothing.at.all"])).toEqual([]);
+  });
+});
+
+describe("imputing an unavailable signal", () => {
+  function imputingModel(): CombinerModel {
+    return {
+      intercept: 0,
+      coefficients: {
+        "ratingDeconvolution.injectedShare": 3,
+        "verificationConcentration.lift": 1,
+      },
+      calibration: [],
+      featureQuantiles: { "verificationConcentration.lift": [0, 1, 4] },
+    };
+  }
+
+  const withoutVerification = () => featureVector({ verificationConcentration: null });
+
+  it("scores instead of refusing, and says what it imputed", () => {
+    const result = applyModel(withoutVerification(), imputingModel(), { impute: 0.5 });
+    expect(result.status).toBe("ok");
+    expect(result.status === "ok" && result.imputed).toEqual(["verificationConcentration.lift"]);
+  });
+
+  it("substitutes the sketch value the fraction names", () => {
+    const result = applyModel(withoutVerification(), imputingModel(), { impute: 0.5 });
+    const expected = 1 / (1 + Math.exp(-(3 * 0.5 + 1)));
+    expect(result.status === "ok" && result.rawProbability).toBeCloseTo(expected, 12);
+  });
+
+  it("moves with the fraction, which is what widens the interval", () => {
+    const low = applyModel(withoutVerification(), imputingModel(), { impute: 0 });
+    const high = applyModel(withoutVerification(), imputingModel(), { impute: 1 });
+    expect(low.status === "ok" && high.status === "ok" && low.rawProbability < high.rawProbability)
+      .toBe(true);
+  });
+
+  it("still refuses without an explicit fraction, so nothing imputes by accident", () => {
+    expect(applyModel(withoutVerification(), imputingModel()).status).toBe("missing-features");
+  });
+
+  it("refuses a feature the model carries no sketch for", () => {
+    const model = { ...imputingModel(), featureQuantiles: {} };
+    expect(applyModel(withoutVerification(), model, { impute: 0.5 }).status).toBe(
+      "missing-features",
+    );
+  });
+
+  it("refuses when every feature would be imputed, since that is only the prior", () => {
+    const model: CombinerModel = {
+      intercept: 0,
+      coefficients: { "verificationConcentration.lift": 1 },
+      calibration: [],
+      featureQuantiles: { "verificationConcentration.lift": [0, 1, 4] },
+    };
+    expect(applyModel(withoutVerification(), model, { impute: 0.5 }).status).toBe(
+      "insufficient-data",
+    );
+  });
+
+  it("reports nothing imputed when every feature is present", () => {
+    const result = applyModel(featureVector(), imputingModel(), { impute: 0.5 });
+    expect(result.status === "ok" && result.imputed).toEqual([]);
   });
 });

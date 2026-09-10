@@ -2,7 +2,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { preflightProblems } from "./storePreflight.mjs";
+import { modelProblems, preflightProblems } from "./storePreflight.mjs";
 
 const DEFAULT_OUTPUT = resolve(import.meta.dirname, "..", ".output");
 const SCANNED_EXTENSIONS = [".js", ".mjs", ".html", ".css", ".json"];
@@ -52,7 +52,17 @@ function main() {
     .filter((path) => path !== join(bundle, "manifest.json"))
     .map((path) => ({ path: relative(bundle, path), text: readFileSync(path, "utf8") }));
 
-  const problems = preflightProblems(manifest, files);
+  const modelPath = resolve(import.meta.dirname, "..", "src", "score", "model.json");
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(modelPath, "utf8"));
+  } catch {
+    console.error(`no model artifact at ${modelPath}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const problems = [...preflightProblems(manifest, files), ...modelProblems(artifact)];
   if (problems.length > 0) {
     console.error(`${target} is not shippable:`);
     for (const problem of problems) {

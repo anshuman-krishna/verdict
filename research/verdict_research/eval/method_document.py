@@ -31,6 +31,7 @@ def build_method_document(run: TrainingRun, trained_at: float) -> dict[str, Any]
             "recall": None if point is None else point.recall,
             "expectedCalibrationError": run.report.expected_calibration_error,
             "evaluatedCount": run.report.evaluated_count,
+            "imputedCount": run.report.imputed_count,
             "heldOutCount": run.sizes.test,
         },
         "criteria": {

@@ -1,6 +1,6 @@
 import type { Review } from "../extract/types";
 import { bandFromProbability } from "./band";
-import { applyModel, selectModel, type ModelSet } from "./combine";
+import { applyModel, MEDIAN_FRACTION, selectModel, signalsFor, type ModelSet } from "./combine";
 import { buildEvidence } from "./evidence";
 import { buildFeatureVector, type FeatureVector, type FeatureVectorInputs } from "./featureVector";
 import { bootstrap, interquartileRange } from "./bootstrap";
@@ -66,7 +66,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
 
   // picked once, so resamples cannot switch
   const model = selectModel(options.model, vector);
-  const result = applyModel(vector, model);
+  const result = applyModel(vector, model, { impute: MEDIAN_FRACTION });
   if (result.status === "insufficient-data") {
     return { status: "not-enough-data" };
   }
@@ -74,14 +74,16 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     return { status: "missing-features", missing: result.missing };
   }
 
+  const random = options.random ?? Math.random;
   const samples = bootstrap(
     options.reviews,
     (sample) => {
       const sampleVector = buildFeatureVector(sample, priors);
-      const sampleResult = applyModel(sampleVector, model);
+      // drawn per resample, so it widens
+      const sampleResult = applyModel(sampleVector, model, { impute: random() });
       return sampleResult.status === "ok" ? sampleResult.probability : null;
     },
-    { resamples: options.bootstrapResamples, random: options.random },
+    { resamples: options.bootstrapResamples, random },
   ).filter((value): value is number => value !== null);
   const confidence = samples.length > 0
     ? interquartileRange(samples)
@@ -104,6 +106,7 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     estimatedInorganicShare: inorganicShare,
     confidence,
     evidence: buildEvidence(vector),
+    unavailableSignals: signalsFor(result.imputed),
     generatedAt,
   };
 

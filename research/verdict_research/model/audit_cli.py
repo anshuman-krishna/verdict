@@ -15,6 +15,7 @@ def _print(audit: Audit, corpus: str) -> None:
     print(f"features: {', '.join(sorted(audit.model.coefficients))}")
     print(
         f"rows: {audit.report.evaluated_count} scored, "
+        f"{audit.report.imputed_count} with a signal imputed, "
         f"{audit.report.skipped_missing_features_count} skipped for a missing feature"
     )
     if point is None:
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
                     "expectedCalibrationError": audit.report.expected_calibration_error,
                     "evaluatedCount": audit.report.evaluated_count,
                     "skippedMissingFeaturesCount": audit.report.skipped_missing_features_count,
+                    "imputedCount": audit.report.imputed_count,
                     "precision": None
                     if audit.operating_point is None
                     else audit.operating_point.precision,

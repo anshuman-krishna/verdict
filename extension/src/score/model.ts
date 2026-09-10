@@ -13,10 +13,44 @@ function parseModel(value: unknown): CombinerModel | null {
   const intercept = record.intercept;
   const coefficients = parseCoefficients(record.coefficients);
   const calibration = parseCalibration(record.calibration);
-  if (typeof intercept !== "number" || coefficients === null || calibration === null) {
+  const featureQuantiles = parseFeatureQuantiles(record.featureQuantiles);
+  if (
+    typeof intercept !== "number" ||
+    coefficients === null ||
+    calibration === null ||
+    featureQuantiles === null
+  ) {
     return null;
   }
-  return { intercept, coefficients, calibration };
+  return { intercept, coefficients, calibration, featureQuantiles };
+}
+
+function parseFeatureQuantiles(value: unknown): Record<string, number[]> | null {
+  if (value === undefined) {
+    return {};
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const parsed: Record<string, number[]> = {};
+  for (const [name, quantiles] of Object.entries(value)) {
+    if (!Array.isArray(quantiles) || quantiles.length === 0) {
+      return null;
+    }
+    const numbers: number[] = [];
+    for (const entry of quantiles) {
+      if (typeof entry !== "number" || !Number.isFinite(entry)) {
+        return null;
+      }
+      const previous = numbers[numbers.length - 1];
+      if (previous !== undefined && entry < previous) {
+        return null;
+      }
+      numbers.push(entry);
+    }
+    parsed[name] = numbers;
+  }
+  return parsed;
 }
 
 export function parseModelArtifact(data: unknown): ModelSet | null {
@@ -51,6 +85,10 @@ function parseCoefficients(value: unknown): Record<string, number> | null {
   return parsed;
 }
 
+function isProbability(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
 function parseCalibration(value: unknown): CalibrationPoint[] | null {
   if (!Array.isArray(value)) {
     return null;
@@ -61,7 +99,7 @@ function parseCalibration(value: unknown): CalibrationPoint[] | null {
       return null;
     }
     const { x, y } = entry as Record<string, unknown>;
-    if (typeof x !== "number" || typeof y !== "number") {
+    if (!isProbability(x) || !isProbability(y)) {
       return null;
     }
     const previous = points[points.length - 1];

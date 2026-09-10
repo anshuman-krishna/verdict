@@ -19,6 +19,7 @@ function sampleReport(overrides: Partial<Report> = {}): Report {
       { signal: "duplicate text", strength: "weak", value: 0.02, detail: "" },
       { signal: "different product", strength: "none", value: null, detail: "" },
     ],
+    unavailableSignals: [],
     generatedAt: 0,
     ...overrides,
   };

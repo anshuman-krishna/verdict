@@ -18,6 +18,7 @@ function sampleReport(overrides: Partial<Report> = {}): Report {
       { signal: "rating shape", strength: "strong", detail: "the rating histogram does not look organic", value: 0.4 },
       { signal: "arrival timing", strength: "moderate", detail: "reviews arrived in unusual bursts", value: 0.2 },
     ],
+    unavailableSignals: [],
     generatedAt: Date.now(),
     ...overrides,
   };
@@ -42,6 +43,12 @@ function stubMatchMedia(matches: boolean): void {
 beforeEach(() => {
   stubMatchMedia(false);
 });
+
+function render(report: Report): ShadowRoot {
+  const panel = new VerdictPanelElement();
+  panel.render(report, rosetteInput);
+  return getPanelShadowRootForTesting(panel);
+}
 
 describe("VerdictPanelElement", () => {
   it("renders the band, figures, counts, and summary sentence from the report", () => {
@@ -165,5 +172,48 @@ describe("VerdictPanelElement", () => {
     const root = getPanelShadowRootForTesting(panel);
 
     expect(root.querySelector(".checked")?.textContent).toBe("checked 5 minutes ago");
+  });
+});
+
+describe("the confidence interval and what could not be read", () => {
+  it("states the range the bootstrap produced", () => {
+    const root = render(sampleReport({ confidence: { low: 0.1, high: 0.19 } }));
+    expect(root.querySelector(".interval-note")?.textContent).toContain("10 to 19 percent");
+  });
+
+  it("collapses a range that rounds to one number", () => {
+    const root = render(sampleReport({ confidence: { low: 0.142, high: 0.144 } }));
+    expect(root.querySelector(".interval-note")?.textContent).toContain("14 percent");
+  });
+
+  it("draws a wide band wide, never hidden", () => {
+    const narrow = render(sampleReport({ confidence: { low: 0.4, high: 0.45 } }));
+    const wide = render(sampleReport({ confidence: { low: 0.1, high: 0.9 } }));
+    const width = (root: ShadowRoot) =>
+      Number.parseFloat(
+        root.querySelector<HTMLElement>(".interval-span")?.style.width.replace("%", "") ?? "0",
+      );
+    expect(width(wide)).toBeGreaterThan(width(narrow));
+  });
+
+  it("says which signal could not be read", () => {
+    const root = render(sampleReport({ unavailableSignals: ["different product"] }));
+    expect(root.querySelector(".interval-note")?.textContent).toContain(
+      "different product could not be read on this page",
+    );
+  });
+
+  it("joins two unreadable signals rather than listing them twice", () => {
+    const root = render(
+      sampleReport({ unavailableSignals: ["different product", "verification pattern"] }),
+    );
+    expect(root.querySelector(".interval-note")?.textContent).toContain(
+      "different product and verification pattern could not be read",
+    );
+  });
+
+  it("says nothing about unreadable signals when every signal was read", () => {
+    const root = render(sampleReport());
+    expect(root.querySelector(".interval-note")?.textContent).not.toContain("could not be read");
   });
 });

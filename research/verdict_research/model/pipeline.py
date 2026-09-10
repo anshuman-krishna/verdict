@@ -3,10 +3,11 @@ from dataclasses import dataclass
 from verdict_research.corpus.dataset import LabeledExample, train_test_split
 from verdict_research.eval.metrics import ThresholdPoint
 from verdict_research.eval.report import EvalReport, evaluate_model
-from verdict_research.model.combine import CombinerModel
+from verdict_research.model.combine import MEDIAN_FRACTION, CombinerModel
 from verdict_research.model.train import (
     LogisticFit,
     export_model,
+    feature_quantiles,
     fit_isotonic_regression,
     fit_logistic_regression,
     predict_probability,
@@ -114,9 +115,11 @@ def train_pipeline(
         (predict_probability(fit, row), float(label))
         for row, label in zip(calibration_rows, calibration_labels, strict=True)
     ]
-    model = export_model(fit, fit_isotonic_regression(pairs))
+    model = export_model(
+        fit, fit_isotonic_regression(pairs), feature_quantiles(fit_rows, feature_names)
+    )
 
-    report = evaluate_model(model, held_out)
+    report = evaluate_model(model, held_out, impute=MEDIAN_FRACTION)
     return TrainingRun(
         model=model,
         fit=fit,
@@ -165,6 +168,7 @@ def acceptance_summary(run: TrainingRun) -> dict[str, object]:
         "expectedCalibrationError": run.report.expected_calibration_error,
         "evaluatedCount": run.report.evaluated_count,
         "skippedMissingFeaturesCount": run.report.skipped_missing_features_count,
+        "imputedCount": run.report.imputed_count,
         "trainCount": run.sizes.train,
         "calibrationCount": run.sizes.calibration,
         "testCount": run.sizes.test,

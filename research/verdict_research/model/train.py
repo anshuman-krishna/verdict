@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 
-from verdict_research.model.combine import CalibrationPoint, CombinerModel
+from verdict_research.model.combine import CalibrationPoint, CombinerModel, quantile_value
 
 
 @dataclass
@@ -108,9 +108,33 @@ def fit_isotonic_regression(pairs: list[tuple[float, float]]) -> list[Calibratio
     return points
 
 
-def export_model(fit: LogisticFit, calibration: list[CalibrationPoint]) -> CombinerModel:
+QUANTILE_COUNT = 11
+
+
+def feature_quantiles(
+    rows: list[dict[str, float]], feature_names: list[str], count: int = QUANTILE_COUNT
+) -> dict[str, list[float]]:
+    if count < 2:
+        raise ValueError("a quantile sketch needs both ends")
+    sketch: dict[str, list[float]] = {}
+    for name in feature_names:
+        values = sorted(float(row[name]) for row in rows if row.get(name) is not None)
+        if not values:
+            continue
+        sketch[name] = [quantile_value(values, index / (count - 1)) for index in range(count)]
+    return sketch
+
+
+def export_model(
+    fit: LogisticFit,
+    calibration: list[CalibrationPoint],
+    quantiles: dict[str, list[float]] | None = None,
+) -> CombinerModel:
     return CombinerModel(
-        intercept=fit.intercept, coefficients=dict(fit.coefficients), calibration=calibration
+        intercept=fit.intercept,
+        coefficients=dict(fit.coefficients),
+        calibration=calibration,
+        feature_quantiles={} if quantiles is None else dict(quantiles),
     )
 
 
@@ -119,6 +143,7 @@ def model_to_json(model: CombinerModel) -> dict:
         "intercept": model.intercept,
         "coefficients": dict(model.coefficients),
         "calibration": [{"x": point.x, "y": point.y} for point in model.calibration],
+        "featureQuantiles": {k: list(v) for k, v in model.feature_quantiles.items()},
     }
 
 
@@ -127,4 +152,8 @@ def model_from_json(data: dict) -> CombinerModel:
         intercept=data["intercept"],
         coefficients=dict(data["coefficients"]),
         calibration=[CalibrationPoint(x=point["x"], y=point["y"]) for point in data["calibration"]],
+        feature_quantiles={
+            str(k): [float(value) for value in v]
+            for k, v in data.get("featureQuantiles", {}).items()
+        },
     )

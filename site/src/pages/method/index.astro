@@ -216,6 +216,11 @@ function percent(value: number | null): string {
                 <td class="data">{accuracy.heldOutCount}</td>
                 <td>n/a</td>
               </tr>
+              <tr>
+                <td>Of those, scored with a signal unavailable</td>
+                <td class="data">{accuracy.imputedCount ?? 0}</td>
+                <td>n/a</td>
+              </tr>
             </tbody>
           </table>
         </div>

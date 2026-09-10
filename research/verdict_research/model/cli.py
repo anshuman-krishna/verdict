@@ -45,6 +45,10 @@ def _print_run(run: TrainingRun, problems: list[str]) -> None:
         f"rows: {run.sizes.train} train, {run.sizes.calibration} calibration, "
         f"{run.sizes.test} held out, {run.sizes.dropped_incomplete} dropped as incomplete"
     )
+    print(
+        f"held out: {run.report.evaluated_count} scored, "
+        f"{run.report.imputed_count} with a signal imputed"
+    )
     if point is None:
         print("operating point: no threshold clears the recall floor")
     else:

@@ -5,6 +5,7 @@ import {
   declaredHosts,
   hostProblems,
   hostsIn,
+  modelProblems,
   permissionProblems,
   preflightProblems,
   remoteCodeProblems,
@@ -158,5 +159,58 @@ describe("preflightProblems", () => {
     const manifest = { ...MANIFEST, permissions: ["tabs"], host_permissions: ["<all_urls>"] };
     const problems = preflightProblems(manifest, file('eval("1");fetch("https://x.example.com/")'));
     expect(problems.length).toBeGreaterThan(3);
+  });
+});
+
+describe("modelProblems", () => {
+  const PRESENT = {
+    artifactVersion: 1,
+    present: true,
+    intercept: -1,
+    coefficients: { "temporalBurst.burstFraction": 2 },
+    calibration: [],
+    featureQuantiles: { "temporalBurst.burstFraction": [0, 0.5, 1] },
+  };
+
+  it("passes a model that can impute every feature it weighs", () => {
+    expect(modelProblems(PRESENT)).toEqual([]);
+  });
+
+  it("passes the absent artifact, which ships no scorer to gate", () => {
+    expect(modelProblems({ artifactVersion: 1, present: false, reason: "none yet" })).toEqual([]);
+  });
+
+  it("refuses a model with no sketch for a feature it weighs", () => {
+    const { featureQuantiles: _none, ...withoutSketch } = PRESENT;
+    expect(modelProblems(withoutSketch)).toHaveLength(1);
+  });
+
+  it("names every uncovered feature, not just the first", () => {
+    const model = {
+      ...PRESENT,
+      coefficients: { a: 1, b: 2 },
+      featureQuantiles: {},
+    };
+    expect(modelProblems(model)[0]).toContain("a, b");
+  });
+
+  it("checks the reviewer graph slot too", () => {
+    const model = {
+      ...PRESENT,
+      reviewerGraph: { intercept: 0, coefficients: { a: 1 }, calibration: [] },
+    };
+    expect(modelProblems(model)).toHaveLength(1);
+    expect(modelProblems(model)[0]).toContain("reviewer graph");
+  });
+
+  it("refuses an empty sketch, which would impute nothing", () => {
+    expect(
+      modelProblems({ ...PRESENT, featureQuantiles: { "temporalBurst.burstFraction": [] } }),
+    ).toHaveLength(1);
+  });
+
+  it("refuses something that is not an artifact at all", () => {
+    expect(modelProblems(null)).toHaveLength(1);
+    expect(modelProblems([])).toHaveLength(1);
   });
 });

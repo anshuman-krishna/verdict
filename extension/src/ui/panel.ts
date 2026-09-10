@@ -34,6 +34,23 @@ function relativeCheckedTime(generatedAt: number, now: number): string {
   return `checked ${hours} hour${hours === 1 ? "" : "s"} ago`;
 }
 
+function joinSignals(signals: readonly string[]): string {
+  if (signals.length < 2) {
+    return signals[0] ?? "";
+  }
+  return `${signals.slice(0, -1).join(", ")} and ${signals[signals.length - 1]}`;
+}
+
+export function confidenceLine(report: Report): string {
+  const low = Math.round(report.confidence.low * 100);
+  const high = Math.round(report.confidence.high * 100);
+  const range = low === high ? `${low} percent` : `${low} to ${high} percent`;
+  const unavailable = report.unavailableSignals.length === 0
+    ? ""
+    : ` ${joinSignals(report.unavailableSignals)} could not be read on this page, which widens it.`;
+  return `The estimate sits between ${range} of reviews.${unavailable}`;
+}
+
 export class VerdictPanelElement extends HTMLElement {
   private report: Report | null = null;
   private focusableSelector =
@@ -123,6 +140,20 @@ export class VerdictPanelElement extends HTMLElement {
           <span>kept ${(report.totalReviewCount - report.excludedReviewCount).toLocaleString()}</span>
           <span>excluded ${report.excludedReviewCount.toLocaleString()}</span>
         </div>
+
+        <div
+          class="interval"
+          role="img"
+          aria-label="${confidenceLine(report)}"
+        >
+          <div
+            class="interval-span"
+            style="margin-left: ${(report.confidence.low * 100).toFixed(2)}%; width: ${
+              Math.max(report.confidence.high - report.confidence.low, 0.005) * 100
+            }%"
+          ></div>
+        </div>
+        <p class="interval-note">${confidenceLine(report)}</p>
 
         <div class="evidence">
           <h2>evidence</h2>
@@ -366,6 +397,26 @@ button.full-report:focus-visible {
   font-size: 0.875rem;
   color: var(--ink-soft);
   margin-top: 4px;
+}
+
+.interval {
+  position: relative;
+  height: 6px;
+  margin-top: 12px;
+  border-radius: 1px;
+  background: var(--paper-sunk);
+}
+
+.interval-span {
+  height: 100%;
+  border-radius: 1px;
+  background: var(--ink-soft);
+}
+
+.interval-note {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  margin: 4px 0 0;
 }
 
 .evidence h2 {

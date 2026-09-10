@@ -127,6 +127,37 @@ export function hostProblems(manifest, files) {
   return [...new Set(problems)];
 }
 
+function modelSlots(artifact) {
+  const slots = [["local", artifact]];
+  if (artifact.reviewerGraph !== undefined && artifact.reviewerGraph !== null) {
+    slots.push(["reviewer graph", artifact.reviewerGraph]);
+  }
+  return slots;
+}
+
+export function modelProblems(artifact) {
+  if (artifact === null || typeof artifact !== "object" || Array.isArray(artifact)) {
+    return ["model.json is not an artifact, so the build ships no scorer at all"];
+  }
+  if (artifact.present !== true) {
+    return [];
+  }
+  const problems = [];
+  for (const [slot, model] of modelSlots(artifact)) {
+    const quantiles = model?.featureQuantiles ?? {};
+    const uncovered = Object.keys(model?.coefficients ?? {}).filter(
+      (key) => !Array.isArray(quantiles[key]) || quantiles[key].length === 0,
+    );
+    if (uncovered.length > 0) {
+      problems.push(
+        `the ${slot} model carries no quantile sketch for ${uncovered.join(", ")}, so a page ` +
+          "missing that signal gets no report at all rather than a wider one",
+      );
+    }
+  }
+  return problems;
+}
+
 export function preflightProblems(manifest, files) {
   return [
     ...permissionProblems(manifest),

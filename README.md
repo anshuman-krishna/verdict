@@ -32,6 +32,13 @@ hosts, product URL shape, and review page template, and the extension derives it
 its manifest matches, and the website bridge's allowlist from that one file. Adding a
 storefront is an entry there plus a rules file in `extension/src/extract/rules/`.
 
+A page that hides one signal still gets a report. The trainer records a quantile sketch of
+every feature it fits on, so a product with no verification badges or no review text is scored
+with that feature drawn from the sketch instead of being refused outright. The point estimate
+takes the median; each bootstrap resample draws its own value, so the interval widens by
+exactly what is unknown, and the panel names the signal it could not read. A model whose
+sketch does not cover its own coefficients fails `just preflight`.
+
 `research/` and `extension/` implement the same scoring maths twice, once in Python and
 once in TypeScript, checked against each other by a parity test over shared vectors. A
 change to one side that is not mirrored in the other fails `just check`.

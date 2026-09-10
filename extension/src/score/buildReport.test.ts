@@ -112,3 +112,64 @@ describe("buildReport", () => {
     expect(outcome.report.confidence.low).toBeLessThanOrEqual(outcome.report.confidence.high);
   });
 });
+
+describe("a report built with a signal unavailable", () => {
+  const DEGRADING_MODEL: CombinerModel = {
+    intercept: -1,
+    coefficients: {
+      "ratingDeconvolution.injectedShare": 3,
+      "listingDrift.offTopicShare": 2,
+    },
+    calibration: [],
+    featureQuantiles: { "listingDrift.offTopicShare": [0, 0.1, 0.2, 0.4, 0.8] },
+  };
+
+  function build(model: CombinerModel) {
+    return buildReport({
+      reviews: skewedReviews(),
+      seed: "product-1",
+      claimedRating: 4.6,
+      model: localModelSet(model),
+      priors: PRIORS,
+      random: seededRandom(7),
+      bootstrapResamples: 200,
+    });
+  }
+
+  it("scores anyway and names the signal it could not read", () => {
+    const outcome = build(DEGRADING_MODEL);
+    expect(outcome.status).toBe("ok");
+    expect(outcome.status === "ok" && outcome.report.unavailableSignals).toEqual([
+      "different product",
+    ]);
+  });
+
+  it("names nothing when every signal was read", () => {
+    const outcome = build(WORKING_MODEL);
+    expect(outcome.status === "ok" && outcome.report.unavailableSignals).toEqual([]);
+  });
+
+  it("widens the interval, because the imputed value is drawn per resample", () => {
+    const degraded = build(DEGRADING_MODEL);
+    const complete = build(WORKING_MODEL);
+    if (degraded.status !== "ok" || complete.status !== "ok") {
+      throw new Error("both reports should have been built");
+    }
+    const width = (outcome: typeof degraded) =>
+      outcome.report.confidence.high - outcome.report.confidence.low;
+    expect(width(degraded)).toBeGreaterThan(width(complete));
+  });
+
+  it("still refuses when the model carries no sketch to impute from", () => {
+    const { featureQuantiles: _none, ...withoutSketch } = DEGRADING_MODEL;
+    expect(build(withoutSketch).status).toBe("missing-features");
+  });
+});
+
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}

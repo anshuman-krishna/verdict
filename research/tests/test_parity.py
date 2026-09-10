@@ -46,7 +46,12 @@ from verdict_research.features.verification_concentration import (
     VerificationConcentrationResult,
     verification_concentration,
 )
-from verdict_research.model.combine import CalibrationPoint, CombinerModel, apply_model
+from verdict_research.model.combine import (
+    CalibrationPoint,
+    CombinerModel,
+    apply_model,
+    quantile_value,
+)
 from verdict_research.schema import Review
 
 VECTORS_PATH = Path(__file__).parent.parent.parent / "tests" / "parity" / "vectors.jsonl"
@@ -286,17 +291,22 @@ def run(vector: dict):
             intercept=data["model"]["intercept"],
             coefficients=data["model"]["coefficients"],
             calibration=[CalibrationPoint(p["x"], p["y"]) for p in data["model"]["calibration"]],
+            feature_quantiles=data["model"].get("featureQuantiles", {}),
         )
-        result = apply_model(feature_vector, model)
+        result = apply_model(feature_vector, model, impute=data.get("impute"))
         if result.status == "ok":
             return {
                 "status": result.status,
                 "rawProbability": result.raw_probability,
                 "probability": result.probability,
+                "imputed": result.imputed,
             }
         if result.status == "missing-features":
             return {"status": result.status, "missing": result.missing}
         return {"status": result.status}
+
+    if signal == "quantileValue":
+        return {"value": quantile_value(data["quantiles"], data["fraction"])}
 
     raise ValueError(f"unknown signal in parity vectors: {signal}")
 

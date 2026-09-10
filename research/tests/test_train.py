@@ -1,6 +1,9 @@
+import pytest
+
 from verdict_research.model.combine import CalibrationPoint, CombinerModel
 from verdict_research.model.train import (
     export_model,
+    feature_quantiles,
     fit_isotonic_regression,
     fit_logistic_regression,
     model_from_json,
@@ -86,6 +89,7 @@ class TestExportAndJsonRoundTrip:
             "intercept": -1.0,
             "coefficients": {"ratingDeconvolution.injectedShare": 2.0},
             "calibration": [{"x": 0.0, "y": 0.1}],
+            "featureQuantiles": {},
         }
 
     def test_json_round_trips_through_model_from_json(self):
@@ -95,3 +99,33 @@ class TestExportAndJsonRoundTrip:
             calibration=[CalibrationPoint(x=0.0, y=0.1), CalibrationPoint(x=1.0, y=0.9)],
         )
         assert model_from_json(model_to_json(model)) == model
+
+
+class TestFeatureQuantiles:
+    def test_sketch_spans_the_observed_range(self):
+        rows = [{"a": float(value)} for value in range(11)]
+        sketch = feature_quantiles(rows, ["a"])
+        assert sketch["a"][0] == pytest.approx(0.0)
+        assert sketch["a"][-1] == pytest.approx(10.0)
+        assert sketch["a"][5] == pytest.approx(5.0)
+
+    def test_sketch_is_monotonic(self):
+        rows = [{"a": value} for value in [9.0, 1.0, 5.0, 3.0, 7.0]]
+        sketch = feature_quantiles(rows, ["a"])
+        assert sketch["a"] == sorted(sketch["a"])
+
+    def test_a_feature_no_row_carries_gets_no_sketch(self):
+        assert feature_quantiles([{"a": 1.0}], ["a", "b"]) == {"a": [1.0] * 11}
+
+    def test_a_sketch_needs_both_ends(self):
+        with pytest.raises(ValueError):
+            feature_quantiles([{"a": 1.0}], ["a"], count=1)
+
+    def test_quantiles_survive_the_json_round_trip(self):
+        model = CombinerModel(
+            intercept=0.0,
+            coefficients={"a": 1.0},
+            calibration=[],
+            feature_quantiles={"a": [0.0, 0.5, 1.0]},
+        )
+        assert model_from_json(model_to_json(model)).feature_quantiles == {"a": [0.0, 0.5, 1.0]}

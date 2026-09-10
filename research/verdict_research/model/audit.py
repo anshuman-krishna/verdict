@@ -4,7 +4,7 @@ from verdict_research.corpus.dataset import LabeledExample
 from verdict_research.eval.report import EvalReport, evaluate_model
 from verdict_research.features.priors import placeholder_priors, priors_digest
 from verdict_research.model.artifact import LOCAL_SLOT, SLOTS, ArtifactError, parse_model_artifact
-from verdict_research.model.combine import CombinerModel, ModelSet
+from verdict_research.model.combine import MEDIAN_FRACTION, CombinerModel, ModelSet
 from verdict_research.model.pipeline import OperatingPoint, best_operating_point, report_problems
 
 
@@ -38,7 +38,7 @@ def audit_artifact(artifact: dict, examples: list[LabeledExample], slot: str = L
         raise ArtifactError("the corpus holds no examples")
 
     model = _slot_model(models, slot)
-    report = evaluate_model(model, examples)
+    report = evaluate_model(model, examples, impute=MEDIAN_FRACTION)
     point = best_operating_point(report.curve)
     digests = sorted(
         {example.metadata["priors"] for example in examples if "priors" in example.metadata}
