@@ -100,3 +100,35 @@ describe("lookupFlaggedReviewers", () => {
     expect(order).toEqual(["delay", "fetch"]);
   });
 });
+
+describe("a service that answers too slowly (SPEC.md section 13, service unreachable)", () => {
+  it("gives up rather than holding the report open forever", async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const flagged = await lookupFlaggedReviewers(["r1", "r2"], {
+      endpoint: "https://api.example.com/lookup",
+      salt: "salt",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      delay: () => Promise.resolve(),
+      timeoutMs: 0,
+    });
+
+    expect(flagged.size).toBe(0);
+  });
+
+  it("aborts the request it abandoned, so the connection is not left open", async () => {
+    let signal: AbortSignal | undefined;
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise(() => {});
+    });
+    await lookupFlaggedReviewers(["r1"], {
+      endpoint: "https://api.example.com/lookup",
+      salt: "salt",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      delay: () => Promise.resolve(),
+      timeoutMs: 0,
+    });
+
+    expect(signal?.aborted).toBe(true);
+  });
+});

@@ -2,7 +2,6 @@ import type { CalibrationPoint, CombinerModel, ModelSet } from "./combine";
 import artifact from "./model.json";
 
 
-// absence is stated, never implied
 export const ARTIFACT_VERSION = 1;
 
 function parseModel(value: unknown): CombinerModel | null {

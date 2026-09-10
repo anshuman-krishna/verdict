@@ -39,6 +39,15 @@ takes the median; each bootstrap resample draws its own value, so the interval w
 exactly what is unknown, and the panel names the signal it could not read. A model whose
 sketch does not cover its own coefficients fails `just preflight`.
 
+The panel never makes you wait on the network. Scoring runs in two passes over one set of
+cached embeddings: the local signals produce a report immediately, and the reviewer network
+lookup, which deliberately jitters up to four seconds for k anonymity, refines that report in
+place when it lands. While it is outstanding the panel says so, so a figure never changes
+without explanation. If nothing has been drawn within 400 ms the extension says what it is
+doing rather than showing a bare spinner, and a panel closed while provisional stays closed.
+Both service calls are bounded, so a server that accepts a connection and never answers
+cannot wedge the report or stall the contribution queue.
+
 `research/` and `extension/` implement the same scoring maths twice, once in Python and
 once in TypeScript, checked against each other by a parity test over shared vectors. A
 change to one side that is not mirrored in the other fails `just check`.

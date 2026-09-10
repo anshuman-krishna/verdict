@@ -207,7 +207,7 @@ describe("loadRules", () => {
       fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => newerEnvelope }),
       now: () => now,
     });
-    now += 25 * 60 * 60 * 1000; // past the 24 hour ttl
+    now += 25 * 60 * 60 * 1000;
 
     const olderRules: RulesDocument = { version: 3, site: "example", locales: ["com"], fields: FIELDS };
     const olderEnvelope: SignedRulesEnvelope = {

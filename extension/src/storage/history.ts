@@ -10,7 +10,6 @@ export interface HistoryEntry {
   title: string;
   thumbnailUrl: string | null;
   report: unknown;
-  // no text, no reviewer id
   featureVector?: FeatureVector;
 }
 

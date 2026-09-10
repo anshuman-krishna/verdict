@@ -88,3 +88,21 @@ describe("flushDueContributions", () => {
     expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
   });
 });
+
+describe("a service that never answers", () => {
+  it("leaves the queue intact instead of hanging on the flush", async () => {
+    await clearQueue();
+    const fetchImpl = vi.fn().mockImplementation(() => new Promise(() => {}));
+    await enqueueContributionEdges([edge()]);
+
+    const result = await flushDueContributions({
+      endpoint: "https://api.example.com/contribute",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      now: () => FAR_FUTURE,
+      timeoutMs: 0,
+    });
+
+    expect(result.submitted).toBe(0);
+    expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
+  });
+});

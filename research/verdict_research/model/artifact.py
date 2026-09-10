@@ -10,7 +10,6 @@ class ArtifactError(ValueError):
     pass
 
 
-# the local model stays top level
 REVIEWER_GRAPH_SLOT = "reviewerGraph"
 LOCAL_SLOT = "local"
 SLOTS = (LOCAL_SLOT, REVIEWER_GRAPH_SLOT)

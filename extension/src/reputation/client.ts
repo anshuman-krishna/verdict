@@ -1,3 +1,4 @@
+import { fetchWithin } from "../net/fetchWithin";
 import { buildLookupRequest, matchFlaggedReviewers, type LookupResponse } from "./lookup";
 
 
@@ -7,6 +8,7 @@ export interface LookupOptions {
   fetchImpl?: typeof fetch;
   random?: () => number;
   delay?: (ms: number) => Promise<void>;
+  timeoutMs?: number;
 }
 
 const MIN_DELAY_MS = 200;
@@ -29,12 +31,17 @@ export async function lookupFlaggedReviewers(
   try {
     const request = await buildLookupRequest(reviewerIds, options.salt, random);
     await delay(MIN_DELAY_MS + random() * (MAX_DELAY_MS - MIN_DELAY_MS));
-    const response = await fetchImpl(options.endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(request),
-    });
-    if (!response.ok) {
+    const response = await fetchWithin(
+      fetchImpl,
+      options.endpoint,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(request),
+      },
+      options.timeoutMs,
+    );
+    if (response === null || !response.ok) {
       return new Set();
     }
     const body = (await response.json()) as LookupResponse;

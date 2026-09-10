@@ -81,7 +81,6 @@ export function contentScriptMatches(sites: readonly SiteDefinition[] = SITES): 
   );
 }
 
-// narrowed by the locales rules cover
 export function allowedDomains(
   siteId: string,
   locales: readonly string[],

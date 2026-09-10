@@ -22,15 +22,27 @@ function defaultOpenTab(url: string): void {
   window.open(url, "_blank");
 }
 
-function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
+function createPanel(
+  document: Document,
+  openTab: (url: string) => void,
+  onClose: () => void,
+): VerdictPanelElement {
   const panel = document.createElement("verdict-panel") as VerdictPanelElement;
   pinToCorner(panel);
   document.body.appendChild(panel);
-  panel.render(report, rosetteInputFromReport(report));
-  panel.addEventListener("verdict:close", () => panel.remove());
+  panel.addEventListener("verdict:close", () => {
+    panel.remove();
+    onClose();
+  });
   panel.addEventListener("verdict:full-report", () => {
     openTab(browser.runtime.getURL("/popup.html"));
   });
+  return panel;
+}
+
+function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
+  const panel = createPanel(document, openTab, () => {});
+  panel.render(report, rosetteInputFromReport(report));
 }
 
 function mountNotEnoughDataNotice(
@@ -103,4 +115,78 @@ export function mountResult(
   if (result.outcome.status === "not-enough-data") {
     mountNotEnoughDataNotice(document, result, deps, checkOptions, openTab);
   }
+}
+
+export interface ProgressiveMount {
+  waiting: () => void;
+  show: (result: AnalysisResult, pending: readonly string[]) => void;
+  settle: () => void;
+}
+
+export function createProgressiveMount(
+  document: Document,
+  deps: OrchestratorDeps,
+  checkOptions: CheckMoreDeeplyOptions = {},
+  openTab: (url: string) => void = defaultOpenTab,
+): ProgressiveMount {
+  let panel: VerdictPanelElement | null = null;
+  let waitingNotice: VerdictNoticeElement | null = null;
+  let dismissed = false;
+  let shown: AnalysisResult | null = null;
+
+  const clearWaiting = (): void => {
+    waitingNotice?.remove();
+    waitingNotice = null;
+  };
+
+  const mounted: ProgressiveMount = {
+    waiting: () => {
+      if (dismissed || panel !== null || waitingNotice !== null) {
+        return;
+      }
+      const notice = document.createElement("verdict-notice") as VerdictNoticeElement;
+      pinToCorner(notice);
+      document.body.appendChild(notice);
+      notice.addEventListener("verdict:close", () => {
+        dismissed = true;
+        clearWaiting();
+      });
+      notice.render({ message: "Reading the reviews on this page.", busy: true });
+      waitingNotice = notice;
+    },
+
+    settle: () => {
+      if (shown !== null) {
+        mounted.show(shown, []);
+      }
+      clearWaiting();
+    },
+
+    show: (result, pending) => {
+      // a closed panel stays closed
+      if (dismissed) {
+        return;
+      }
+      shown = result;
+      if (result.outcome.status === "ok") {
+        clearWaiting();
+        panel ??= createPanel(document, openTab, () => {
+          dismissed = true;
+          panel = null;
+        });
+        panel.render(result.outcome.report, rosetteInputFromReport(result.outcome.report), Date.now(), {
+          pending,
+        });
+        return;
+      }
+      if (pending.length > 0) {
+        return;
+      }
+      clearWaiting();
+      if (result.outcome.status === "not-enough-data") {
+        mountNotEnoughDataNotice(document, result, deps, checkOptions, openTab);
+      }
+    },
+  };
+  return mounted;
 }

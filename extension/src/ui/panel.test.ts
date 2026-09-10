@@ -44,9 +44,9 @@ beforeEach(() => {
   stubMatchMedia(false);
 });
 
-function render(report: Report): ShadowRoot {
+function render(report: Report, pending: string[] = []): ShadowRoot {
   const panel = new VerdictPanelElement();
-  panel.render(report, rosetteInput);
+  panel.render(report, rosetteInput, Date.now(), { pending });
   return getPanelShadowRootForTesting(panel);
 }
 
@@ -215,5 +215,42 @@ describe("the confidence interval and what could not be read", () => {
   it("says nothing about unreadable signals when every signal was read", () => {
     const root = render(sampleReport());
     expect(root.querySelector(".interval-note")?.textContent).not.toContain("could not be read");
+  });
+});
+
+describe("the provisional state while a signal is still arriving", () => {
+  it("says nothing when every signal is already in", () => {
+    expect(render(sampleReport()).querySelector(".pending")).toBeNull();
+  });
+
+  it("names the one signal still being read", () => {
+    const root = render(sampleReport(), ["reviewer network"]);
+    expect(root.querySelector(".pending")?.textContent).toContain(
+      "Still reading the reviewer network",
+    );
+  });
+
+  it("warns that the figure can still move", () => {
+    const root = render(sampleReport(), ["reviewer network"]);
+    expect(root.querySelector(".pending")?.textContent).toContain("may still move");
+  });
+
+  it("joins two pending signals rather than listing them twice", () => {
+    const root = render(sampleReport(), ["reviewer network", "duplicate text"]);
+    expect(root.querySelector(".pending")?.textContent).toContain(
+      "reviewer network and duplicate text",
+    );
+  });
+
+  it("announces the pending line politely, since it appears after first paint", () => {
+    const root = render(sampleReport(), ["reviewer network"]);
+    expect(root.querySelector(".pending")?.getAttribute("role")).toBe("status");
+  });
+
+  it("drops the pending line when the panel is re-rendered with the final report", () => {
+    const panel = new VerdictPanelElement();
+    panel.render(sampleReport(), rosetteInput, Date.now(), { pending: ["reviewer network"] });
+    panel.render(sampleReport(), rosetteInput, Date.now(), { pending: [] });
+    expect(getPanelShadowRootForTesting(panel).querySelector(".pending")).toBeNull();
   });
 });

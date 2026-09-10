@@ -7,7 +7,7 @@ import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { FeatureVector } from "../score/featureVector";
-import type { ModelSet } from "../score/combine";
+import { signalsFor, type ModelSet } from "../score/combine";
 import type { FeatureVectorInputs } from "../score/featureVector";
 
 export interface ReputationLookupDeps {
@@ -17,6 +17,7 @@ export interface ReputationLookupDeps {
   fetchImpl?: typeof fetch;
   random?: () => number;
   delay?: (ms: number) => Promise<void>;
+  timeoutMs?: number;
 }
 
 export interface OrchestratorDeps {
@@ -52,10 +53,23 @@ export interface AnalysisResult {
   outcome: ReportOutcome;
 }
 
+const REVIEWER_NETWORK = signalsFor(["reviewerGraph"]);
+
+export interface AnalysisStage {
+  result: AnalysisResult;
+  pending: string[];
+}
+
+export interface AnalyzeOptions {
+  onRecognised?: (page: ParsedProductPage) => void;
+  onStage?: (stage: AnalysisStage) => void;
+}
+
 export async function analyzePage(
   document: ParentNode,
   url: string,
   deps: OrchestratorDeps,
+  options: AnalyzeOptions = {},
 ): Promise<AnalysisResult | null> {
   const page = parseProductUrl(url);
   if (page === null) {
@@ -65,9 +79,20 @@ export async function analyzePage(
   if (product === null) {
     return null;
   }
+  options.onRecognised?.(page);
   const reviews = extractReviews(document, deps.rules, page.locale);
-  const outcome = await scoreAndMaybeSave(page, product, reviews, deps);
-  return { page, product, reviews, outcome };
+  const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options);
+  const result = { page, product, reviews, outcome };
+  options.onStage?.({ result, pending: [] });
+  return result;
+}
+
+async function bestEffort(run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch {
+    return;
+  }
 }
 
 function productText(product: ProductSnapshot): string {
@@ -79,6 +104,7 @@ async function scoreAndMaybeSave(
   product: ProductSnapshot,
   reviews: readonly Review[],
   deps: OrchestratorDeps,
+  options: AnalyzeOptions = {},
   signatureCache?: WeakMap<Review, bigint[]>,
   embeddingCache?: WeakMap<Review, number[]>,
 ): Promise<ReportOutcome> {
@@ -86,35 +112,55 @@ async function scoreAndMaybeSave(
     return { status: "not-enough-data" };
   }
 
-  const flaggedReviewerIds = deps.reputation && (await deps.reputation.isEnabled())
-    ? await flaggedReviewers(reviews, deps.reputation)
-    : undefined;
+  // reused by both passes
+  const signatures = signatureCache ?? new WeakMap<Review, bigint[]>();
+  const embeddings = embeddingCache ?? new WeakMap<Review, number[]>();
+  const score = (flaggedReviewerIds?: ReadonlySet<string>): ReportOutcome =>
+    buildReport({
+      reviews,
+      seed: product.url,
+      claimedRating: product.claimedRating as number,
+      productText: productText(product),
+      model: deps.model,
+      priors: deps.priors,
+      now: deps.now,
+      random: deps.random,
+      bootstrapResamples: deps.bootstrapResamples,
+      signatureCache: signatures,
+      embeddingCache: embeddings,
+      flaggedReviewerIds,
+    });
 
-  const outcome: ReportOutcome = buildReport({
-    reviews,
-    seed: product.url,
-    claimedRating: product.claimedRating,
-    productText: productText(product),
-    model: deps.model,
-    priors: deps.priors,
-    now: deps.now,
-    random: deps.random,
-    bootstrapResamples: deps.bootstrapResamples,
-    signatureCache,
-    embeddingCache,
-    flaggedReviewerIds,
-  });
-
-  if (outcome.status === "ok" && deps.graphContribution && (await deps.graphContribution.isEnabled())) {
-    await queueGraphContribution(page, reviews, deps.graphContribution);
+  const lookingUp = deps.reputation !== undefined && (await deps.reputation.isEnabled());
+  if (lookingUp) {
+    const provisional = score();
+    options.onStage?.({
+      result: { page, product, reviews: [...reviews], outcome: provisional },
+      pending: REVIEWER_NETWORK,
+    });
   }
 
-  if (outcome.status === "ok" && (await deps.isHistoryEnabled())) {
-    await deps.saveHistory({
-      title: product.title,
-      thumbnailUrl: product.thumbnailUrl,
-      report: outcome.report,
-      featureVector: outcome.featureVector,
+  const flaggedReviewerIds = lookingUp
+    ? await flaggedReviewers(reviews, deps.reputation as ReputationLookupDeps)
+    : undefined;
+  const outcome = score(flaggedReviewerIds);
+
+  if (outcome.status === "ok") {
+    // a failed write must not discard a report
+    await bestEffort(async () => {
+      if (deps.graphContribution && (await deps.graphContribution.isEnabled())) {
+        await queueGraphContribution(page, reviews, deps.graphContribution);
+      }
+    });
+    await bestEffort(async () => {
+      if (await deps.isHistoryEnabled()) {
+        await deps.saveHistory({
+          title: product.title,
+          thumbnailUrl: product.thumbnailUrl,
+          report: outcome.report,
+          featureVector: outcome.featureVector,
+        });
+      }
     });
   }
 
@@ -148,26 +194,27 @@ async function flaggedReviewers(
     fetchImpl: reputation.fetchImpl,
     random: reputation.random,
     delay: reputation.delay,
+    timeoutMs: reputation.timeoutMs,
   });
 }
 
+// refetches must not read as duplication
+function reviewKey(review: Review): string {
+  if (review.reviewerId !== null && review.date !== null) {
+    return `id:${review.reviewerId}:${review.date}`;
+  }
+  return `body:${review.rating}:${review.date}:${review.verified}:${review.text}`;
+}
+
 export function mergeReviews(existing: readonly Review[], fetched: readonly Review[]): Review[] {
-  const seen = new Set(
-    existing
-      .filter((review) => review.reviewerId !== null && review.date !== null)
-      .map((review) => `${review.reviewerId}:${review.date}`),
-  );
+  const seen = new Set(existing.map(reviewKey));
   const merged = [...existing];
   for (const review of fetched) {
-    const key = review.reviewerId !== null && review.date !== null
-      ? `${review.reviewerId}:${review.date}`
-      : null;
-    if (key !== null && seen.has(key)) {
+    const key = reviewKey(review);
+    if (seen.has(key)) {
       continue;
     }
-    if (key !== null) {
-      seen.add(key);
-    }
+    seen.add(key);
     merged.push(review);
   }
   return merged;
@@ -213,6 +260,7 @@ export async function checkMoreDeeply(
     product,
     reviews,
     deps,
+    {},
     fetched.signatures,
     fetched.embeddings,
   );

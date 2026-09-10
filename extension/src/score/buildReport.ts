@@ -50,7 +50,6 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     ...options.priors,
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
     textNearDuplicationLinkCache: new WeakMap(),
-    // scoped, so caches never cross products
     listingDriftEmbeddingCache: options.embeddingCache ?? new WeakMap(),
     productText: options.productText ?? "",
     flaggedReviewerIds: options.flaggedReviewerIds,

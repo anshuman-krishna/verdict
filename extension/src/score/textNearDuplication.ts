@@ -29,12 +29,10 @@ export interface TextNearDuplicationOptions {
   bands?: number;
   rows?: number;
   jaccardThreshold?: number;
-  // keyed by identity, never by text
   signatureCache?: WeakMap<ReviewForNearDuplication, bigint[]>;
   linkCache?: DuplicateLinkCache;
 }
 
-// a pair links regardless of draw
 export interface DuplicateLinks {
   population: object;
   bands: number;
@@ -178,7 +176,6 @@ export function textNearDuplication(
     return cached !== undefined && cached.length === numPermutations ? cached : undefined;
   };
 
-  // one text, one signature array
   const byText = new Map<string, bigint[]>();
   const signatures: (readonly bigint[])[] = [];
   for (const review of reviews) {
@@ -209,7 +206,6 @@ export function textNearDuplication(
 
   const unionFind = new UnionFind(signatures.length);
 
-  // same array means same text
   const firstIndexOf = new Map<readonly bigint[], number>();
   const distinct: number[] = [];
   for (let i = 0; i < signatures.length; i++) {
@@ -262,7 +258,6 @@ export function textNearDuplication(
   };
 }
 
-// reuse only within one recorded set
 function linksCover(
   links: DuplicateLinkCache,
   signatures: readonly (readonly bigint[])[],
@@ -304,7 +299,6 @@ function findLinks(
   }
 
   const width = signatures.length;
-  // a pair is one number
   const candidatePairs = new Set<number>();
   for (const bucket of buckets.values()) {
     if (bucket.length < 2) {

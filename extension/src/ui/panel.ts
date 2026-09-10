@@ -51,6 +51,15 @@ export function confidenceLine(report: Report): string {
   return `The estimate sits between ${range} of reviews.${unavailable}`;
 }
 
+export interface PanelRenderOptions {
+  pending?: readonly string[];
+  now?: number;
+}
+
+export function pendingLine(pending: readonly string[]): string {
+  return `Still reading the ${joinSignals(pending)}, so this may still move.`;
+}
+
 export class VerdictPanelElement extends HTMLElement {
   private report: Report | null = null;
   private focusableSelector =
@@ -70,12 +79,19 @@ export class VerdictPanelElement extends HTMLElement {
     this.removeEventListener("keydown", this.handleKeydown);
   }
 
-  render(report: Report, rosetteInput: RosetteInput, now: number = Date.now()): void {
+  render(
+    report: Report,
+    rosetteInput: RosetteInput,
+    now: number = Date.now(),
+    options: PanelRenderOptions = {},
+  ): void {
     this.report = report;
     const root = shadowRoots.get(this);
     if (root === undefined) {
       return;
     }
+
+    const pending = options.pending ?? [];
 
     const params = rosetteParams(rosetteInput);
     const path = rosettePath(params, 44);
@@ -154,6 +170,11 @@ export class VerdictPanelElement extends HTMLElement {
           ></div>
         </div>
         <p class="interval-note">${confidenceLine(report)}</p>
+        ${
+      pending.length === 0
+        ? ""
+        : `<p class="pending" role="status">${pendingLine(pending)}</p>`
+    }
 
         <div class="evidence">
           <h2>evidence</h2>
@@ -415,6 +436,13 @@ button.full-report:focus-visible {
 
 .interval-note {
   font-size: 0.875rem;
+  color: var(--ink-soft);
+  margin: 4px 0 0;
+}
+
+.pending {
+  font-size: 0.875rem;
+  font-style: italic;
   color: var(--ink-soft);
   margin: 4px 0 0;
 }

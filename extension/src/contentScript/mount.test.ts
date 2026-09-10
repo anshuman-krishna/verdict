@@ -6,7 +6,7 @@ import type { RulesDocument } from "../extract/rules";
 import { localModelSet, type CombinerModel } from "../score/combine";
 import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
-import { mountResult } from "./mount";
+import { createProgressiveMount, mountResult } from "./mount";
 import type { AnalysisResult, OrchestratorDeps } from "./orchestrator";
 
 const PAGE = { site: "amazon" as const, locale: "com", productId: "B0EXAMPLE1" };
@@ -241,6 +241,123 @@ describe("mountResult", () => {
     await vi.waitFor(() => {
       expect(document.body.querySelector("verdict-panel")).not.toBeNull();
     });
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+  });
+});
+
+function okResult(band: "mixed" | "clean" = "mixed"): AnalysisResult {
+  return {
+    page: PAGE,
+    product: PRODUCT,
+    reviews: [],
+    outcome: {
+      status: "ok",
+      report: {
+        serial: "AAAA-BBBB",
+        band,
+        claimedRating: 4.6,
+        adjustedRating: 3.9,
+        totalReviewCount: 100,
+        excludedReviewCount: 10,
+        estimatedInorganicShare: 0.1,
+        confidence: { low: 0.05, high: 0.15 },
+        evidence: [],
+        unavailableSignals: [],
+        generatedAt: 0,
+      },
+      featureVector: {} as never,
+    },
+  };
+}
+
+describe("createProgressiveMount, SPEC.md section 13 first paint", () => {
+  it("shows a waiting notice when the analysis outruns the budget", () => {
+    createProgressiveMount(document, deps()).waiting();
+    expect(document.body.querySelector("verdict-notice")).not.toBeNull();
+  });
+
+  it("shows nothing at all when a result already arrived in time", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show(okResult(), []);
+    mount.waiting();
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+    expect(document.body.querySelectorAll("verdict-panel")).toHaveLength(1);
+  });
+
+  it("replaces the waiting notice with the panel once a stage lands", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.waiting();
+    mount.show(okResult(), ["reviewer network"]);
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+    expect(document.body.querySelector("verdict-panel")).not.toBeNull();
+  });
+
+  it("names what is still being read while the estimate is provisional", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show(okResult(), ["reviewer network"]);
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    const root = getPanelShadowRootForTesting(panel);
+    expect(root.querySelector(".pending")?.textContent).toContain("reviewer network");
+  });
+
+  it("updates the one panel in place rather than stacking a second", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show(okResult("mixed"), ["reviewer network"]);
+    mount.show(okResult("clean"), []);
+    expect(document.body.querySelectorAll("verdict-panel")).toHaveLength(1);
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    const root = getPanelShadowRootForTesting(panel);
+    expect(root.querySelector(".summary")?.textContent).toContain("clean");
+    expect(root.querySelector(".pending")).toBeNull();
+  });
+
+  it("never reopens a panel the reader closed while it was still provisional", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show(okResult(), ["reviewer network"]);
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".close")?.click();
+
+    mount.show(okResult(), []);
+
+    expect(document.body.querySelector("verdict-panel")).toBeNull();
+  });
+
+  it("never reopens after the waiting notice was closed either", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.waiting();
+    const notice = document.body.querySelector("verdict-notice") as HTMLElement;
+    notice.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+
+    mount.show(okResult(), []);
+
+    expect(document.body.querySelector("verdict-panel")).toBeNull();
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+  });
+
+  it("holds back the not-enough-data notice until nothing is pending", () => {
+    const mount = createProgressiveMount(document, deps());
+    const thin: AnalysisResult = { ...okResult(), outcome: { status: "not-enough-data" } };
+    mount.show(thin, ["reviewer network"]);
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+
+    mount.show(thin, []);
+    expect(document.body.querySelector("verdict-notice")).not.toBeNull();
+  });
+});
+
+describe("createProgressiveMount, settling after a failure", () => {
+  it("drops the provisional wording when the analysis never finishes", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show(okResult(), ["reviewer network"]);
+    mount.settle();
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    expect(getPanelShadowRootForTesting(panel).querySelector(".pending")).toBeNull();
+  });
+
+  it("clears a waiting notice that nothing will ever replace", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.waiting();
+    mount.settle();
     expect(document.body.querySelector("verdict-notice")).toBeNull();
   });
 });

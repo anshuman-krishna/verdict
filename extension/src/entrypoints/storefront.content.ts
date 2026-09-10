@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import { analyzePage, type OrchestratorDeps } from "../contentScript/orchestrator";
-import { mountResult } from "../contentScript/mount";
+import { createProgressiveMount } from "../contentScript/mount";
+import { callIfSlower, FIRST_PAINT_BUDGET_MS } from "../contentScript/deadline";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
 import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
 import {
@@ -55,7 +56,24 @@ export default defineContentScript({
       },
     };
 
-    const result = await analyzePage(document, location.href, deps);
+    const mount = createProgressiveMount(document, deps);
+    let finish = (): void => {};
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+
+    let result;
+    try {
+      result = await analyzePage(document, location.href, deps, {
+        // armed only for product pages
+        onRecognised: () => callIfSlower(settled, FIRST_PAINT_BUDGET_MS, mount.waiting),
+        onStage: (stage) => mount.show(stage.result, stage.pending),
+      });
+    } catch {
+      mount.settle();
+    } finally {
+      finish();
+    }
 
     const message: AnalysisResultMessage = {
       type: "verdict:analysis-result",
@@ -63,11 +81,5 @@ export default defineContentScript({
     };
     browser.runtime.sendMessage(message).catch(() => {
     });
-
-    if (result === null) {
-      return;
-    }
-
-    mountResult(document, result, deps);
   },
 });

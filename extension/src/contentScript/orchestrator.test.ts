@@ -318,3 +318,154 @@ describe("checkMoreDeeply", () => {
     expect(result.outcome.status).toBe("ok");
   });
 });
+
+describe("analyzePage, staged results (SPEC.md section 13, 400ms first paint)", () => {
+  function stagedDeps(overrides = {}) {
+    return deps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://api.verdict.tools/v1/reputation/lookup",
+        salt: "test-salt",
+        fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ matches: {} }) }),
+        delay: () => Promise.resolve(),
+      },
+      ...overrides,
+    });
+  }
+
+  it("emits a scorable result before the reputation lookup is even sent", async () => {
+    const sent: string[] = [];
+    const testDeps = stagedDeps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://x",
+        salt: "s",
+        delay: () => Promise.resolve(),
+        fetchImpl: vi.fn().mockImplementation(() => {
+          sent.push("lookup");
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+        }),
+      },
+    });
+    const order: string[] = [];
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps, {
+      onStage: (stage) => order.push(stage.pending.length > 0 ? "provisional" : "final"),
+    });
+
+    expect(order).toEqual(["provisional", "final"]);
+    expect(sent).toEqual(["lookup"]);
+  });
+
+  it("names the reviewer network as what the provisional estimate is still missing", async () => {
+    const pending: string[][] = [];
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", stagedDeps(), {
+      onStage: (stage) => pending.push(stage.pending),
+    });
+
+    expect(pending[0]).toEqual(["reviewer network"]);
+    expect(pending[1]).toEqual([]);
+  });
+
+  it("emits one final stage and nothing provisional when no lookup will run", async () => {
+    const pending: string[][] = [];
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", deps(), {
+      onStage: (stage) => pending.push(stage.pending),
+    });
+
+    expect(pending).toEqual([[]]);
+  });
+
+  it("still reports a page with no claimed rating, rather than going quiet", async () => {
+    const pending: string[][] = [];
+    const result = await analyzePage(
+      parse(pageHtml(30, null)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps(),
+      { onStage: (stage) => pending.push(stage.pending) },
+    );
+
+    expect(result?.outcome.status).toBe("not-enough-data");
+    expect(pending).toEqual([[]]);
+  });
+
+  it("saves one history entry, not one per stage", async () => {
+    const saveHistory = vi.fn().mockResolvedValue(undefined);
+    await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      stagedDeps({ saveHistory }),
+      { onStage: () => {} },
+    );
+
+    expect(saveHistory).toHaveBeenCalledOnce();
+  });
+
+  it("announces the page before any scoring, so a slow read can be reported", async () => {
+    const recognised: string[] = [];
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", deps(), {
+      onRecognised: (page) => recognised.push(page.productId),
+    });
+
+    expect(recognised).toEqual(["B0BXYZ1234"]);
+  });
+
+  it("says nothing at all about a page that is not a product page", async () => {
+    const onRecognised = vi.fn();
+    await analyzePage(parse(pageHtml(30)), "https://www.example.com/", deps(), { onRecognised });
+
+    expect(onRecognised).not.toHaveBeenCalled();
+  });
+});
+
+describe("mergeReviews, anonymous reviews", () => {
+  it("drops a refetched anonymous review, so plumbing cannot read as duplicate text", () => {
+    const anonymous = { rating: 5, text: "great", date: "2024-01-01", verified: true, reviewerId: null };
+    expect(mergeReviews([anonymous], [{ ...anonymous }])).toHaveLength(1);
+  });
+
+  it("keeps an anonymous review that differs in any visible field", () => {
+    const anonymous = { rating: 5, text: "great", date: "2024-01-01", verified: true, reviewerId: null };
+    expect(mergeReviews([anonymous], [{ ...anonymous, rating: 4 }])).toHaveLength(2);
+    expect(mergeReviews([anonymous], [{ ...anonymous, text: "good" }])).toHaveLength(2);
+  });
+
+  it("still trusts the reviewer id over the text when both reviews carry one", () => {
+    const first = { rating: 5, text: "great", date: "2024-01-01", verified: true, reviewerId: "r1" };
+    const second = { ...first, reviewerId: "r2" };
+    expect(mergeReviews([first], [second])).toHaveLength(2);
+  });
+});
+
+describe("analyzePage, a report survives its own bookkeeping", () => {
+  it("still returns the report when the history write throws", async () => {
+    const testDeps = deps({ saveHistory: vi.fn().mockRejectedValue(new Error("quota")) });
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(result?.outcome.status).toBe("ok");
+  });
+
+  it("still returns the report when the contribution queue throws", async () => {
+    const testDeps = deps({
+      graphContribution: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        salt: "s",
+        enqueue: vi.fn().mockRejectedValue(new Error("blocked")),
+      },
+    });
+    const result = await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(result?.outcome.status).toBe("ok");
+  });
+
+  it("still saves history when the contribution queue throws first", async () => {
+    const saveHistory = vi.fn().mockResolvedValue(undefined);
+    const testDeps = deps({
+      saveHistory,
+      graphContribution: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        salt: "s",
+        enqueue: vi.fn().mockRejectedValue(new Error("blocked")),
+      },
+    });
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+    expect(saveHistory).toHaveBeenCalledOnce();
+  });
+});
