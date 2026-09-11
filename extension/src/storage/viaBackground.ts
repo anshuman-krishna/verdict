@@ -15,6 +15,7 @@ import {
   type ReviewsCacheRecord,
 } from "./reviewsCodec";
 import type { Review } from "../extract/types";
+import type { PreviousCheck } from "./history";
 
 export type SendToBackground = (request: StorageRequest) => Promise<unknown>;
 
@@ -49,6 +50,13 @@ export function readRules(
   send: SendToBackground = realSend,
 ): Promise<RulesDocument> {
   return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "rules" }, bundledDefault);
+}
+
+export function readChecksOfProduct(
+  productKey: string,
+  send: SendToBackground = realSend,
+): Promise<PreviousCheck[]> {
+  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "history-of-product", productKey }, []);
 }
 
 export function saveHistoryEntry(

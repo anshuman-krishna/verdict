@@ -51,6 +51,11 @@ export interface ReportSummary {
   estimatedInorganicShare: number | null;
 }
 
+function numberAt(value: Record<string, unknown>, key: string): number | null {
+  const found = value[key];
+  return typeof found === "number" && Number.isFinite(found) ? found : null;
+}
+
 export function summarizeReport(report: unknown): ReportSummary {
   if (typeof report !== "object" || report === null) {
     return { band: null, claimedRating: null, adjustedRating: null, estimatedInorganicShare: null };
@@ -59,11 +64,75 @@ export function summarizeReport(report: unknown): ReportSummary {
   const band = typeof value.band === "string" && value.band in BAND_LABELS
     ? (value.band as Band)
     : null;
-  const claimedRating = typeof value.claimedRating === "number" ? value.claimedRating : null;
-  const adjustedRating = typeof value.adjustedRating === "number" ? value.adjustedRating : null;
-  const estimatedInorganicShare =
-    typeof value.estimatedInorganicShare === "number" ? value.estimatedInorganicShare : null;
-  return { band, claimedRating, adjustedRating, estimatedInorganicShare };
+  return {
+    band,
+    claimedRating: numberAt(value, "claimedRating"),
+    adjustedRating: numberAt(value, "adjustedRating"),
+    estimatedInorganicShare: numberAt(value, "estimatedInorganicShare"),
+  };
+}
+
+const STRENGTHS: readonly EvidenceStrength[] = ["none", "weak", "moderate", "strong"];
+
+function evidenceRow(value: unknown): EvidenceRow | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.signal !== "string" || typeof row.detail !== "string") {
+    return null;
+  }
+  const strength = STRENGTHS.find((known) => known === row.strength);
+  if (strength === undefined) {
+    return null;
+  }
+  return { signal: row.signal, strength, detail: row.detail, value: numberAt(row, "value") };
+}
+
+// a report read back from storage was written by an older build, so nothing is assumed
+export function parseStoredReport(value: unknown): Report | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const stored = value as Record<string, unknown>;
+  const summary = summarizeReport(value);
+  const confidence = stored.confidence as Record<string, unknown> | undefined;
+  const low = confidence === undefined ? null : numberAt(confidence, "low");
+  const high = confidence === undefined ? null : numberAt(confidence, "high");
+  const total = numberAt(stored, "totalReviewCount");
+  const excluded = numberAt(stored, "excludedReviewCount");
+  const generatedAt = numberAt(stored, "generatedAt");
+  if (
+    summary.band === null ||
+    summary.claimedRating === null ||
+    summary.adjustedRating === null ||
+    summary.estimatedInorganicShare === null ||
+    low === null ||
+    high === null ||
+    total === null ||
+    excluded === null ||
+    generatedAt === null ||
+    !Array.isArray(stored.evidence)
+  ) {
+    return null;
+  }
+  const evidence = stored.evidence.map(evidenceRow).filter((row): row is EvidenceRow => row !== null);
+  const unavailable = Array.isArray(stored.unavailableSignals)
+    ? stored.unavailableSignals.filter((signal): signal is string => typeof signal === "string")
+    : [];
+  return {
+    serial: typeof stored.serial === "string" ? stored.serial : "",
+    band: summary.band,
+    claimedRating: summary.claimedRating,
+    adjustedRating: summary.adjustedRating,
+    totalReviewCount: total,
+    excludedReviewCount: excluded,
+    estimatedInorganicShare: summary.estimatedInorganicShare,
+    confidence: { low, high },
+    evidence,
+    unavailableSignals: unavailable,
+    generatedAt,
+  };
 }
 
 const SERIAL_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

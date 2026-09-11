@@ -37,6 +37,39 @@ import Layout from "../../layouts/Layout.astro";
       claimedRating: number | null;
       adjustedRating: number | null;
       estimatedInorganicShare: number | null;
+      productKey: string | null;
+      checkCount?: number;
+    }
+
+    // repeat checks of one listing collapse to the newest, the rest sit behind it
+    function groupByProduct(entries: HistorySummaryEntry[]): HistorySummaryEntry[] {
+      const newestFor = new Map<string, HistorySummaryEntry>();
+      const rows: HistorySummaryEntry[] = [];
+      for (const entry of entries) {
+        if (entry.productKey === null) {
+          rows.push({ ...entry, checkCount: 1 });
+          continue;
+        }
+        const seen = newestFor.get(entry.productKey);
+        if (seen === undefined) {
+          const row = { ...entry, checkCount: 1 };
+          newestFor.set(entry.productKey, row);
+          rows.push(row);
+          continue;
+        }
+        seen.checkCount = (seen.checkCount ?? 1) + 1;
+      }
+      return rows;
+    }
+
+    function earlierChecks(entry: HistorySummaryEntry): HistorySummaryEntry[] {
+      if (entry.productKey === null) {
+        return [];
+      }
+      return allEntries.filter(
+        (candidate) =>
+          candidate.productKey === entry.productKey && candidate.timestamp < entry.timestamp,
+      );
     }
 
     const root = document.documentElement;
@@ -115,11 +148,13 @@ import Layout from "../../layouts/Layout.astro";
 
     function renderFigures(container: HTMLElement, entries: HistorySummaryEntry[]): void {
       const checksRun = entries.length;
-      const gaps = entries
+      // a listing checked twenty times is one listing, not twenty, for these two
+      const listings = groupByProduct(entries);
+      const gaps = listings
         .filter((e) => e.claimedRating !== null && e.adjustedRating !== null)
         .map((e) => Math.abs((e.claimedRating as number) - (e.adjustedRating as number)));
       const averageGap = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
-      const banded = entries.filter((e) => e.band !== null);
+      const banded = listings.filter((e) => e.band !== null);
       const shareDoubtful =
         banded.length > 0
           ? banded.filter((e) => DOUBTFUL_OR_WORSE.has(e.band as string)).length / banded.length
@@ -128,8 +163,9 @@ import Layout from "../../layouts/Layout.astro";
       container.innerHTML = `
         <dl class="figures">
           <div><dd>${checksRun.toLocaleString()}</dd><dt>checks run</dt></div>
-          <div><dd>${averageGap !== null ? averageGap.toFixed(1) : "n/a"}</dd><dt>average gap, claimed to adjusted</dt></div>
-          <div><dd>${shareDoubtful !== null ? Math.round(shareDoubtful * 100) + "%" : "n/a"}</dd><dt>doubtful or worse</dt></div>
+          <div><dd>${listings.length.toLocaleString()}</dd><dt>listings checked</dt></div>
+          <div><dd>${averageGap !== null ? averageGap.toFixed(1) : "n/a"}</dd><dt>average gap per listing, claimed to adjusted</dt></div>
+          <div><dd>${shareDoubtful !== null ? Math.round(shareDoubtful * 100) + "%" : "n/a"}</dd><dt>listings doubtful or worse</dt></div>
         </dl>
       `;
     }
@@ -189,7 +225,10 @@ import Layout from "../../layouts/Layout.astro";
           const claimed = entry.claimedRating !== null ? entry.claimedRating.toFixed(1) : "";
           const adjusted = entry.adjustedRating !== null ? entry.adjustedRating.toFixed(1) : "";
           const thumb = rosetteThumbnail(entry.band, entry.estimatedInorganicShare);
-          return `<tr><td>${thumb}</td><td>${formatDate(entry.timestamp)}</td><td>${escapeHtml(entry.title)}</td><td>${claimed}</td><td>${adjusted}</td><td>${band}</td></tr>`;
+          const repeat =
+            (entry.checkCount ?? 1) > 1 ? ` <span class="repeat">${entry.checkCount}&times;</span>` : "";
+          const title = `<button type="button" class="open-report" data-id="${entry.id}" aria-expanded="false">${escapeHtml(entry.title)}</button>${repeat}`;
+          return `<tr data-row="${entry.id}"><td>${thumb}</td><td>${formatDate(entry.timestamp)}</td><td>${title}</td><td>${claimed}</td><td>${adjusted}</td><td>${band}</td></tr>`;
         })
         .join("");
       tableContainer.innerHTML = `
@@ -202,6 +241,101 @@ import Layout from "../../layouts/Layout.astro";
           </table>
         </div>
       `;
+      wireOpenReport(tableContainer);
+    }
+
+    interface StoredEvidenceRow {
+      signal: string;
+      strength: string;
+      detail: string;
+    }
+
+    interface StoredReport {
+      band: string;
+      claimedRating: number;
+      adjustedRating: number;
+      totalReviewCount: number;
+      excludedReviewCount: number;
+      confidence: { low: number; high: number };
+      evidence: StoredEvidenceRow[];
+      unavailableSignals: string[];
+      serial: string;
+    }
+
+    function reportMarkup(report: StoredReport): string {
+      const low = Math.round(report.confidence.low * 100);
+      const high = Math.round(report.confidence.high * 100);
+      const range = low === high ? `${low} percent` : `${low} to ${high} percent`;
+      const kept = report.totalReviewCount - report.excludedReviewCount;
+      const evidence = report.evidence
+        .map(
+          (row) =>
+            `<div class="evidence-row"><span>${escapeHtml(row.signal)}</span>` +
+            `<span class="evidence-strength">${escapeHtml(row.strength)}</span>` +
+            `<p>${escapeHtml(row.detail)}</p></div>`,
+        )
+        .join("");
+      const unavailable =
+        report.unavailableSignals.length === 0
+          ? ""
+          : `<p class="report-note">${escapeHtml(report.unavailableSignals.join(", "))} could not be read on this page, which widens the estimate.</p>`;
+      const serial = report.serial === "" ? "" : `<p class="report-serial">${escapeHtml(report.serial)}</p>`;
+      return `
+        <p class="report-note">Estimated ${range} of reviews. ${kept.toLocaleString()} kept, ${report.excludedReviewCount.toLocaleString()} excluded.</p>
+        ${unavailable}
+        <div class="evidence">${evidence}</div>
+        ${serial}
+      `;
+    }
+
+    function earlierMarkup(checks: HistorySummaryEntry[]): string {
+      if (checks.length === 0) {
+        return "";
+      }
+      const rows = checks
+        .map((check) => {
+          const band =
+            check.band !== null && check.band in BAND_LABELS ? BAND_LABELS[check.band] : "";
+          const adjusted = check.adjustedRating !== null ? check.adjustedRating.toFixed(1) : "";
+          return `<div class="earlier-row"><span>${formatDate(check.timestamp)}</span><span>${band}</span><span>${adjusted}</span></div>`;
+        })
+        .join("");
+      return `<p class="report-note">Earlier checks of this listing</p><div class="earlier">${rows}</div>`;
+    }
+
+    function wireOpenReport(tableContainer: HTMLElement): void {
+      for (const button of tableContainer.querySelectorAll<HTMLButtonElement>(".open-report")) {
+        button.addEventListener("click", async () => {
+          const id = Number(button.dataset.id);
+          const row = tableContainer.querySelector<HTMLTableRowElement>(`tr[data-row="${id}"]`);
+          const open = tableContainer.querySelector<HTMLTableRowElement>(`tr[data-detail="${id}"]`);
+          if (open !== null) {
+            open.remove();
+            button.setAttribute("aria-expanded", "false");
+            return;
+          }
+          if (row === null) {
+            return;
+          }
+          const detail = document.createElement("tr");
+          detail.dataset.detail = String(id);
+          detail.innerHTML = `<td colspan="6" class="report-cell">Reading the report.</td>`;
+          row.after(detail);
+          button.setAttribute("aria-expanded", "true");
+          const cell = detail.querySelector("td") as HTMLElement;
+          try {
+            const response = await sendToExtension("verdict:report:get", { id });
+            const entry = allEntries.find((candidate) => candidate.id === id);
+            const report =
+              response?.report == null
+                ? "<p>This check was saved by an older version, so only its heading is readable.</p>"
+                : reportMarkup(response.report as StoredReport);
+            cell.innerHTML = report + (entry === undefined ? "" : earlierMarkup(earlierChecks(entry)));
+          } catch {
+            cell.textContent = "The extension did not answer, so this report could not be read.";
+          }
+        });
+      }
     }
 
     function renderControlsAndTable(app: HTMLElement): void {
@@ -213,7 +347,12 @@ import Layout from "../../layouts/Layout.astro";
         return;
       }
       const rerender = () => {
-        const filtered = applyFilters(allEntries, searchInput.value, bandSelect.value, sortSelect.value);
+        const filtered = applyFilters(
+          groupByProduct(allEntries),
+          searchInput.value,
+          bandSelect.value,
+          sortSelect.value,
+        );
         renderTable(tableContainer, filtered);
       };
       searchInput.addEventListener("input", rerender);
@@ -327,6 +466,63 @@ import Layout from "../../layouts/Layout.astro";
     gap: 12px;
     flex-wrap: wrap;
     margin-bottom: 12px;
+  }
+
+  .open-report {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  .repeat {
+    font-family: "Fragment Mono", ui-monospace, monospace;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .earlier-row {
+    display: flex;
+    gap: 16px;
+    padding: 2px 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .report-cell {
+    background: var(--paper-sunk, transparent);
+  }
+
+  .report-note,
+  .report-serial {
+    margin: 4px 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .report-serial {
+    font-family: "Fragment Mono", ui-monospace, monospace;
+  }
+
+  .evidence-row {
+    margin: 8px 0;
+  }
+
+  .evidence-row p {
+    margin: 2px 0 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+  }
+
+  .evidence-strength {
+    margin-left: 8px;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
   }
 
   .rosette-thumb {

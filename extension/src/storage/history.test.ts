@@ -5,6 +5,7 @@ import {
   deleteAllHistory,
   exportHistoryAsCsv,
   exportHistoryAsJson,
+  listChecksOfProduct,
   listHistory,
 } from "./history";
 import type { FeatureVector } from "../score/featureVector";
@@ -154,5 +155,67 @@ describe("history", () => {
       expect(csv.split("\n")).toHaveLength(2);
       expect(csv).toContain(`"one\rtwo"`);
     });
+  });
+});
+
+describe("the checks of one listing", () => {
+  const report = { band: "mixed", adjustedRating: 3.9 };
+
+  it("returns every check of that product, newest first", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report, productKey: "k1" });
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report, productKey: "k1" });
+    await addHistoryEntry({ title: "b", thumbnailUrl: null, report, productKey: "k2" });
+
+    const checks = await listChecksOfProduct("k1");
+
+    expect(checks).toHaveLength(2);
+    expect(checks[0]?.timestamp).toBeGreaterThanOrEqual(checks[1]?.timestamp as number);
+  });
+
+  it("carries the band and rating of each one", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report, productKey: "k1" });
+
+    expect(await listChecksOfProduct("k1")).toEqual([
+      { timestamp: expect.any(Number), band: "mixed", adjustedRating: 3.9 },
+    ]);
+  });
+
+  it("returns nothing for a product with no checks", async () => {
+    await deleteAllHistory();
+    await expect(listChecksOfProduct("nothing-here")).resolves.toEqual([]);
+  });
+
+  it("returns nothing rather than everything for an empty key", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report, productKey: "k1" });
+    await expect(listChecksOfProduct("")).resolves.toEqual([]);
+  });
+
+  it("never matches an entry written before the key existed", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report });
+    await expect(listChecksOfProduct("k1")).resolves.toEqual([]);
+  });
+
+  it("takes only the checks before a given moment, so a report excludes itself", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report, productKey: "k1" });
+    const [entry] = await listHistory();
+
+    await expect(listChecksOfProduct("k1", entry?.timestamp)).resolves.toEqual([]);
+  });
+
+  it("reports a band of null for a check whose report cannot be read", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({
+      title: "a",
+      thumbnailUrl: null,
+      report: "not an object",
+      productKey: "k1",
+    });
+
+    expect((await listChecksOfProduct("k1"))[0]?.band).toBeNull();
   });
 });

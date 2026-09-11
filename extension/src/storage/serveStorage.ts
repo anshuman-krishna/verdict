@@ -1,7 +1,7 @@
 import type { RulesDocument } from "../extract/rules";
 import { storefrontHosts } from "../extract/sites";
 import { enqueueContributionEdges } from "../graph/queue";
-import { addHistoryEntry } from "./history";
+import { addHistoryEntry, listChecksOfProduct } from "./history";
 import { isStorageRequest, type StorageRequest, type StorageResponse } from "./messages";
 import { putStoredReviews, readCacheRecord } from "./reviewsCache";
 import {
@@ -70,6 +70,9 @@ async function run(request: StorageRequest, deps: ServeStorageDeps) {
       }
       await addHistoryEntry(request.entry);
       return null;
+    case "history-of-product":
+      // only what the panel shows, never another product's entries
+      return await listChecksOfProduct(request.productKey);
     case "contribution-enqueue":
       if (!(await getGraphContributionEnabled())) {
         return null;

@@ -369,3 +369,37 @@ describe("createProgressiveMount, settling after a failure", () => {
     expect(document.body.querySelector("verdict-notice")).toBeNull();
   });
 });
+
+const REPORT = {
+  serial: "AAAA-BBBB",
+  band: "mixed" as const,
+  claimedRating: 4.6,
+  adjustedRating: 3.9,
+  totalReviewCount: 100,
+  excludedReviewCount: 10,
+  estimatedInorganicShare: 0.1,
+  confidence: { low: 0.05, high: 0.15 },
+  evidence: [],
+  unavailableSignals: [],
+  generatedAt: 0,
+};
+
+describe("where the full report button goes", () => {
+  it("opens the popup at the report the panel was showing", () => {
+    const openTab = vi.fn();
+    const result: AnalysisResult = {
+      page: PAGE,
+      product: PRODUCT,
+      reviews: [],
+      outcome: { status: "ok", report: REPORT, featureVector: {} as never },
+    };
+    mountResult(document, result, deps(), { cache: directReviewsCache }, openTab);
+
+    const panel = document.body.querySelector("verdict-panel") as InstanceType<
+      typeof VerdictPanelElement
+    >;
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".full-report")?.click();
+
+    expect(openTab).toHaveBeenCalledWith(expect.stringContaining(`#${REPORT.serial}`));
+  });
+});

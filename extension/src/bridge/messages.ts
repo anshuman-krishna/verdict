@@ -1,5 +1,5 @@
 import type { ReportOutcome } from "../score/buildReport";
-import type { ReportSummary } from "../score/report";
+import type { Report, ReportSummary } from "../score/report";
 
 
 export interface HistoryListRequest {
@@ -11,6 +11,8 @@ export interface HistorySummaryEntry extends ReportSummary {
   timestamp: number;
   title: string;
   thumbnailUrl: string | null;
+  // the local hash, so the site can group repeat checks without knowing the product
+  productKey: string | null;
 }
 
 export interface HistoryListResponse {
@@ -38,6 +40,15 @@ export interface HistoryExportResponse {
   content: string;
 }
 
+export interface ReportGetRequest {
+  type: "verdict:report:get";
+  id: number;
+}
+
+export interface ReportGetResponse {
+  report: Report | null;
+}
+
 export interface AnalyzeRequest {
   type: "verdict:analyze";
   url: string;
@@ -53,11 +64,13 @@ export type BridgeRequest =
   | HistoryListRequest
   | HistoryClearRequest
   | HistoryExportRequest
+  | ReportGetRequest
   | AnalyzeRequest;
 export type BridgeResponse =
   | HistoryListResponse
   | HistoryClearResponse
   | HistoryExportResponse
+  | ReportGetResponse
   | AnalyzeResponse;
 
 export function isBridgeRequest(value: unknown): value is BridgeRequest {
@@ -71,6 +84,8 @@ export function isBridgeRequest(value: unknown): value is BridgeRequest {
       return true;
     case "verdict:history:export":
       return record.format === "json" || record.format === "csv";
+    case "verdict:report:get":
+      return Number.isInteger(record.id);
     case "verdict:analyze":
       return typeof record.url === "string";
     default:

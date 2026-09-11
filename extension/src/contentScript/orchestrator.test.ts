@@ -494,3 +494,72 @@ describe("analyzePage, a report survives its own bookkeeping", () => {
     expect(saveHistory).toHaveBeenCalledOnce();
   });
 });
+
+const PRODUCT_URL = "https://www.amazon.com/dp/B0BXYZ1234";
+
+function productDocument(): ParentNode {
+  return parse(pageHtml(40));
+}
+
+describe("what analyzePage remembers about a listing", () => {
+  it("saves the product as a hash, never as a url or an id", async () => {
+    const saveHistory = vi.fn().mockResolvedValue(undefined);
+    const testDeps = { ...deps(), isHistoryEnabled: async () => true, saveHistory };
+
+    await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+
+    const saved = saveHistory.mock.calls[0]?.[0] as { productKey: string };
+    expect(saved.productKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(saved)).not.toContain("B0BXYZ1234");
+    expect(JSON.stringify(saved)).not.toContain("amazon.com");
+  });
+
+  it("gives the same listing the same key on a second visit", async () => {
+    const saveHistory = vi.fn().mockResolvedValue(undefined);
+    const testDeps = { ...deps(), isHistoryEnabled: async () => true, saveHistory };
+
+    await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+    await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+
+    const [first, second] = saveHistory.mock.calls.map((call) => call[0].productKey);
+    expect(first).toBe(second);
+  });
+
+  it("asks what it read about this listing before, using that same key", async () => {
+    const previousChecks = vi.fn().mockResolvedValue([]);
+    const saveHistory = vi.fn().mockResolvedValue(undefined);
+    const testDeps = { ...deps(), isHistoryEnabled: async () => true, saveHistory, previousChecks };
+
+    await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+
+    expect(previousChecks).toHaveBeenCalledWith(saveHistory.mock.calls[0]?.[0].productKey);
+  });
+
+  it("carries what it read before out with the result", async () => {
+    const earlier = [{ timestamp: 1, band: "clean" as const, adjustedRating: 4.4 }];
+    const testDeps = { ...deps(), previousChecks: async () => earlier };
+
+    const result = await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+
+    expect(result?.previousChecks).toEqual(earlier);
+  });
+
+  it("still reports when the lookup fails, rather than losing the analysis", async () => {
+    const testDeps = {
+      ...deps(),
+      previousChecks: async () => {
+        throw new Error("storage is gone");
+      },
+    };
+
+    const result = await analyzePage(productDocument(), PRODUCT_URL, testDeps);
+
+    expect(result?.outcome).toBeDefined();
+    expect(result?.previousChecks).toEqual([]);
+  });
+
+  it("asks nothing when no lookup was wired in", async () => {
+    const result = await analyzePage(productDocument(), PRODUCT_URL, deps());
+    expect(result?.previousChecks).toEqual([]);
+  });
+});

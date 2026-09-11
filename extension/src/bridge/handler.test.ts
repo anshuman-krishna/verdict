@@ -6,6 +6,7 @@ import {
   deleteAllHistory,
   exportHistoryAsCsv,
   exportHistoryAsJson,
+  listHistory,
 } from "../storage/history";
 import { deriveAllowedHostnames, handleBridgeMessage, type BridgeHandlerOptions } from "./handler";
 import { isBridgeRequest } from "./messages";
@@ -33,6 +34,8 @@ describe("isBridgeRequest", () => {
     expect(isBridgeRequest({ type: "verdict:analyze", url: "https://amazon.com/dp/x" })).toBe(
       true,
     );
+    expect(isBridgeRequest({ type: "verdict:history:export", format: "csv" })).toBe(true);
+    expect(isBridgeRequest({ type: "verdict:report:get", id: 3 })).toBe(true);
   });
 
   it("rejects an analyze request missing its url", () => {
@@ -88,6 +91,7 @@ describe("handleBridgeMessage", () => {
           timestamp: expect.any(Number),
           title: "wireless mouse",
           thumbnailUrl: "https://x/y.jpg",
+          productKey: null,
           band: "mixed",
           claimedRating: 4.5,
           adjustedRating: 3.9,
@@ -325,5 +329,88 @@ describe("history export", () => {
       options(),
     )) as { content: string };
     expect(response.content).not.toContain("reviews");
+  });
+});
+
+describe("verdict:report:get", () => {
+  const stored = {
+    serial: "7QK2-M4P9",
+    band: "mixed",
+    claimedRating: 4.6,
+    adjustedRating: 3.9,
+    totalReviewCount: 120,
+    excludedReviewCount: 30,
+    estimatedInorganicShare: 0.25,
+    confidence: { low: 0.18, high: 0.33 },
+    evidence: [{ signal: "arrival timing", strength: "moderate", detail: "two bursts.", value: 0.12 }],
+    unavailableSignals: [],
+    generatedAt: 1_700_000_000_000,
+  };
+
+  it("returns the whole report for a check the user made", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: stored });
+    const [entry] = await listHistory();
+
+    const response = await handleBridgeMessage(
+      { type: "verdict:report:get", id: entry?.id },
+      options(),
+    );
+
+    expect(response).toEqual({ report: stored });
+  });
+
+  it("returns nothing for an id the user has no check for", async () => {
+    await deleteAllHistory();
+    await expect(
+      handleBridgeMessage({ type: "verdict:report:get", id: 9999 }, options()),
+    ).resolves.toEqual({ report: null });
+  });
+
+  it("returns nothing rather than a half report an older build stored", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: { band: "mixed" } });
+    const [entry] = await listHistory();
+
+    await expect(
+      handleBridgeMessage({ type: "verdict:report:get", id: entry?.id }, options()),
+    ).resolves.toEqual({ report: null });
+  });
+
+  it("refuses a request whose id is not a whole number", async () => {
+    for (const id of ["1", 1.5, null, undefined, Number.NaN]) {
+      await expect(handleBridgeMessage({ type: "verdict:report:get", id }, options())).resolves.toEqual(
+        { error: "unrecognised message" },
+      );
+    }
+  });
+});
+
+describe("the product key the site groups by", () => {
+  it("carries the hash the extension stored, and never anything else about the product", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({
+      title: "a product",
+      thumbnailUrl: null,
+      report: null,
+      productKey: "f".repeat(64),
+    });
+
+    const response = (await handleBridgeMessage({ type: "verdict:history:list" }, options())) as {
+      entries: { productKey: string | null }[];
+    };
+
+    expect(response.entries[0]?.productKey).toBe("f".repeat(64));
+  });
+
+  it("reports no key for a check saved before keys existed", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: null });
+
+    const response = (await handleBridgeMessage({ type: "verdict:history:list" }, options())) as {
+      entries: { productKey: string | null }[];
+    };
+
+    expect(response.entries[0]?.productKey).toBeNull();
   });
 });

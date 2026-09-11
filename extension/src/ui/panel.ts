@@ -1,5 +1,6 @@
 import type { Report } from "../score/report";
 import { BAND_LABELS } from "../score/report";
+import type { PreviousCheck } from "../storage/history";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
@@ -51,9 +52,50 @@ export function confidenceLine(report: Report): string {
   return `The estimate sits between ${range} of reviews.${unavailable}`;
 }
 
+export interface FullReportDetail {
+  serial: string;
+}
+
+const MS_PER_DAY = 86_400_000;
+
+function daysAgo(then: number, now: number): string {
+  const days = Math.floor((now - then) / MS_PER_DAY);
+  if (days < 1) {
+    return "earlier today";
+  }
+  if (days === 1) {
+    return "yesterday";
+  }
+  if (days < 30) {
+    return `${days} days ago`;
+  }
+  const months = Math.round(days / 30);
+  return months === 1 ? "a month ago" : `${months} months ago`;
+}
+
+// what changed since last time is the thing worth a sentence, not the count of visits
+export function previouslyLine(
+  report: Report,
+  previous: PreviousCheck | undefined,
+  now: number,
+): string | null {
+  if (previous === undefined) {
+    return null;
+  }
+  const when = daysAgo(previous.timestamp, now);
+  if (previous.band === null) {
+    return `You checked this listing ${when}.`;
+  }
+  if (previous.band === report.band) {
+    return `You checked this listing ${when}, and it read ${BAND_LABELS[previous.band]} then too.`;
+  }
+  return `You checked this listing ${when}, when it read ${BAND_LABELS[previous.band]}.`;
+}
+
 export interface PanelRenderOptions {
   pending?: readonly string[];
   now?: number;
+  previousChecks?: readonly PreviousCheck[];
 }
 
 export function pendingLine(pending: readonly string[]): string {
@@ -92,6 +134,7 @@ export class VerdictPanelElement extends HTMLElement {
     }
 
     const pending = options.pending ?? [];
+    const previously = previouslyLine(report, options.previousChecks?.[0], now);
 
     const params = rosetteParams(rosetteInput);
     const path = rosettePath(params, 44);
@@ -170,6 +213,7 @@ export class VerdictPanelElement extends HTMLElement {
           ></div>
         </div>
         <p class="interval-note">${confidenceLine(report)}</p>
+        ${previously === null ? "" : `<p class="previously">${previously}</p>`}
         ${
       pending.length === 0
         ? ""
@@ -241,7 +285,14 @@ export class VerdictPanelElement extends HTMLElement {
   private wireFullReport(root: ShadowRoot): void {
     const fullReportButton = root.querySelector(".full-report");
     fullReportButton?.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("verdict:full-report", { bubbles: true, composed: true }));
+      // the serial names which stored report to open, so the button lands on this one
+      this.dispatchEvent(
+        new CustomEvent<FullReportDetail>("verdict:full-report", {
+          bubbles: true,
+          composed: true,
+          detail: { serial: this.report?.serial ?? "" },
+        }),
+      );
     });
   }
 
@@ -491,6 +542,12 @@ footer {
   margin-top: 16px;
   font-size: 0.875rem;
   color: var(--ink-soft);
+}
+
+.previously {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
 }
 
 footer .full-report {

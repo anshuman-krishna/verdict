@@ -3,7 +3,7 @@ import { DEFAULT_MAX_PAGES, NO_REVIEWS_CACHE, type FetchProgress } from "../extr
 import type { Report } from "../score/report";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
 import type { VerdictNoticeElement } from "../ui/notice";
-import type { VerdictPanelElement } from "../ui/panel";
+import type { FullReportDetail, VerdictPanelElement } from "../ui/panel";
 import {
   checkMoreDeeply,
   type AnalysisResult,
@@ -34,15 +34,24 @@ function createPanel(
     panel.remove();
     onClose();
   });
-  panel.addEventListener("verdict:full-report", () => {
-    openTab(browser.runtime.getURL("/popup.html"));
+  panel.addEventListener("verdict:full-report", (event) => {
+    const { serial } = (event as CustomEvent<FullReportDetail>).detail ?? { serial: "" };
+    const suffix = serial === "" ? "" : `#${encodeURIComponent(serial)}`;
+    openTab(`${browser.runtime.getURL("/popup.html")}${suffix}`);
   });
   return panel;
 }
 
-function mountPanel(document: Document, report: Report, openTab: (url: string) => void): void {
+function mountPanel(
+  document: Document,
+  result: AnalysisResult,
+  report: Report,
+  openTab: (url: string) => void,
+): void {
   const panel = createPanel(document, openTab, () => {});
-  panel.render(report, rosetteInputFromReport(report));
+  panel.render(report, rosetteInputFromReport(report), Date.now(), {
+    previousChecks: result.previousChecks,
+  });
 }
 
 function mountNotEnoughDataNotice(
@@ -109,7 +118,7 @@ export function mountResult(
   openTab: (url: string) => void = defaultOpenTab,
 ): void {
   if (result.outcome.status === "ok") {
-    mountPanel(document, result.outcome.report, openTab);
+    mountPanel(document, result, result.outcome.report, openTab);
     return;
   }
   if (result.outcome.status === "not-enough-data") {
@@ -176,6 +185,7 @@ export function createProgressiveMount(
         });
         panel.render(result.outcome.report, rosetteInputFromReport(result.outcome.report), Date.now(), {
           pending,
+          previousChecks: result.previousChecks,
         });
         return;
       }

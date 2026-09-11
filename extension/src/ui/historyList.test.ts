@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { HistoryEntry } from "../storage/history";
-import { renderPopup, type PopupCallbacks } from "./historyList";
+import { groupByProduct, matchesQuery, renderPopup, type PopupCallbacks } from "./historyList";
 
 function entry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
   return {
@@ -133,5 +133,170 @@ describe("renderPopup", () => {
 
       expect(container.querySelector("img")?.getAttribute("src")).toBe(thumbnailUrl);
     });
+  });
+});
+
+describe("opening one check from the list", () => {
+  it("hands back the id of the row that was clicked", () => {
+    const container = document.createElement("div");
+    const onOpenEntry = vi.fn();
+    renderPopup(
+      container,
+      [entry({ id: 4, title: "first" }), entry({ id: 9, title: "second" })],
+      callbacks({ onOpenEntry }),
+    );
+
+    container.querySelectorAll<HTMLButtonElement>(".row")[1]?.click();
+
+    expect(onOpenEntry).toHaveBeenCalledWith(9);
+  });
+
+  it("makes every row reachable from the keyboard", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry()], callbacks());
+    expect(container.querySelector(".row")?.tagName).toBe("BUTTON");
+  });
+
+  it("does not fail when nothing is listening for the click", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry()], callbacks());
+    expect(() => container.querySelector<HTMLButtonElement>(".row")?.click()).not.toThrow();
+  });
+});
+
+describe("searching the history", () => {
+  it("shows no search box until there is something to search", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks());
+    expect(container.querySelector(".search-input")).toBeNull();
+  });
+
+  it("narrows the rows to titles that contain what was typed", () => {
+    const container = document.createElement("div");
+    renderPopup(
+      container,
+      [entry({ id: 1, title: "wireless mouse" }), entry({ id: 2, title: "desk lamp" })],
+      callbacks(),
+    );
+
+    const search = container.querySelector<HTMLInputElement>(".search-input") as HTMLInputElement;
+    search.value = "lamp";
+    search.dispatchEvent(new Event("input"));
+
+    expect(container.querySelectorAll(".row").length).toBe(1);
+    expect(container.querySelector(".title")?.textContent).toBe("desk lamp");
+  });
+
+  it("ignores case and surrounding spaces", () => {
+    expect(matchesQuery(entry({ title: "Wireless Mouse" }), "  mouse ")).toBe(true);
+  });
+
+  it("keeps everything for an empty query", () => {
+    expect(matchesQuery(entry({ title: "anything" }), "")).toBe(true);
+  });
+
+  it("says so when nothing matches, rather than looking empty", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry({ title: "wireless mouse" })], callbacks());
+    const search = container.querySelector<HTMLInputElement>(".search-input") as HTMLInputElement;
+    search.value = "nothing like it";
+    search.dispatchEvent(new Event("input"));
+
+    expect(container.querySelector(".empty")?.textContent).toBe("No checks match that.");
+  });
+
+  it("keeps what was typed in the box after rerendering", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry({ title: "wireless mouse" })], callbacks());
+    const search = container.querySelector<HTMLInputElement>(".search-input") as HTMLInputElement;
+    search.value = "mouse";
+    search.dispatchEvent(new Event("input"));
+
+    expect(container.querySelector<HTMLInputElement>(".search-input")?.value).toBe("mouse");
+  });
+});
+
+describe("the band a row shows", () => {
+  it("prefers what the current model reads over the band stored at the time", () => {
+    const container = document.createElement("div");
+    renderPopup(
+      container,
+      [
+        {
+          ...entry({ report: { band: "mixed", adjustedRating: 3.9 } }),
+          rescored: { band: "doubtful", probability: 0.7, unavailableSignals: [] },
+        },
+      ],
+      callbacks(),
+    );
+
+    expect(container.querySelector(".band")?.textContent).toBe("doubtful");
+  });
+
+  it("keeps the stored band when there is no model to score against", () => {
+    const container = document.createElement("div");
+    renderPopup(
+      container,
+      [{ ...entry({ report: { band: "mixed", adjustedRating: 3.9 } }), rescored: null }],
+      callbacks(),
+    );
+
+    expect(container.querySelector(".band")?.textContent).toBe("mixed");
+  });
+});
+
+describe("repeat checks of one listing", () => {
+  it("shows one row per listing, standing for its newest check", () => {
+    const container = document.createElement("div");
+    renderPopup(
+      container,
+      [
+        entry({ id: 3, title: "wireless mouse", productKey: "k1" }),
+        entry({ id: 2, title: "wireless mouse", productKey: "k1" }),
+        entry({ id: 1, title: "desk lamp", productKey: "k2" }),
+      ],
+      callbacks(),
+    );
+
+    expect(container.querySelectorAll(".row").length).toBe(2);
+    expect(container.querySelector<HTMLButtonElement>(".row")?.dataset.id).toBe("3");
+  });
+
+  it("says how many checks a row stands for, once there is more than one", () => {
+    const container = document.createElement("div");
+    renderPopup(
+      container,
+      [
+        entry({ id: 3, productKey: "k1" }),
+        entry({ id: 2, productKey: "k1" }),
+        entry({ id: 1, productKey: "k1" }),
+      ],
+      callbacks(),
+    );
+
+    expect(container.querySelector(".repeat")?.textContent).toBe("3×");
+  });
+
+  it("says nothing about a count for a listing checked once", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry({ productKey: "k1" })], callbacks());
+    expect(container.querySelector(".repeat")).toBeNull();
+  });
+
+  it("keeps entries from before the key existed as separate rows", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry({ id: 2 }), entry({ id: 1 })], callbacks());
+    expect(container.querySelectorAll(".row").length).toBe(2);
+  });
+
+  it("counts without reordering what listHistory already sorted", () => {
+    const grouped = groupByProduct([
+      entry({ id: 3, title: "newest", productKey: "k1" }),
+      entry({ id: 2, title: "other", productKey: "k2" }),
+      entry({ id: 1, title: "older", productKey: "k1" }),
+    ]);
+
+    expect(grouped.map((row) => row.title)).toEqual(["newest", "other"]);
+    expect(grouped[0]?.checkCount).toBe(2);
   });
 });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BAND_COLORS, BAND_LABELS, generateSerial, summarizeReport } from "./report";
+import {
+  BAND_COLORS,
+  BAND_LABELS,
+  generateSerial,
+  parseStoredReport,
+  summarizeReport,
+} from "./report";
 
 describe("generateSerial", () => {
   it("is deterministic for the same seed and timestamp", () => {
@@ -61,5 +67,90 @@ describe("band tables", () => {
       expect(BAND_LABELS[band].length).toBeGreaterThan(0);
       expect(BAND_COLORS[band]).toMatch(/^#[0-9A-F]{6}$/);
     }
+  });
+});
+
+describe("parseStoredReport", () => {
+  const stored = {
+    serial: "7QK2-M4P9",
+    band: "mixed",
+    claimedRating: 4.6,
+    adjustedRating: 3.9,
+    totalReviewCount: 120,
+    excludedReviewCount: 30,
+    estimatedInorganicShare: 0.25,
+    confidence: { low: 0.18, high: 0.33 },
+    evidence: [
+      { signal: "arrival timing", strength: "moderate", detail: "two bursts.", value: 0.12 },
+    ],
+    unavailableSignals: ["reviewer network"],
+    generatedAt: 1_700_000_000_000,
+  };
+
+  it("round trips a report the extension wrote", () => {
+    expect(parseStoredReport(stored)).toEqual(stored);
+  });
+
+  it("refuses anything that is not an object", () => {
+    for (const value of [null, "a report", 7, undefined]) {
+      expect(parseStoredReport(value)).toBeNull();
+    }
+  });
+
+  it("refuses a report missing a field the view would read", () => {
+    for (const key of [
+      "band",
+      "claimedRating",
+      "adjustedRating",
+      "estimatedInorganicShare",
+      "totalReviewCount",
+      "excludedReviewCount",
+      "generatedAt",
+      "confidence",
+      "evidence",
+    ]) {
+      const partial: Record<string, unknown> = { ...stored };
+      delete partial[key];
+      expect(parseStoredReport(partial)).toBeNull();
+    }
+  });
+
+  it("refuses a band this build does not know", () => {
+    expect(parseStoredReport({ ...stored, band: "catastrophic" })).toBeNull();
+  });
+
+  it("refuses a rating that is not a finite number", () => {
+    expect(parseStoredReport({ ...stored, adjustedRating: Number.NaN })).toBeNull();
+  });
+
+  it("drops an evidence row it cannot read rather than the whole report", () => {
+    const parsed = parseStoredReport({
+      ...stored,
+      evidence: [...stored.evidence, { signal: "later signal", strength: "unknown to us" }],
+    });
+    expect(parsed?.evidence).toHaveLength(1);
+  });
+
+  it("reads a report with no unavailable signals recorded at all", () => {
+    const partial: Record<string, unknown> = { ...stored };
+    delete partial.unavailableSignals;
+    expect(parseStoredReport(partial)?.unavailableSignals).toEqual([]);
+  });
+
+  it("reads a report written before serials existed", () => {
+    const partial: Record<string, unknown> = { ...stored };
+    delete partial.serial;
+    expect(parseStoredReport(partial)?.serial).toBe("");
+  });
+});
+
+describe("what summarizeReport counts as a number", () => {
+  it("reports nothing rather than a figure no interface can render", () => {
+    const summary = summarizeReport({ band: "mixed", adjustedRating: Number.NaN });
+    expect(summary.adjustedRating).toBeNull();
+  });
+
+  it("reports nothing for an infinite share", () => {
+    expect(summarizeReport({ estimatedInorganicShare: Infinity }).estimatedInorganicShare).toBeNull();
   });
 });

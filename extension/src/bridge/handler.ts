@@ -1,6 +1,6 @@
 import type { RulesDocument } from "../extract/rules";
 import { allowedDomains } from "../extract/sites";
-import { summarizeReport } from "../score/report";
+import { parseStoredReport, summarizeReport } from "../score/report";
 import {
   deleteAllHistory,
   exportHistoryAsCsv,
@@ -84,6 +84,7 @@ async function handleRequest(
           timestamp: entry.timestamp,
           title: entry.title,
           thumbnailUrl: entry.thumbnailUrl,
+          productKey: entry.productKey ?? null,
           ...summarizeReport(entry.report),
         })),
       };
@@ -99,6 +100,12 @@ async function handleRequest(
         filename: `verdict-history-${new Date().toISOString().slice(0, 10)}.${request.format}`,
         content: json ? await exportHistoryAsJson() : await exportHistoryAsCsv(),
       };
+    }
+    case "verdict:report:get": {
+      const entries = await listHistory();
+      const entry = entries.find((candidate) => candidate.id === request.id);
+      // the report only, never the url or the id of anything else
+      return { report: entry === undefined ? null : parseStoredReport(entry.report) };
     }
     case "verdict:analyze": {
       return handleAnalyze(

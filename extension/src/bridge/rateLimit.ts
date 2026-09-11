@@ -12,6 +12,7 @@ export const RATE_LIMITS: Record<BridgeRequest["type"], RateLimitRule> = {
   "verdict:history:list": { limit: 60, windowMs: MINUTE_MS },
   "verdict:history:clear": { limit: 6, windowMs: MINUTE_MS },
   "verdict:history:export": { limit: 12, windowMs: MINUTE_MS },
+  "verdict:report:get": { limit: 60, windowMs: MINUTE_MS },
   "verdict:analyze": { limit: 6, windowMs: MINUTE_MS },
 };
 

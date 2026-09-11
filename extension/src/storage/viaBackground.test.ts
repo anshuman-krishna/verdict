@@ -31,7 +31,13 @@ describe("what the content script asks the background for", () => {
 
   it("sends the entry to save rather than writing it where the page can read it", async () => {
     const send = vi.fn().mockResolvedValue({ ok: true, value: null });
-    const entry = { title: "a product", thumbnailUrl: null, report: {}, featureVector: {} as never };
+    const entry = {
+      title: "a product",
+      thumbnailUrl: null,
+      report: {},
+      featureVector: {} as never,
+      productKey: "k",
+    };
     await saveHistoryEntry(entry, send);
 
     expect(send).toHaveBeenCalledWith({ type: STORAGE_MESSAGE_TYPE, op: "history-add", entry });

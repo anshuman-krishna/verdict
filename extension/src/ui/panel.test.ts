@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Report } from "../score/report";
-import { getPanelShadowRootForTesting, VerdictPanelElement } from "./panel";
+import { getPanelShadowRootForTesting, previouslyLine, VerdictPanelElement } from "./panel";
 import type { RosetteInput } from "./rosette";
 
 function sampleReport(overrides: Partial<Report> = {}): Report {
@@ -252,5 +252,89 @@ describe("the provisional state while a signal is still arriving", () => {
     panel.render(sampleReport(), rosetteInput, Date.now(), { pending: ["reviewer network"] });
     panel.render(sampleReport(), rosetteInput, Date.now(), { pending: [] });
     expect(getPanelShadowRootForTesting(panel).querySelector(".pending")).toBeNull();
+  });
+});
+
+describe("the full report button", () => {
+  it("names the report it was showing, so the popup can open that one", () => {
+    const panel = new VerdictPanelElement();
+    const report = sampleReport();
+    panel.render(report, rosetteInput);
+    let sent: { serial: string } | null = null;
+    panel.addEventListener("verdict:full-report", (event) => {
+      sent = (event as CustomEvent<{ serial: string }>).detail;
+    });
+
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".full-report")?.click();
+
+    expect(sent).toEqual({ serial: "7F2A-0091" });
+  });
+
+  it("still asks for the popup when the report carries no serial", () => {
+    const panel = new VerdictPanelElement();
+    panel.render(sampleReport({ serial: "" }), rosetteInput);
+    let fired = false;
+    panel.addEventListener("verdict:full-report", () => {
+      fired = true;
+    });
+
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".full-report")?.click();
+
+    expect(fired).toBe(true);
+  });
+});
+
+describe("what the panel says about a listing checked before", () => {
+  const NOW = Date.parse("2026-03-01T12:00:00Z");
+
+  function check(daysBack: number, band: Report["band"] | null) {
+    return { timestamp: NOW - daysBack * 86_400_000, band, adjustedRating: 3.9 };
+  }
+
+  it("says nothing at all the first time a listing is seen", () => {
+    expect(previouslyLine(sampleReport(), undefined, NOW)).toBeNull();
+    const panel = new VerdictPanelElement();
+    panel.render(sampleReport(), rosetteInput, NOW, { previousChecks: [] });
+    expect(getPanelShadowRootForTesting(panel).querySelector(".previously")).toBeNull();
+  });
+
+  it("names the band it read last time when that band has changed", () => {
+    expect(previouslyLine(sampleReport(), check(12, "clean"), NOW)).toBe(
+      "You checked this listing 12 days ago, when it read clean.",
+    );
+  });
+
+  it("says the reading has not moved when the band is the same", () => {
+    expect(previouslyLine(sampleReport(), check(12, "mixed"), NOW)).toBe(
+      "You checked this listing 12 days ago, and it read mixed then too.",
+    );
+  });
+
+  it("says only when, for a check whose band cannot be read", () => {
+    expect(previouslyLine(sampleReport(), check(12, null), NOW)).toBe(
+      "You checked this listing 12 days ago.",
+    );
+  });
+
+  it("reads the same day, yesterday, and a run of days the way a person would", () => {
+    expect(previouslyLine(sampleReport(), check(0, null), NOW)).toContain("earlier today");
+    expect(previouslyLine(sampleReport(), check(1, null), NOW)).toContain("yesterday");
+    expect(previouslyLine(sampleReport(), check(29, null), NOW)).toContain("29 days ago");
+  });
+
+  it("rounds to months once days stop being useful", () => {
+    expect(previouslyLine(sampleReport(), check(31, null), NOW)).toContain("a month ago");
+    expect(previouslyLine(sampleReport(), check(120, null), NOW)).toContain("4 months ago");
+  });
+
+  it("renders the line under the interval, and uses only the newest check", () => {
+    const panel = new VerdictPanelElement();
+    panel.render(sampleReport(), rosetteInput, NOW, {
+      previousChecks: [check(2, "clean"), check(40, "doubtful")],
+    });
+
+    expect(getPanelShadowRootForTesting(panel).querySelector(".previously")?.textContent).toBe(
+      "You checked this listing 2 days ago, when it read clean.",
+    );
   });
 });

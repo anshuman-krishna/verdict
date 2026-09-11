@@ -1,5 +1,5 @@
 import type { FeatureVector } from "../score/featureVector";
-import { summarizeReport } from "../score/report";
+import { summarizeReport, type Band } from "../score/report";
 import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } from "./database";
 
 const HISTORY_CAP = 500;
@@ -11,6 +11,14 @@ export interface HistoryEntry {
   thumbnailUrl: string | null;
   report: unknown;
   featureVector?: FeatureVector;
+  // the same local hash the reviews cache is keyed by, never the url or the id
+  productKey?: string | null;
+}
+
+export interface PreviousCheck {
+  timestamp: number;
+  band: Band | null;
+  adjustedRating: number | null;
 }
 
 export async function addHistoryEntry(
@@ -35,6 +43,23 @@ export async function listHistory(): Promise<HistoryEntry[]> {
   );
   const entries = await requestToPromise<HistoryEntry[]>(store.getAll());
   return entries.sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
+}
+
+// entries written before the key existed belong to no product, so they never match
+export async function listChecksOfProduct(
+  productKey: string,
+  before: number = Number.POSITIVE_INFINITY,
+): Promise<PreviousCheck[]> {
+  if (productKey === "") {
+    return [];
+  }
+  const entries = await listHistory();
+  return entries
+    .filter((entry) => entry.productKey === productKey && entry.timestamp < before)
+    .map((entry) => {
+      const { band, adjustedRating } = summarizeReport(entry.report);
+      return { timestamp: entry.timestamp, band, adjustedRating };
+    });
 }
 
 export async function deleteAllHistory(): Promise<void> {

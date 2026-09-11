@@ -10,6 +10,8 @@ import { parseProductUrl, reviewPageUrl, type ParsedProductPage } from "../extra
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
+import { cacheKey } from "../storage/reviewsCodec";
+import type { PreviousCheck } from "../storage/history";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { FeatureVector } from "../score/featureVector";
@@ -38,8 +40,10 @@ export interface OrchestratorDeps {
       thumbnailUrl: string | null;
       report: unknown;
       featureVector: FeatureVector;
+      productKey: string | null;
     },
   ) => Promise<unknown>;
+  previousChecks?: (productKey: string) => Promise<PreviousCheck[]>;
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
@@ -58,6 +62,7 @@ export interface AnalysisResult {
   product: ProductSnapshot;
   reviews: Review[];
   outcome: ReportOutcome;
+  previousChecks?: PreviousCheck[];
 }
 
 const REVIEWER_NETWORK = signalsFor(["reviewerGraph"]);
@@ -88,10 +93,27 @@ export async function analyzePage(
   }
   options.onRecognised?.(page);
   const reviews = extractReviews(document, deps.rules, page.locale);
-  const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options);
-  const result = { page, product, reviews, outcome };
+  const productKey = await cacheKey(page.productId, page.site);
+  const previousChecks = await earlierChecks(productKey, deps);
+  const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options, productKey);
+  const result = { page, product, reviews, outcome, previousChecks };
   options.onStage?.({ result, pending: [] });
   return result;
+}
+
+async function earlierChecks(
+  productKey: string,
+  deps: OrchestratorDeps,
+): Promise<PreviousCheck[]> {
+  if (deps.previousChecks === undefined) {
+    return [];
+  }
+  try {
+    return await deps.previousChecks(productKey);
+  } catch {
+    // a listing nobody can look up still gets a report
+    return [];
+  }
 }
 
 async function bestEffort(run: () => Promise<void>): Promise<void> {
@@ -112,6 +134,7 @@ async function scoreAndMaybeSave(
   reviews: readonly Review[],
   deps: OrchestratorDeps,
   options: AnalyzeOptions = {},
+  productKey: string | null = null,
   signatureCache?: WeakMap<Review, bigint[]>,
   embeddingCache?: WeakMap<Review, number[]>,
 ): Promise<ReportOutcome> {
@@ -166,6 +189,7 @@ async function scoreAndMaybeSave(
           thumbnailUrl: product.thumbnailUrl,
           report: outcome.report,
           featureVector: outcome.featureVector,
+          productKey,
         });
       }
     });
@@ -245,14 +269,16 @@ export async function checkMoreDeeply(
   });
 
   const reviews = mergeReviews(existingReviews, fetched.reviews);
+  const productKey = await cacheKey(page.productId, page.site);
   const outcome = await scoreAndMaybeSave(
     page,
     product,
     reviews,
     deps,
     {},
+    productKey,
     fetched.signatures,
     fetched.embeddings,
   );
-  return { page, product, reviews, outcome };
+  return { page, product, reviews, outcome, previousChecks: await earlierChecks(productKey, deps) };
 }

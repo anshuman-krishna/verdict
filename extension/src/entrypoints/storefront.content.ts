@@ -11,6 +11,7 @@ import { BUNDLED_MODEL } from "../score/model";
 import { PLACEHOLDER_PRIORS } from "../score/priors";
 import {
   queueContributionEdges,
+  readChecksOfProduct,
   readRules,
   readSettings,
   reviewsCacheVia,
@@ -34,6 +35,7 @@ export default defineContentScript({
       priors: PLACEHOLDER_PRIORS,
       isHistoryEnabled: async () => (await readSettings()).historyEnabled,
       saveHistory: (entry) => saveHistoryEntry(entry),
+      previousChecks: (productKey) => readChecksOfProduct(productKey),
       reputation: {
         isEnabled: async () => (await readSettings()).reputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,

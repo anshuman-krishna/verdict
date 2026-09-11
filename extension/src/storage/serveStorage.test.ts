@@ -207,3 +207,48 @@ describe("settings the content script reads", () => {
     expect(send).toHaveBeenCalledWith({ type: STORAGE_MESSAGE_TYPE, op: "rules" });
   });
 });
+
+describe("the earlier checks of one listing", () => {
+  it("returns only the checks of the listing that was asked for", async () => {
+    await setHistoryEnabled(true);
+    await serveStorageRequest(
+      request("history-add", { entry: { ...entry, productKey: "k1" } }),
+      STOREFRONT,
+      DEPS,
+    );
+    await serveStorageRequest(
+      request("history-add", { entry: { ...entry, productKey: "k2" } }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    const response = await serveStorageRequest(
+      request("history-of-product", { productKey: "k1" }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    expect(response).toMatchObject({ ok: true });
+    expect((response as { value: unknown[] }).value).toHaveLength(1);
+  });
+
+  it("returns nothing for a key the page invented", async () => {
+    await expect(
+      serveStorageRequest(
+        request("history-of-product", { productKey: "not a product" }),
+        STOREFRONT,
+        DEPS,
+      ),
+    ).resolves.toEqual({ ok: true, value: [] });
+  });
+
+  it("refuses the question entirely from a sender that is not ours", async () => {
+    await expect(
+      serveStorageRequest(
+        request("history-of-product", { productKey: "k1" }),
+        { tab: { id: 1 }, url: "https://evil.example/" },
+        DEPS,
+      ),
+    ).resolves.toEqual({ ok: false });
+  });
+});
