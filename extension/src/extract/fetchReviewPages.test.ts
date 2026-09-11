@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import type { Review } from "./types";
 import { fetchReviewPages, type FetchProgress } from "./fetchReviewPages";
+import { directReviewsCache } from "../storage/reviewsCache";
 
 // distinct reviewers, so paging is not mistaken for the repeated last page
 function review(text: string): Review {
@@ -15,6 +16,7 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-lazy",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 1,
       delay: async () => {},
@@ -27,6 +29,7 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-progress",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage: async (page) => [review(`page ${page} a`), review(`page ${page} b`)],
       maxPages: 3,
       delay: async () => {},
@@ -44,6 +47,7 @@ describe("fetchReviewPages", () => {
     const options = {
       productId: "p-cached-progress",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 1,
       delay: async () => {},
@@ -60,6 +64,7 @@ describe("fetchReviewPages", () => {
     const reviews = await fetchReviewPages({
       productId: "p-cap",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       delay: async () => {},
     });
@@ -78,6 +83,7 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-cap-2",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
@@ -91,6 +97,7 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-spacing",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 3,
       delay: async (ms) => {
@@ -111,6 +118,7 @@ describe("fetchReviewPages", () => {
     await fetchReviewPages({
       productId: "p-first",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 1,
       delay: async (ms) => {
@@ -125,6 +133,7 @@ describe("fetchReviewPages", () => {
     const first = await fetchReviewPages({
       productId: "p-cache",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
@@ -134,6 +143,7 @@ describe("fetchReviewPages", () => {
     const second = await fetchReviewPages({
       productId: "p-cache",
       site: "amazon",
+      cache: directReviewsCache,
       fetchPage,
       maxPages: 2,
       delay: async () => {},
@@ -149,6 +159,7 @@ describe("fetchReviewPages", () => {
       const options = {
         productId: "p-notext",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: async (page: number) => [review(`page ${page} with real review text`)],
         maxPages: 2,
         delay: async () => {},
@@ -164,6 +175,7 @@ describe("fetchReviewPages", () => {
       const options = {
         productId: "p-fields",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: async () => [
           { rating: 4, text: "some text", date: "2026-02-03", verified: false, reviewerId: "r-9" },
         ],
@@ -185,6 +197,7 @@ describe("fetchReviewPages", () => {
       const options = {
         productId: "p-signature",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: async () => [review("a review with plenty of text to shingle over")],
         maxPages: 1,
         delay: async () => {},
@@ -199,6 +212,7 @@ describe("fetchReviewPages", () => {
       const options = {
         productId: "p-notextever",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: async () => [
           { rating: 5, text: null, date: "2026-01-01", verified: true, reviewerId: "r-1" },
         ],
@@ -214,6 +228,7 @@ describe("fetchReviewPages", () => {
       const fresh = await fetchReviewPages({
         productId: "p-fresh",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: async () => [review("text is right here, no need for a signature")],
         maxPages: 1,
         delay: async () => {},
@@ -233,6 +248,7 @@ describe("fetchReviewPages", () => {
       const fetched = await fetchReviewPages({
         productId: "p-throws",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         maxPages: 5,
         delay: async () => {},
@@ -247,6 +263,7 @@ describe("fetchReviewPages", () => {
       const fetched = await fetchReviewPages({
         productId: "p-empty",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         maxPages: 10,
         delay: async () => {},
@@ -261,6 +278,7 @@ describe("fetchReviewPages", () => {
       const fetched = await fetchReviewPages({
         productId: "p-repeats",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         maxPages: 20,
         delay: async () => {},
@@ -278,6 +296,7 @@ describe("fetchReviewPages", () => {
       const first = await fetchReviewPages({
         productId: "p-firstfails",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: failing,
         maxPages: 3,
         delay: async () => {},
@@ -288,6 +307,7 @@ describe("fetchReviewPages", () => {
       const second = await fetchReviewPages({
         productId: "p-firstfails",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage: working,
         maxPages: 3,
         delay: async () => {},
@@ -302,6 +322,7 @@ describe("fetchReviewPages", () => {
       await fetchReviewPages({
         productId: "p-deeper",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         maxPages: 2,
         delay: async () => {},
@@ -311,6 +332,7 @@ describe("fetchReviewPages", () => {
       const deeper = await fetchReviewPages({
         productId: "p-deeper",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         maxPages: 6,
         delay: async () => {},
@@ -326,6 +348,7 @@ describe("fetchReviewPages", () => {
       const options = {
         productId: "p-shallower",
         site: "amazon",
+        cache: directReviewsCache,
         fetchPage,
         delay: async () => {},
       };
@@ -334,5 +357,58 @@ describe("fetchReviewPages", () => {
 
       expect(fetchPage).toHaveBeenCalledTimes(5);
     });
+  });
+});
+
+describe("where the pages it read are kept", () => {
+  function reviewsOn(page: number): Review[] {
+    return [
+      {
+        rating: 5,
+        text: `page ${page}`,
+        date: "2026-01-01",
+        verified: true,
+        reviewerId: `r-${page}`,
+      },
+    ];
+  }
+
+  it("reads and writes through the cache it was given, not the page's own database", async () => {
+    const read = vi.fn().mockResolvedValue(null);
+    const write = vi.fn().mockResolvedValue(undefined);
+
+    await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 2,
+      delay: async () => {},
+      fetchPage: async (page) => reviewsOn(page),
+      cache: { read, write },
+    });
+
+    expect(read).toHaveBeenCalledWith("p-1", "amazon");
+    expect(write).toHaveBeenCalledWith("p-1", "amazon", expect.any(Array), 2);
+  });
+
+  it("answers from the cache it was given when that run went deep enough", async () => {
+    const cached = {
+      reviews: reviewsOn(1),
+      signatures: new WeakMap<Review, bigint[]>(),
+      embeddings: new WeakMap<Review, number[]>(),
+      cachedAt: Date.now(),
+      pagesFetched: 5,
+    };
+    const fetchPage = vi.fn();
+
+    const result = await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 2,
+      fetchPage,
+      cache: { read: async () => cached, write: async () => undefined },
+    });
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(result.stoppedBecause).toBe("complete");
   });
 });

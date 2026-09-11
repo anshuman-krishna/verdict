@@ -1,6 +1,12 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { canonicalJson, loadRules, type SignedRulesEnvelope } from "./rulesLoader";
+import {
+  canonicalJson,
+  loadRules,
+  refreshRules,
+  trustedRules,
+  type SignedRulesEnvelope,
+} from "./rulesLoader";
 import type { RulesDocument } from "./rules";
 
 const FIELDS = { title: { strategy: "selector", value: "h1" } } as const;
@@ -187,7 +193,7 @@ describe("loadRules", () => {
     expect(result).toEqual(fallback);
   });
 
-  it("rejects a version rollback even with a valid signature", async () => {
+  it("keeps the newer document it already had rather than accepting a rollback", async () => {
     const keyPair = await generateKeypair();
     const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
     const cacheKey = freshCacheKey();
@@ -225,7 +231,199 @@ describe("loadRules", () => {
       now: () => now,
     });
 
-    expect(result).toEqual(fallback);
+    // a replayed older release must not cost this install what it already trusts
+    expect(result).toEqual(newerRules);
+  });
+});
+
+describe("what an install falls back to once it trusts a fetched document", () => {
+  async function withCachedVersion(version: number): Promise<{
+    cacheKey: string;
+    publicKeyJwk: JsonWebKey;
+    rules: RulesDocument;
+    at: number;
+  }> {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const cacheKey = freshCacheKey();
+    const at = 1_000_000;
+    const rules: RulesDocument = { version, site: "example", locales: ["com"], fields: FIELDS };
+    const envelope: SignedRulesEnvelope = {
+      rules,
+      signature: await sign(rules, keyPair.privateKey),
+    };
+    await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => envelope }),
+      now: () => at,
+    });
+    return { cacheKey, publicKeyJwk, rules, at };
+  }
+
+  it("keeps serving it when the network is down, rather than dropping to bundled", async () => {
+    const { cacheKey, publicKeyJwk, rules, at } = await withCachedVersion(5);
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl: vi.fn().mockRejectedValue(new Error("network down")),
+      now: () => at + 25 * 60 * 60 * 1000,
+    });
+
+    expect(result).toEqual(rules);
+  });
+
+  it("keeps serving it when the refresh answers with an error", async () => {
+    const { cacheKey, publicKeyJwk, rules, at } = await withCachedVersion(5);
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
+      now: () => at + 25 * 60 * 60 * 1000,
+    });
+
+    expect(result).toEqual(rules);
+  });
+
+  it("keeps serving it when the refresh is signed by the wrong key", async () => {
+    const { cacheKey, publicKeyJwk, rules, at } = await withCachedVersion(5);
+    const other = await generateKeypair();
+    const forged: RulesDocument = { version: 9, site: "example", locales: ["com"], fields: FIELDS };
+    const envelope: SignedRulesEnvelope = {
+      rules: forged,
+      signature: await sign(forged, other.privateKey),
+    };
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => envelope }),
+      now: () => at + 25 * 60 * 60 * 1000,
+    });
+
+    expect(result).toEqual(rules);
+  });
+
+  it("refreshes again rather than holding a document a backwards clock made look fresh", async () => {
+    const { cacheKey, publicKeyJwk, at } = await withCachedVersion(5);
+    const fetchImpl = vi.fn().mockRejectedValue(new Error("network down"));
+
+    await loadRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl,
+      now: () => at - 60 * 60 * 1000,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+});
+
+describe("what a refresh looks like on the wire", () => {
+  it("carries no cookie, no referer, and no cached copy", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+
+    await refreshRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://verdict.tools/rules.json",
+      expect.objectContaining({
+        credentials: "omit",
+        referrer: "",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+      }),
+    );
+  });
+});
+
+describe("trustedRules", () => {
+  it("touches the network not at all, so no page waits on it", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const fetchImpl = vi.fn();
+
+    const result = await trustedRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey: freshCacheKey(),
+      fetchImpl,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result).toEqual(bundledDefault());
+  });
+
+  it("prefers a cached document once one has been verified", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const cacheKey = freshCacheKey();
+    const rules: RulesDocument = { version: 4, site: "example", locales: ["com"], fields: FIELDS };
+    const envelope: SignedRulesEnvelope = {
+      rules,
+      signature: await sign(rules, keyPair.privateKey),
+    };
+    const options = {
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+    };
+    await refreshRules({
+      ...options,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => envelope }),
+    });
+
+    await expect(trustedRules(options)).resolves.toEqual(rules);
+  });
+
+  it("prefers a newer bundled document after an update ships", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const cacheKey = freshCacheKey();
+    const rules: RulesDocument = { version: 2, site: "example", locales: ["com"], fields: FIELDS };
+    const envelope: SignedRulesEnvelope = {
+      rules,
+      signature: await sign(rules, keyPair.privateKey),
+    };
+    await refreshRules({
+      url: "https://verdict.tools/rules.json",
+      publicKeyJwk,
+      bundledDefault: bundledDefault(),
+      cacheKey,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => envelope }),
+    });
+
+    const shipped: RulesDocument = { version: 7, site: "example", locales: ["com"], fields: FIELDS };
+    await expect(
+      trustedRules({
+        url: "https://verdict.tools/rules.json",
+        publicKeyJwk,
+        bundledDefault: shipped,
+        cacheKey,
+      }),
+    ).resolves.toEqual(shipped);
   });
 });
 

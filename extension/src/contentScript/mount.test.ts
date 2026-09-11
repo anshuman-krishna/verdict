@@ -8,6 +8,7 @@ import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
 import { createProgressiveMount, mountResult } from "./mount";
 import type { AnalysisResult, OrchestratorDeps } from "./orchestrator";
+import { directReviewsCache } from "../storage/reviewsCache";
 
 const PAGE = { site: "amazon" as const, locale: "com", productId: "B0EXAMPLE1" };
 const PRODUCT = {
@@ -103,7 +104,7 @@ describe("mountResult", () => {
       },
     };
     const openTab = vi.fn();
-    mountResult(document, result, deps(), {}, openTab);
+    mountResult(document, result, deps(), { cache: directReviewsCache }, openTab);
 
     const panel = document.body.querySelector("verdict-panel") as InstanceType<
       typeof VerdictPanelElement
@@ -170,7 +171,7 @@ describe("mountResult", () => {
       reviews: [],
       outcome: { status: "not-enough-data" },
     };
-    mountResult(document, result, deps(), { maxPages: 2, delay: () => Promise.resolve() });
+    mountResult(document, result, deps(), { maxPages: 2, delay: () => Promise.resolve(), cache: directReviewsCache });
 
     const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
@@ -196,7 +197,7 @@ describe("mountResult", () => {
       reviews: [],
       outcome: { status: "not-enough-data" },
     };
-    mountResult(document, result, deps(), { delay: () => Promise.resolve() });
+    mountResult(document, result, deps(), { delay: () => Promise.resolve(), cache: directReviewsCache });
 
     const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
@@ -237,7 +238,7 @@ describe("mountResult", () => {
       reviews: [],
       outcome: { status: "not-enough-data" },
     };
-    mountResult(document, result, deps(), { maxPages: 1, delay: () => Promise.resolve() });
+    mountResult(document, result, deps(), { maxPages: 1, delay: () => Promise.resolve(), cache: directReviewsCache });
 
     const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");

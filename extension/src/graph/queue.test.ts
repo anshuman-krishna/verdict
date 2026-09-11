@@ -6,6 +6,7 @@ import {
   deleteContributions,
   enqueueContributionEdges,
   listDueContributions,
+  QUEUE_CAP,
 } from "./queue";
 
 const FAR_FUTURE = 10_000_000_000_000;
@@ -91,5 +92,35 @@ describe("deleteContributions", () => {
     await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
     await deleteContributions([]);
     expect(await countQueuedContributions()).toBe(1);
+  });
+});
+
+describe("when the service has been unreachable for a long time", () => {
+  it("stops adding once the queue is at its cap", async () => {
+    await clearQueue();
+    const edges = Array.from({ length: 6 }, (_, i) => edge({ weekBucket: 2800 + i }));
+
+    await enqueueContributionEdges(edges, () => 1_000, () => 0, 4);
+
+    expect(await countQueuedContributions()).toBe(4);
+  });
+
+  it("adds nothing more once the cap is already reached", async () => {
+    await clearQueue();
+    await enqueueContributionEdges([edge(), edge()], () => 1_000, () => 0, 2);
+    await enqueueContributionEdges([edge()], () => 1_000, () => 0, 2);
+
+    expect(await countQueuedContributions()).toBe(2);
+  });
+
+  it("still takes everything while there is room", async () => {
+    await clearQueue();
+    await enqueueContributionEdges([edge(), edge(), edge()], () => 1_000, () => 0, 10);
+
+    expect(await countQueuedContributions()).toBe(3);
+  });
+
+  it("caps high enough that ordinary browsing never reaches it", () => {
+    expect(QUEUE_CAP).toBeGreaterThanOrEqual(10_000);
   });
 });

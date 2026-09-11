@@ -5,7 +5,9 @@ from fastapi.testclient import TestClient
 
 from verdict_service.api.contribution import (
     MAX_EDGES_PER_BATCH,
+    MAX_MINHASH_DIGITS,
     MAX_MINHASH_LENGTH,
+    MAX_WEEK_BUCKET,
     create_contribution_router,
 )
 from verdict_service.graph.contribution_store import InMemoryContributionEdgeStore
@@ -136,3 +138,53 @@ def test_rejects_a_request_missing_the_edges_field():
     client = make_client(InMemoryContributionEdgeStore())
     response = client.post("/v1/graph/contribute", json={})
     assert response.status_code == 422
+
+
+def test_rejects_a_week_bucket_outside_any_plausible_range():
+    client = make_client(InMemoryContributionEdgeStore())
+    for week_bucket in (-1, MAX_WEEK_BUCKET + 1, 10**18):
+        response = client.post(
+            "/v1/graph/contribute", json={"edges": [valid_edge(week_bucket=week_bucket)]}
+        )
+        assert response.status_code == 422, week_bucket
+
+
+def test_accepts_a_week_bucket_at_the_edges_of_the_range():
+    store = InMemoryContributionEdgeStore()
+    client = make_client(store)
+    for week_bucket in (0, MAX_WEEK_BUCKET):
+        response = client.post(
+            "/v1/graph/contribute", json={"edges": [valid_edge(week_bucket=week_bucket)]}
+        )
+        assert response.status_code == 200, week_bucket
+
+
+def test_rejects_unicode_digits_that_isdigit_would_have_allowed():
+    # '²'.isdigit() is True but int('²') raises, so the old check let a crash through
+    client = make_client(InMemoryContributionEdgeStore())
+    for entry in ("\u00b2", "\u0663", "", " 1", "1.0", "-1"):
+        response = client.post(
+            "/v1/graph/contribute",
+            json={"edges": [valid_edge(minhash_signature=[entry])]},
+        )
+        assert response.status_code == 422, repr(entry)
+
+
+def test_rejects_a_minhash_entry_longer_than_a_64_bit_value():
+    client = make_client(InMemoryContributionEdgeStore())
+    response = client.post(
+        "/v1/graph/contribute",
+        json={"edges": [valid_edge(minhash_signature=["9" * (MAX_MINHASH_DIGITS + 1)])]},
+    )
+    assert response.status_code == 422
+
+
+def test_every_accepted_minhash_entry_survives_int_conversion():
+    store = InMemoryContributionEdgeStore()
+    client = make_client(store)
+    client.post(
+        "/v1/graph/contribute",
+        json={"edges": [valid_edge(minhash_signature=["0", "9" * MAX_MINHASH_DIGITS])]},
+    )
+    for entry in store.list_since(0)[0].minhash_signature:
+        assert int(entry) >= 0

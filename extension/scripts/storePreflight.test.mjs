@@ -6,6 +6,7 @@ import {
   hostProblems,
   hostsIn,
   modelProblems,
+  pageStorageProblems,
   permissionProblems,
   preflightProblems,
   remoteCodeProblems,
@@ -212,5 +213,33 @@ describe("modelProblems", () => {
   it("refuses something that is not an artifact at all", () => {
     expect(modelProblems(null)).toHaveLength(1);
     expect(modelProblems([])).toHaveLength(1);
+  });
+});
+
+describe("pageStorageProblems", () => {
+  it("refuses a content script that reaches for indexeddb", () => {
+    expect(
+      pageStorageProblems(file("indexedDB.open('verdict')", "content-scripts/storefront.js")),
+    ).toHaveLength(1);
+  });
+
+  it("names every storage a content script shares with the page it runs on", () => {
+    for (const source of ["localStorage.setItem('a',1)", "sessionStorage.a", "document.cookie"]) {
+      expect(pageStorageProblems(file(source, "content-scripts/storefront.js"))).toHaveLength(1);
+    }
+  });
+
+  it("allows the background to use the extension's own indexeddb", () => {
+    expect(pageStorageProblems(file("indexedDB.open('verdict')", "background.js"))).toEqual([]);
+  });
+
+  it("allows the popup to use it too", () => {
+    expect(pageStorageProblems(file("indexedDB.open('verdict')", "chunks/popup.js"))).toEqual([]);
+  });
+
+  it("says nothing about a content script that stores nothing", () => {
+    expect(
+      pageStorageProblems(file("browser.runtime.sendMessage(x)", "content-scripts/storefront.js")),
+    ).toEqual([]);
   });
 });

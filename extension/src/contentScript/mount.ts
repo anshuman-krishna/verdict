@@ -1,5 +1,5 @@
 import { browser } from "wxt/browser";
-import { DEFAULT_MAX_PAGES, type FetchProgress } from "../extract/fetchReviewPages";
+import { DEFAULT_MAX_PAGES, NO_REVIEWS_CACHE, type FetchProgress } from "../extract/fetchReviewPages";
 import type { Report } from "../score/report";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
 import type { VerdictNoticeElement } from "../ui/notice";
@@ -105,7 +105,7 @@ export function mountResult(
   document: Document,
   result: AnalysisResult,
   deps: OrchestratorDeps,
-  checkOptions: CheckMoreDeeplyOptions = {},
+  checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
 ): void {
   if (result.outcome.status === "ok") {
@@ -126,7 +126,7 @@ export interface ProgressiveMount {
 export function createProgressiveMount(
   document: Document,
   deps: OrchestratorDeps,
-  checkOptions: CheckMoreDeeplyOptions = {},
+  checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
 ): ProgressiveMount {
   let panel: VerdictPanelElement | null = null;

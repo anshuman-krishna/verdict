@@ -21,6 +21,14 @@ async function sha256Hex(input: string): Promise<string> {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_PER_WEEK = 7;
 
+export const MIN_STAR_RATING = 1;
+export const MAX_STAR_RATING = 5;
+
+// the service rejects anything else, and one rejected edge fails the whole batch
+function isSendableRating(rating: number): boolean {
+  return Number.isInteger(rating) && rating >= MIN_STAR_RATING && rating <= MAX_STAR_RATING;
+}
+
 export function weekBucket(dateIso: string): number | null {
   const parsed = Date.parse(dateIso);
   if (Number.isNaN(parsed)) {
@@ -35,6 +43,9 @@ export async function buildContributionEdge(
   salt: string,
 ): Promise<ContributionEdge | null> {
   if (review.reviewerId === null || review.date === null || review.rating === null) {
+    return null;
+  }
+  if (!isSendableRating(review.rating)) {
     return null;
   }
   const bucket = weekBucket(review.date);

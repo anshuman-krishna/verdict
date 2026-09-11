@@ -77,4 +77,28 @@ describe("buildContributionEdge", () => {
     const b = await buildContributionEdge(review(), "B0", "salt-one");
     expect(a?.reviewerHash).toBe(b?.reviewerHash);
   });
+
+  describe("a rating the service would refuse", () => {
+    it("drops an edge rather than letting one bad rating fail the whole batch", async () => {
+      for (const rating of [4.5, 0, 6, 99, -3]) {
+        const edge = await buildContributionEdge(
+          { rating, text: "x", date: "2026-01-01", verified: true, reviewerId: "r-1" },
+          "B0EXAMPLE1",
+          "salt",
+        );
+        expect(edge).toBeNull();
+      }
+    });
+
+    it("still builds an edge for every rating the service accepts", async () => {
+      for (const rating of [1, 2, 3, 4, 5]) {
+        const edge = await buildContributionEdge(
+          { rating, text: "x", date: "2026-01-01", verified: true, reviewerId: "r-1" },
+          "B0EXAMPLE1",
+          "salt",
+        );
+        expect(edge?.starRating).toBe(rating);
+      }
+    });
+  });
 });

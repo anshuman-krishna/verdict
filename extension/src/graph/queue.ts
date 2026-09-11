@@ -4,6 +4,9 @@ import type { ContributionEdge } from "./edge";
 const MIN_DELAY_MS = 60 * 60 * 1000;
 const MAX_DELAY_MS = 6 * 60 * 60 * 1000;
 
+// a service that stays down must not grow the queue without bound
+export const QUEUE_CAP = 20_000;
+
 interface QueuedContribution {
   id: number;
   edge: ContributionEdge;
@@ -14,6 +17,7 @@ export async function enqueueContributionEdges(
   edges: readonly ContributionEdge[],
   now: () => number = Date.now,
   random: () => number = Math.random,
+  cap: number = QUEUE_CAP,
 ): Promise<void> {
   if (edges.length === 0) {
     return;
@@ -22,9 +26,15 @@ export async function enqueueContributionEdges(
   const store = db
     .transaction(STORE_NAMES.graphContributionQueue, "readwrite")
     .objectStore(STORE_NAMES.graphContributionQueue);
+  const queued = await requestToPromise<number>(store.count());
+  let room = cap - queued;
   for (const edge of edges) {
+    if (room <= 0) {
+      return;
+    }
     const readyAt = now() + MIN_DELAY_MS + random() * (MAX_DELAY_MS - MIN_DELAY_MS);
     await put(store, { edge, readyAt } as Omit<QueuedContribution, "id">);
+    room--;
   }
 }
 

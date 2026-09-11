@@ -130,4 +130,55 @@ describe("sanitiseRulesDocument", () => {
       expect(result?.problems[0]).toMatch(/deeper than/);
     });
   });
+
+  describe("an embedded json path the interpreter cannot read", () => {
+    it("is rejected as a problem rather than shipped as a rule that matches everything", () => {
+      const sanitised = sanitiseRulesDocument({
+        version: 1,
+        site: "amazon",
+        locales: ["com"],
+        fields: {
+          title: { strategy: "selector", value: ".title" },
+          reviews: { strategy: "embedded-json", path: "$..reviews" },
+        },
+      });
+
+      expect(sanitised?.rules.fields.reviews).toBeUndefined();
+      expect(sanitised?.problems.join(" ")).toContain("readable json path");
+    });
+
+    it("accepts a json-ld path, which is the whole point of preferring embedded json", () => {
+      const sanitised = sanitiseRulesDocument({
+        version: 1,
+        site: "amazon",
+        locales: ["com"],
+        fields: {
+          reviews: { strategy: "embedded-json", path: "$['@graph'].review[*]" },
+          title: { strategy: "embedded-json", path: "$.@type" },
+        },
+      });
+
+      expect(sanitised?.problems).toEqual([]);
+      expect(Object.keys(sanitised?.rules.fields ?? {}).sort()).toEqual(["reviews", "title"]);
+    });
+
+    it("rejects a broken path sitting in a fallback too", () => {
+      const sanitised = sanitiseRulesDocument({
+        version: 1,
+        site: "amazon",
+        locales: ["com"],
+        fields: {
+          title: { strategy: "selector", value: ".t" },
+          reviews: {
+            strategy: "selector",
+            value: "[data-hook=review]",
+            fallback: { strategy: "embedded-json", path: "$.a[" },
+          },
+        },
+      });
+
+      expect(sanitised?.rules.fields.reviews).toBeUndefined();
+      expect(sanitised?.problems.join(" ")).toContain("fallback");
+    });
+  });
 });

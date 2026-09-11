@@ -24,6 +24,14 @@ const REMOTE_CODE_PATTERNS = [
   { pattern: /<script[^>]+src\s*=\s*["']https?:/i, name: "a remote <script src>" },
 ];
 
+// a content script shares the page's origin for these, so what it stores, the seller reads
+const PAGE_STORAGE_PATTERNS = [
+  { pattern: /\bindexedDB\b/, name: "indexedDB" },
+  { pattern: /\blocalStorage\b/, name: "localStorage" },
+  { pattern: /\bsessionStorage\b/, name: "sessionStorage" },
+  { pattern: /document\s*\.\s*cookie\b/, name: "document.cookie" },
+];
+
 const HOST_PATTERN = /https?:\/\/([a-z0-9.*-]+\.[a-z]{2,}|localhost)(?::\d+)?/gi;
 
 export function hostsIn(text) {
@@ -108,6 +116,24 @@ export function remoteCodeProblems(files) {
   return problems;
 }
 
+export function pageStorageProblems(files) {
+  const problems = [];
+  for (const { path, text } of files) {
+    if (!path.startsWith("content-scripts/")) {
+      continue;
+    }
+    for (const { pattern, name } of PAGE_STORAGE_PATTERNS) {
+      if (pattern.test(text)) {
+        problems.push(
+          `${path} uses ${name}, which in a content script belongs to the storefront, not to ` +
+            "us. Anything kept there is readable by the seller and invisible to the popup",
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 export function hostProblems(manifest, files) {
   const granted = declaredHosts(manifest);
   const problems = [];
@@ -163,6 +189,7 @@ export function preflightProblems(manifest, files) {
     ...permissionProblems(manifest),
     ...breadthProblems(manifest),
     ...remoteCodeProblems(files),
+    ...pageStorageProblems(files),
     ...hostProblems(manifest, files),
   ];
 }

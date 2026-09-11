@@ -1,4 +1,9 @@
-import { fetchReviewPages, type FetchProgress } from "../extract/fetchReviewPages";
+import {
+  fetchReviewPages,
+  NO_REVIEWS_CACHE,
+  type FetchProgress,
+  type ReviewsCachePort,
+} from "../extract/fetchReviewPages";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import { mergeReviews } from "../extract/reviewIdentity";
 import { parseProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/sites";
@@ -209,6 +214,7 @@ export interface CheckMoreDeeplyOptions {
   delay?: (ms: number) => Promise<void>;
   random?: () => number;
   onProgress?: (progress: FetchProgress) => void;
+  cache: ReviewsCachePort;
 }
 
 export async function checkMoreDeeply(
@@ -216,7 +222,7 @@ export async function checkMoreDeeply(
   product: ProductSnapshot,
   existingReviews: readonly Review[],
   deps: OrchestratorDeps,
-  options: CheckMoreDeeplyOptions = {},
+  options: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
 ): Promise<AnalysisResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const fetched = await fetchReviewPages({
@@ -226,6 +232,7 @@ export async function checkMoreDeeply(
     delay: options.delay,
     random: options.random,
     onProgress: options.onProgress,
+    cache: options.cache ?? NO_REVIEWS_CACHE,
     fetchPage: async (pageNumber) => {
       const response = await fetchImpl(reviewPageUrl(page, pageNumber));
       if (!response.ok) {

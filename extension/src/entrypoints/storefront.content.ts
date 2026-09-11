@@ -4,24 +4,18 @@ import { createProgressiveMount } from "../contentScript/mount";
 import { callIfSlower, FIRST_PAINT_BUDGET_MS } from "../contentScript/deadline";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
 import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
-import {
-  REMOTE_RULES_CACHE_KEY,
-  REMOTE_RULES_PUBLIC_KEY_JWK,
-  REMOTE_RULES_URL,
-} from "../extract/remoteRules";
-import { loadRules } from "../extract/rulesLoader";
 import { contentScriptMatches } from "../extract/sites";
-import { enqueueContributionEdges } from "../graph/queue";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL } from "../score/model";
 import { PLACEHOLDER_PRIORS } from "../score/priors";
-import { addHistoryEntry } from "../storage/history";
 import {
-  getGraphContributionEnabled,
-  getHistoryEnabled,
-  getReputationLookupEnabled,
-} from "../storage/settings";
+  queueContributionEdges,
+  readRules,
+  readSettings,
+  reviewsCacheVia,
+  saveHistoryEntry,
+} from "../storage/viaBackground";
 import "../ui/panel";
 import "../ui/notice";
 
@@ -31,32 +25,31 @@ export default defineContentScript({
   matches: CONTENT_SCRIPT_MATCHES,
   runAt: "document_idle",
   async main() {
-    const rules = await loadRules({
-      url: REMOTE_RULES_URL,
-      publicKeyJwk: REMOTE_RULES_PUBLIC_KEY_JWK,
-      bundledDefault: BUNDLED_AMAZON_RULES,
-      cacheKey: REMOTE_RULES_CACHE_KEY,
-    });
+    // everything stored lives in the extension, never in the storefront's own origin
+    const rules = await readRules(BUNDLED_AMAZON_RULES);
 
     const deps: OrchestratorDeps = {
       rules,
       model: BUNDLED_MODEL,
       priors: PLACEHOLDER_PRIORS,
-      isHistoryEnabled: getHistoryEnabled,
-      saveHistory: (entry) => addHistoryEntry(entry),
+      isHistoryEnabled: async () => (await readSettings()).historyEnabled,
+      saveHistory: (entry) => saveHistoryEntry(entry),
       reputation: {
-        isEnabled: getReputationLookupEnabled,
+        isEnabled: async () => (await readSettings()).reputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,
         salt: REPUTATION_SALT,
       },
       graphContribution: {
-        isEnabled: getGraphContributionEnabled,
+        isEnabled: async () => (await readSettings()).graphContributionEnabled,
         salt: REPUTATION_SALT,
-        enqueue: (edges) => enqueueContributionEdges(edges),
+        enqueue: async (edges) => {
+          await queueContributionEdges(edges);
+        },
       },
     };
 
-    const mount = createProgressiveMount(document, deps);
+    const checkOptions = { cache: reviewsCacheVia() };
+    const mount = createProgressiveMount(document, deps, checkOptions);
     let finish = (): void => {};
     const settled = new Promise<void>((resolve) => {
       finish = resolve;

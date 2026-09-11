@@ -15,6 +15,7 @@ import { getPref, setPref } from "../src/storage/prefs";
 import { getGraphContributionEnabled, getReputationLookupEnabled } from "../src/storage/settings";
 import {
   cacheKey,
+  directReviewsCache,
   getCachedReviews,
   setCachedReviews,
 } from "../src/storage/reviewsCache";
@@ -89,6 +90,7 @@ describe("the default analysis path makes no network requests", () => {
       fetchPage: async () => [review],
       maxPages: 1,
       delay: async () => {},
+      cache: directReviewsCache,
     });
     expect(fetched.reviews).toEqual([review]);
   });

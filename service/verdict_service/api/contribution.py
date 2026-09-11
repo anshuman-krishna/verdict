@@ -8,9 +8,15 @@ from pydantic.alias_generators import to_camel
 from verdict_service.graph.contribution_store import ContributionEdge, ContributionEdgeStore
 
 _HEX_DIGITS = set("0123456789abcdef")
+_ASCII_DIGITS = set("0123456789")
 _SHA256_HEX_LENGTH = 64
 MAX_MINHASH_LENGTH = 128
 MAX_EDGES_PER_BATCH = 500
+# a 64 bit unsigned value is at most 20 decimal digits
+MAX_MINHASH_DIGITS = 20
+# weeks since the epoch, so 0 is 1970 and 5000 is well past any plausible review
+MIN_WEEK_BUCKET = 0
+MAX_WEEK_BUCKET = 5000
 
 
 class ContributionEdgeIn(BaseModel):
@@ -19,7 +25,7 @@ class ContributionEdgeIn(BaseModel):
     reviewer_hash: str
     product_hash: str
     star_rating: int = Field(ge=1, le=5)
-    week_bucket: int
+    week_bucket: int = Field(ge=MIN_WEEK_BUCKET, le=MAX_WEEK_BUCKET)
     verified: bool | None = None
     minhash_signature: list[str] = Field(default_factory=list)
 
@@ -38,8 +44,13 @@ class ContributionEdgeIn(BaseModel):
         if len(value) > MAX_MINHASH_LENGTH:
             raise ValueError(f"minhash_signature must not exceed {MAX_MINHASH_LENGTH} entries")
         for entry in value:
-            if not entry.isdigit():
+            # str.isdigit accepts superscripts and other unicode digits that int() then rejects
+            if entry == "" or not set(entry) <= _ASCII_DIGITS:
                 raise ValueError("minhash_signature entries must be decimal digit strings")
+            if len(entry) > MAX_MINHASH_DIGITS:
+                raise ValueError(
+                    f"minhash_signature entries must not exceed {MAX_MINHASH_DIGITS} digits"
+                )
         return value
 
 

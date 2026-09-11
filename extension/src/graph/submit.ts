@@ -42,7 +42,14 @@ export async function flushDueContributions(deps: FlushDeps): Promise<FlushResul
       },
       deps.timeoutMs,
     );
-    if (response === null || !response.ok) {
+    if (response === null) {
+      return { submitted: 0 };
+    }
+    if (!response.ok) {
+      // a refusal is permanent, so retrying it forever would wedge the queue
+      if (response.status >= 400 && response.status < 500) {
+        await deleteContributions(due.map((item) => item.id));
+      }
       return { submitted: 0 };
     }
   } catch {

@@ -1,4 +1,4 @@
-import { getCachedReviews, setCachedReviews } from "../storage/reviewsCache";
+import type { CachedReviews } from "../storage/reviewsCodec";
 import { reviewKey } from "./reviewIdentity";
 import type { Review } from "./types";
 
@@ -22,6 +22,22 @@ export interface FetchedReviews {
   stoppedBecause: FetchStop;
 }
 
+export interface ReviewsCachePort {
+  read: (productId: string, site: string) => Promise<CachedReviews | null>;
+  write: (
+    productId: string,
+    site: string,
+    reviews: readonly Review[],
+    pagesFetched: number,
+  ) => Promise<unknown>;
+}
+
+// the fallback stores nothing, because nothing here may reach a storefront's own indexeddb
+export const NO_REVIEWS_CACHE: ReviewsCachePort = {
+  read: async () => null,
+  write: async () => undefined,
+};
+
 export interface FetchReviewPagesOptions {
   productId: string;
   site: string;
@@ -30,6 +46,8 @@ export interface FetchReviewPagesOptions {
   delay?: (ms: number) => Promise<void>;
   random?: () => number;
   onProgress?: (progress: FetchProgress) => void;
+  // required, so nothing here can reach for the storefront's own indexeddb
+  cache: ReviewsCachePort;
 }
 
 function defaultDelay(ms: number): Promise<void> {
@@ -43,7 +61,7 @@ export async function fetchReviewPages(
   const delay = options.delay ?? defaultDelay;
   const random = options.random ?? Math.random;
 
-  const cached = await getCachedReviews(options.productId, options.site);
+  const cached = await options.cache.read(options.productId, options.site);
   // a shallower cached run must not answer a deeper request
   if (cached && cached.pagesFetched >= maxPages) {
     return {
@@ -96,7 +114,7 @@ export async function fetchReviewPages(
   }
 
   if (reviews.length > 0) {
-    await setCachedReviews(options.productId, options.site, reviews, pagesFetched);
+    await options.cache.write(options.productId, options.site, reviews, pagesFetched);
   }
   return {
     reviews,

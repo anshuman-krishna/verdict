@@ -128,4 +128,37 @@ describe("a service that never answers", () => {
       await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
     });
   });
+
+  describe("a batch the service will never accept", () => {
+    it("drops it rather than retrying it every alarm forever", async () => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 422 });
+
+      const result = await flushDueContributions({
+        endpoint: "https://x",
+        isEnabled: optedIn,
+        fetchImpl,
+        now: () => FAR_FUTURE,
+      });
+
+      expect(result).toEqual({ submitted: 0 });
+      await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
+    });
+
+    it("keeps the queue when the service is merely having a bad day", async () => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+
+      await flushDueContributions({
+        endpoint: "https://x",
+        isEnabled: optedIn,
+        fetchImpl,
+        now: () => FAR_FUTURE,
+      });
+
+      await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1);
+    });
+  });
 });

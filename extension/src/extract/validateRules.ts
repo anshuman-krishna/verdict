@@ -1,3 +1,5 @@
+// explicit extension, so scripts/signRules.mjs can load this under plain node
+import { parseJsonPath } from "./jsonpath.ts";
 import type { FieldRule, RulesDocument } from "./rules";
 
 
@@ -74,7 +76,9 @@ function strategyProblem(rule: Record<string, unknown>): string | null {
   switch (rule.strategy) {
     case "embedded-json":
       return (
-        nonEmptyString(rule.path, "path") ?? optionalString(rule.scriptSelector, "scriptSelector")
+        nonEmptyString(rule.path, "path") ??
+        optionalString(rule.scriptSelector, "scriptSelector") ??
+        unreadablePath(rule.path as string)
       );
     case "selector":
       return nonEmptyString(rule.value, "value") ?? optionalString(rule.attribute, "attribute");
@@ -118,4 +122,9 @@ function optionalString(value: unknown, key: string): string | null {
     return null;
   }
   return typeof value === "string" && value !== "" ? null : `${key} is not a string`;
+}
+
+// a path the interpreter cannot read would match nothing, silently
+function unreadablePath(path: string): string | null {
+  return parseJsonPath(path) === null ? `path is not a readable json path: ${path}` : null;
 }

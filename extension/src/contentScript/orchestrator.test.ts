@@ -5,6 +5,7 @@ import { BUCKET_COUNT } from "../reputation/lookup";
 import type { RulesDocument } from "../extract/rules";
 import { localModelSet, type CombinerModel } from "../score/combine";
 import { analyzePage, checkMoreDeeply, mergeReviews } from "./orchestrator";
+import { directReviewsCache } from "../storage/reviewsCache";
 
 const PRIORS = { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] };
 
@@ -310,6 +311,7 @@ describe("checkMoreDeeply", () => {
       maxPages: 1,
       fetchImpl: fetchImpl as unknown as typeof fetch,
       delay: () => Promise.resolve(),
+      cache: directReviewsCache,
     });
 
     expect(fetchImpl).toHaveBeenCalledWith(
