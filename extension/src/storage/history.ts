@@ -66,11 +66,15 @@ export async function exportHistoryAsCsv(): Promise<string> {
   return [header, ...rows].join("\n");
 }
 
+// a product title is written by the seller, and a spreadsheet runs what starts with these
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
 function csvField(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replaceAll('"', '""')}"`;
+  const disarmed = FORMULA_LEAD.test(value) ? `'${value}` : value;
+  if (/[",\n\r]/.test(disarmed) || disarmed !== value) {
+    return `"${disarmed.replaceAll('"', '""')}"`;
   }
-  return value;
+  return disarmed;
 }
 
 async function evictBeyondCap(db: IDBDatabase): Promise<void> {

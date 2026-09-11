@@ -131,4 +131,63 @@ describe("a service that answers too slowly (SPEC.md section 13, service unreach
 
     expect(signal?.aborted).toBe(true);
   });
+
+  describe("the time a page can spend on the lookup", () => {
+    it("stops issuing batches once the budget is spent", async () => {
+      let clock = 0;
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ matches: {} }),
+      });
+
+      await lookupFlaggedReviewers(
+        Array.from({ length: 200 }, (_, i) => `reviewer-${i}`),
+        {
+          endpoint: "https://x",
+          salt: "s",
+          fetchImpl: fetchImpl as unknown as typeof fetch,
+          random: () => 0.5,
+          delay: async (ms) => {
+            clock += ms;
+          },
+          now: () => clock,
+          budgetMs: 5_000,
+        },
+      );
+
+      const spent = fetchImpl.mock.calls.length * 2100;
+      expect(spent).toBeLessThanOrEqual(5_000 + 2100);
+      expect(fetchImpl.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("still returns the matches from the batches that did land", async () => {
+      let clock = 0;
+      const salt = "s";
+      const flagged = await reviewerHash("reviewer-0", salt);
+      const fetchImpl = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        const { prefixes } = JSON.parse(init.body as string) as { prefixes: string[] };
+        const prefix = flagged.slice(0, 4);
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              matches: prefixes.includes(prefix) ? { [prefix]: [flagged] } : {},
+            }),
+        });
+      });
+
+      const result = await lookupFlaggedReviewers(["reviewer-0"], {
+        endpoint: "https://x",
+        salt,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        random: () => 0.5,
+        delay: async (ms) => {
+          clock += ms;
+        },
+        now: () => clock,
+      });
+
+      expect(result.has("reviewer-0")).toBe(true);
+    });
+  });
 });

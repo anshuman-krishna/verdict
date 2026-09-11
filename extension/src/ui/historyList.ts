@@ -1,5 +1,7 @@
+import { safeThumbnailUrl } from "../extract/sites";
 import { BAND_COLORS, BAND_LABELS, summarizeReport } from "../score/report";
 import type { HistoryEntry } from "../storage/history";
+import { escapeHtml } from "./escape";
 
 export interface PopupCallbacks {
   onExportJson: () => void;
@@ -55,19 +57,15 @@ export function renderPopup(
   });
 }
 
-function escapeHtml(value: string): string {
-  const div = document.createElement("div");
-  div.textContent = value;
-  return div.innerHTML;
-}
-
 function renderRow(entry: HistoryEntry): string {
   const { band, adjustedRating } = summarizeReport(entry.report);
+  // revalidated here too, since an older build stored whatever the page said
+  const thumbnail = safeThumbnailUrl(entry.thumbnailUrl);
   return `
     <div class="row" role="listitem">
       ${
-        entry.thumbnailUrl !== null
-          ? `<img src="${escapeHtml(entry.thumbnailUrl)}" alt="" width="32" height="32" />`
+        thumbnail !== null
+          ? `<img src="${escapeHtml(thumbnail)}" alt="" width="32" height="32" />`
           : ""
       }
       <span class="title">${escapeHtml(entry.title)}</span>

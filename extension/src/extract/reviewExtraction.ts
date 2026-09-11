@@ -2,6 +2,7 @@ import { resolveField } from "./interpreter";
 import { normaliseDate, normaliseNumber } from "./normalise";
 import type { RulesDocument } from "./rules";
 import type { ParsedProductPage } from "./sites";
+import { safeThumbnailUrl } from "./sites";
 import type { ProductSnapshot, Review } from "./types";
 
 
@@ -74,6 +75,6 @@ export function extractProductSnapshot(
     site: page.site,
     locale: page.locale,
     url,
-    thumbnailUrl: firstString(root, rules, "thumbnailUrl"),
+    thumbnailUrl: safeThumbnailUrl(firstString(root, rules, "thumbnailUrl")),
   };
 }

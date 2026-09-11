@@ -11,6 +11,7 @@ export interface SiteDefinition {
   productPath: string;
   productId: string;
   reviewPath: string;
+  imageHosts?: string[];
 }
 
 export interface ParsedProductPage {
@@ -93,4 +94,41 @@ export function allowedDomains(
   return locales
     .map((locale) => site.locales[locale]?.domain)
     .filter((domain): domain is string => domain !== undefined);
+}
+
+export function storefrontHosts(sites: readonly SiteDefinition[] = SITES): string[] {
+  return sites.flatMap((site) => Object.values(site.locales).map((entry) => entry.host));
+}
+
+export function imageHosts(sites: readonly SiteDefinition[] = SITES): string[] {
+  return [...storefrontHosts(sites), ...sites.flatMap((site) => site.imageHosts ?? [])];
+}
+
+// a thumbnail is a url the seller controls, so it may only point at a storefront we support
+export function isStorefrontImageUrl(
+  url: string,
+  sites: readonly SiteDefinition[] = SITES,
+): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") {
+    return false;
+  }
+  return imageHosts(sites).some(
+    (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`),
+  );
+}
+
+export function safeThumbnailUrl(
+  url: string | null,
+  sites: readonly SiteDefinition[] = SITES,
+): string | null {
+  if (url === null || !isStorefrontImageUrl(url, sites)) {
+    return null;
+  }
+  return url;
 }

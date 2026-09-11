@@ -19,6 +19,7 @@ export interface ReputationLookupDeps {
   random?: () => number;
   delay?: (ms: number) => Promise<void>;
   timeoutMs?: number;
+  budgetMs?: number;
 }
 
 export interface OrchestratorDeps {
@@ -196,6 +197,7 @@ async function flaggedReviewers(
     random: reputation.random,
     delay: reputation.delay,
     timeoutMs: reputation.timeoutMs,
+    budgetMs: reputation.budgetMs,
   });
 }
 

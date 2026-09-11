@@ -68,10 +68,14 @@ import Layout from "../../layouts/Layout.astro";
       });
     }
 
+    // quotes included, because these values land in attributes as well as in text
     function escapeHtml(value: string): string {
-      const div = document.createElement("div");
-      div.textContent = value;
-      return div.innerHTML;
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
     }
 
     function rosetteThumbnail(band: string | null, share: number | null): string {

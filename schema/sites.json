@@ -1,5 +1,5 @@
 {
-  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, and the bridge allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules, not a code change.",
+  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules, not a code change. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered.",
   "sites": [
     {
       "id": "amazon",
@@ -11,7 +11,8 @@
       },
       "productPath": "/(?:dp|gp/product)/([A-Za-z0-9]{10})(?:[/?]|$)",
       "productId": "^[A-Z0-9]{10}$",
-      "reviewPath": "/product-reviews/{productId}/?pageNumber={pageNumber}"
+      "reviewPath": "/product-reviews/{productId}/?pageNumber={pageNumber}",
+      "imageHosts": []
     }
   ]
 }

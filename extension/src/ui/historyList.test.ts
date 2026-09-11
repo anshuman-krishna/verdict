@@ -96,4 +96,42 @@ describe("renderPopup", () => {
 
     expect(cbs.onOpenSettings).toHaveBeenCalledOnce();
   });
+
+  describe("a thumbnail url is whatever the seller put on the page", () => {
+    it("does not let one break out of its attribute and run script", () => {
+      const container = document.createElement("div");
+      renderPopup(
+        container,
+        [entry({ thumbnailUrl: `https://www.amazon.com/a.jpg" onerror="globalThis.pwned = 1` })],
+        callbacks(),
+      );
+
+      const img = container.querySelector("img");
+      expect(img?.getAttribute("onerror")).toBeNull();
+      expect(container.innerHTML).not.toContain("onerror=\"globalThis");
+    });
+
+    it("renders no image at all for a host verdict does not support", () => {
+      const container = document.createElement("div");
+      renderPopup(container, [entry({ thumbnailUrl: "https://tracker.example/pixel.gif" })], callbacks());
+
+      expect(container.querySelector("img")).toBeNull();
+    });
+
+    it("renders no image for a javascript or data url", () => {
+      for (const thumbnailUrl of ["javascript:alert(1)", "data:image/svg+xml,<svg onload=alert(1)>"]) {
+        const container = document.createElement("div");
+        renderPopup(container, [entry({ thumbnailUrl })], callbacks());
+        expect(container.querySelector("img")).toBeNull();
+      }
+    });
+
+    it("still renders a thumbnail served by a supported storefront", () => {
+      const container = document.createElement("div");
+      const thumbnailUrl = "https://www.amazon.co.uk/images/I/a.jpg";
+      renderPopup(container, [entry({ thumbnailUrl })], callbacks());
+
+      expect(container.querySelector("img")?.getAttribute("src")).toBe(thumbnailUrl);
+    });
+  });
 });

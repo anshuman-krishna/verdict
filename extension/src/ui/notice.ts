@@ -1,3 +1,4 @@
+import { escapeHtml } from "./escape";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
 
@@ -72,13 +73,7 @@ export class VerdictNoticeElement extends HTMLElement {
   }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+
 
 if (typeof customElements !== "undefined" && customElements.get("verdict-notice") === undefined) {
   customElements.define("verdict-notice", VerdictNoticeElement);

@@ -115,4 +115,44 @@ describe("history", () => {
 
     expect((await listHistory())[0]?.featureVector).toEqual(VECTOR);
   });
+
+  describe("a csv export is opened in a spreadsheet", () => {
+    it("disarms a title a spreadsheet would run as a formula", async () => {
+      await deleteAllHistory();
+      for (const title of ["=1+1", "+1+1", "-1+1", "@SUM(A1)", "=cmd|'/c calc'!A1"]) {
+        await addHistoryEntry({ title, thumbnailUrl: null, report: null });
+      }
+
+      const rows = (await exportHistoryAsCsv()).split("\n").slice(1);
+      for (const row of rows) {
+        const title = row.split(",").slice(1).join(",");
+        expect(title.startsWith(`"'`)).toBe(true);
+      }
+    });
+
+    it("keeps the original text readable once the cell is text", async () => {
+      await deleteAllHistory();
+      await addHistoryEntry({ title: "=1+1", thumbnailUrl: null, report: null });
+
+      const row = (await exportHistoryAsCsv()).split("\n")[1] as string;
+      expect(row).toContain(`"'=1+1"`);
+    });
+
+    it("leaves an ordinary title unquoted and unchanged", async () => {
+      await deleteAllHistory();
+      await addHistoryEntry({ title: "wireless mouse", thumbnailUrl: null, report: null });
+
+      const row = (await exportHistoryAsCsv()).split("\n")[1] as string;
+      expect(row).toContain(",wireless mouse,");
+    });
+
+    it("quotes a title carrying a carriage return, so it cannot start a new row", async () => {
+      await deleteAllHistory();
+      await addHistoryEntry({ title: "one\rtwo", thumbnailUrl: null, report: null });
+
+      const csv = await exportHistoryAsCsv();
+      expect(csv.split("\n")).toHaveLength(2);
+      expect(csv).toContain(`"one\rtwo"`);
+    });
+  });
 });
