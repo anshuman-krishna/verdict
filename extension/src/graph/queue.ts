@@ -68,6 +68,19 @@ export async function countQueuedContributions(): Promise<number> {
   return requestToPromise<number>(store.count());
 }
 
+// the soonest a queued edge could leave, so the options page can say when
+export async function nextContributionDueAt(): Promise<number | null> {
+  const db = await openDatabase();
+  const store = db
+    .transaction(STORE_NAMES.graphContributionQueue, "readonly")
+    .objectStore(STORE_NAMES.graphContributionQueue);
+  const all = await requestToPromise<QueuedContribution[]>(store.getAll());
+  if (all.length === 0) {
+    return null;
+  }
+  return Math.min(...all.map((item) => item.readyAt));
+}
+
 export async function clearContributionQueue(): Promise<void> {
   const db = await openDatabase();
   const store = db

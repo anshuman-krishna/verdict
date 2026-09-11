@@ -59,7 +59,8 @@ export interface GraphContributionDeps {
 
 export interface AnalysisResult {
   page: ParsedProductPage;
-  product: ProductSnapshot;
+  // null when the url named a product and the page itself could not be read
+  product: ProductSnapshot | null;
   reviews: Review[];
   outcome: ReportOutcome;
   previousChecks?: PreviousCheck[];
@@ -87,9 +88,20 @@ export async function analyzePage(
   if (page === null) {
     return null;
   }
+  // no rules for this site is a state of the build, not a claim about the page
+  if (Object.keys(deps.rules.fields).length === 0) {
+    return null;
+  }
   const product = extractProductSnapshot(document, deps.rules, page, url);
   if (product === null) {
-    return null;
+    const unreadable: AnalysisResult = {
+      page,
+      product: null,
+      reviews: [],
+      outcome: { status: "unreadable" },
+    };
+    options.onStage?.({ result: unreadable, pending: [] });
+    return unreadable;
   }
   options.onRecognised?.(page);
   const reviews = extractReviews(document, deps.rules, page.locale);

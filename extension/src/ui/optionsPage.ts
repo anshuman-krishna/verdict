@@ -1,7 +1,16 @@
+import {
+  cacheLine,
+  checksLine,
+  contributionLine,
+  type Holdings,
+} from "../storage/holdings";
+
 export interface OptionsState {
   historyEnabled: boolean;
   reputationLookupEnabled: boolean;
   graphContributionEnabled: boolean;
+  holdings: Holdings;
+  now?: number;
 }
 
 export interface OptionsCallbacks {
@@ -11,6 +20,8 @@ export interface OptionsCallbacks {
   onExportJson: () => void;
   onExportCsv: () => void;
   onDeleteAll: () => void;
+  onClearCache: () => void;
+  onClearQueue: () => void;
 }
 
 export function renderOptions(
@@ -18,6 +29,7 @@ export function renderOptions(
   state: OptionsState,
   callbacks: OptionsCallbacks,
 ): void {
+  const now = state.now ?? Date.now();
   container.innerHTML = `
     <header>
       <span class="wordmark">verdict</span>
@@ -77,6 +89,36 @@ export function renderOptions(
       </div>
     </section>
     <section class="setting">
+      <h2>What this browser is holding</h2>
+      <!-- PRIVACY.md is a promise about what stays local. A promise the user
+           cannot see the state of is a claim, so the counts live here next to
+           the switches that produce them. -->
+      <dl class="holdings">
+        <div>
+          <dt>Checks</dt>
+          <dd>${checksLine(state.holdings)}</dd>
+        </div>
+        <div>
+          <dt>Review pages</dt>
+          <dd>${cacheLine(state.holdings, now)}</dd>
+          <dd class="actions">
+            <button type="button" class="clear-cache" ${state.holdings.cachedProducts === 0 ? "disabled" : ""}>
+              Clear the review pages
+            </button>
+          </dd>
+        </div>
+        <div>
+          <dt>Waiting to be sent</dt>
+          <dd>${contributionLine(state.holdings, now)}</dd>
+          <dd class="actions">
+            <button type="button" class="clear-queue" ${state.holdings.queuedContributions === 0 ? "disabled" : ""}>
+              Clear what is waiting
+            </button>
+          </dd>
+        </div>
+      </dl>
+    </section>
+    <section class="setting">
       <h2>Your history</h2>
       <div class="actions">
         <button type="button" class="export-json">Export as JSON</button>
@@ -129,6 +171,9 @@ export function renderOptions(
       contributionToggle.checked = false;
     }
   });
+
+  container.querySelector(".clear-cache")?.addEventListener("click", callbacks.onClearCache);
+  container.querySelector(".clear-queue")?.addEventListener("click", callbacks.onClearQueue);
 
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);

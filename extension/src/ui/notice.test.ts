@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import { getNoticeShadowRootForTesting, VerdictNoticeElement } from "./notice";
+import {
+  VerdictNoticeElement,
+  getNoticeShadowRootForTesting,
+  safeNoticeHref,
+} from "./notice";
 
 describe("VerdictNoticeElement", () => {
   it("renders the message and no action button when none is given", () => {
@@ -95,5 +99,44 @@ describe("VerdictNoticeElement", () => {
     notice.addEventListener("verdict:close", handler);
     getNoticeShadowRootForTesting(notice).querySelector<HTMLButtonElement>(".close")?.click();
     expect(handler).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a link on a notice", () => {
+  it("renders one that points at our own site", () => {
+    const notice = new VerdictNoticeElement();
+    notice.render({
+      message: "Verdict could not read this page.",
+      link: { label: "extraction status", href: "https://verdict.tools/status" },
+    });
+
+    const link = getNoticeShadowRootForTesting(notice).querySelector<HTMLAnchorElement>(".link");
+    expect(link?.textContent).toBe("extraction status");
+    expect(link?.getAttribute("href")).toBe("https://verdict.tools/status");
+    expect(link?.getAttribute("rel")).toBe("noreferrer noopener");
+  });
+
+  it("renders none at all when there is no link", () => {
+    const notice = new VerdictNoticeElement();
+    notice.render({ message: "anything" });
+    expect(getNoticeShadowRootForTesting(notice).querySelector(".link")).toBeNull();
+  });
+
+  it("takes only our own pages, so a page cannot aim it anywhere", () => {
+    for (const href of [
+      "javascript:alert(1)",
+      "data:text/html,x",
+      "https://verdict.tools.evil.example/status",
+      "http://verdict.tools/status",
+      "//verdict.tools/status",
+    ]) {
+      expect(safeNoticeHref(href)).toBeNull();
+    }
+  });
+
+  it("drops a link it will not follow rather than rendering a dead one", () => {
+    const notice = new VerdictNoticeElement();
+    notice.render({ message: "anything", link: { label: "somewhere", href: "javascript:alert(1)" } });
+    expect(getNoticeShadowRootForTesting(notice).querySelector(".link")).toBeNull();
   });
 });

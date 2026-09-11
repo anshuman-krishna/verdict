@@ -70,13 +70,38 @@ describe("analyzePage", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when no title can be extracted, even on a valid product url", async () => {
+  it("reports a product page it could not read, rather than staying silent about it", async () => {
     const result = await analyzePage(
       parse(`<script type="application/ld+json">${reviewsJson(30, () => 5)}</script>`),
       "https://www.amazon.com/dp/B0BXYZ1234",
       deps(),
     );
-    expect(result).toBeNull();
+
+    expect(result?.outcome).toEqual({ status: "unreadable" });
+    expect(result?.product).toBeNull();
+    expect(result?.page.productId).toBe("B0BXYZ1234");
+  });
+
+  it("saves nothing to history for a page it could not read", async () => {
+    const saveHistory = vi.fn();
+    await analyzePage(
+      parse("<div></div>"),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ isHistoryEnabled: async () => true, saveHistory }),
+    );
+
+    expect(saveHistory).not.toHaveBeenCalled();
+  });
+
+  it("tells the mount about it, so something is shown", async () => {
+    const onStage = vi.fn();
+    await analyzePage(parse("<div></div>"), "https://www.amazon.com/dp/B0BXYZ1234", deps(), {
+      onStage,
+    });
+
+    expect(onStage).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expect.objectContaining({ product: null }) }),
+    );
   });
 
   it("reports not-enough-data when the page has no claimed rating to adjust", async () => {
@@ -561,5 +586,24 @@ describe("what analyzePage remembers about a listing", () => {
   it("asks nothing when no lookup was wired in", async () => {
     const result = await analyzePage(productDocument(), PRODUCT_URL, deps());
     expect(result?.previousChecks).toEqual([]);
+  });
+});
+
+describe("a build that carries no rules for the site", () => {
+  const noFields: RulesDocument = { ...RULES, fields: {} };
+
+  it("renders nothing, rather than claiming this page could not be read", async () => {
+    const result = await analyzePage(
+      productDocument(),
+      PRODUCT_URL,
+      deps({ rules: noFields }),
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("still reports a page it could not read once there are rules to run", async () => {
+    const result = await analyzePage(parse("<div></div>"), PRODUCT_URL, deps());
+    expect(result?.outcome).toEqual({ status: "unreadable" });
   });
 });

@@ -1,8 +1,10 @@
 import { browser } from "wxt/browser";
 import { DEFAULT_MAX_PAGES, NO_REVIEWS_CACHE, type FetchProgress } from "../extract/fetchReviewPages";
+import type { ProductSnapshot } from "../extract/types";
 import type { Report } from "../score/report";
+import { STATUS_URL } from "../siteLinks";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
-import type { VerdictNoticeElement } from "../ui/notice";
+import type { NoticeState, VerdictNoticeElement } from "../ui/notice";
 import type { FullReportDetail, VerdictPanelElement } from "../ui/panel";
 import {
   checkMoreDeeply,
@@ -54,23 +56,59 @@ function mountPanel(
   });
 }
 
-function mountNotEnoughDataNotice(
-  document: Document,
-  result: AnalysisResult,
-  deps: OrchestratorDeps,
-  checkOptions: CheckMoreDeeplyOptions,
-  openTab: (url: string) => void,
-): void {
+function createNotice(document: Document): VerdictNoticeElement {
   const notice = document.createElement("verdict-notice") as VerdictNoticeElement;
   pinToCorner(notice);
   document.body.appendChild(notice);
   notice.addEventListener("verdict:close", () => notice.remove());
+  return notice;
+}
+
+// DESIGN.md section 9: an extraction that failed says so, and points somewhere
+export function unreadableState(): NoticeState {
+  return {
+    message: "Verdict could not read this page.",
+    link: { label: "extraction status", href: STATUS_URL },
+  };
+}
+
+export function missingSignalsState(missing: readonly string[]): NoticeState {
+  const named = missing.length === 1 ? missing[0] : missing.join(", ");
+  return {
+    message: `Verdict could not read enough of this page to judge it. Missing: ${named}.`,
+    link: { label: "extraction status", href: STATUS_URL },
+  };
+}
+
+export function noModelState(): NoticeState {
+  return { message: "This build of Verdict carries no scoring model, so it cannot judge a page." };
+}
+
+export function notEnoughReviewsMessage(reviewCount: number): string {
+  const found = reviewCount === 1 ? "1 review" : `${reviewCount.toLocaleString()} reviews`;
+  return `Not enough reviews to judge this one. ${found} found.`;
+}
+
+function mountPlainNotice(document: Document, state: NoticeState): void {
+  createNotice(document).render(state);
+}
+
+function mountNotEnoughDataNotice(
+  document: Document,
+  result: AnalysisResult,
+  product: ProductSnapshot,
+  deps: OrchestratorDeps,
+  checkOptions: CheckMoreDeeplyOptions,
+  openTab: (url: string) => void,
+): void {
+  const notice = createNotice(document);
 
   const maxPages = checkOptions.maxPages ?? DEFAULT_MAX_PAGES;
+  const message = notEnoughReviewsMessage(result.reviews.length);
 
   const renderIdle = (): void => {
     notice.render({
-      message: "Not enough data to judge yet.",
+      message,
       action: {
         label: "check more deeply",
         pendingLabel: "checking more deeply...",
@@ -81,13 +119,13 @@ function mountNotEnoughDataNotice(
 
   const runCheck = async (): Promise<void> => {
     notice.render({
-      message: "Not enough data to judge yet.",
+      message,
       busy: true,
       action: { label: "check more deeply", pendingLabel: "checking more deeply...", onClick: () => {} },
       progress: startingProgressLine(maxPages),
     });
     try {
-      const next = await checkMoreDeeply(result.page, result.product, result.reviews, deps, {
+      const next = await checkMoreDeeply(result.page, product, result.reviews, deps, {
         ...checkOptions,
         onProgress: (progress) => notice.updateProgress(progressLine(progress)),
       });
@@ -117,12 +155,25 @@ export function mountResult(
   checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
 ): void {
-  if (result.outcome.status === "ok") {
-    mountPanel(document, result, result.outcome.report, openTab);
+  const outcome = result.outcome;
+  if (outcome.status === "ok") {
+    mountPanel(document, result, outcome.report, openTab);
     return;
   }
-  if (result.outcome.status === "not-enough-data") {
-    mountNotEnoughDataNotice(document, result, deps, checkOptions, openTab);
+  if (outcome.status === "unreadable") {
+    mountPlainNotice(document, unreadableState());
+    return;
+  }
+  if (outcome.status === "missing-features") {
+    mountPlainNotice(document, missingSignalsState(outcome.missing));
+    return;
+  }
+  if (outcome.status === "no-model") {
+    mountPlainNotice(document, noModelState());
+    return;
+  }
+  if (result.product !== null) {
+    mountNotEnoughDataNotice(document, result, result.product, deps, checkOptions, openTab);
   }
 }
 
@@ -193,9 +244,7 @@ export function createProgressiveMount(
         return;
       }
       clearWaiting();
-      if (result.outcome.status === "not-enough-data") {
-        mountNotEnoughDataNotice(document, result, deps, checkOptions, openTab);
-      }
+      mountResult(document, result, deps, checkOptions, openTab);
     },
   };
   return mounted;

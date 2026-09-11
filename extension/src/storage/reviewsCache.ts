@@ -89,6 +89,34 @@ export async function deleteCachedReviews(productId: string, site: string): Prom
   await requestToPromise(store.delete(key));
 }
 
+export interface CachedProducts {
+  count: number;
+  oldestCachedAt: number | null;
+}
+
+export async function countCachedProducts(): Promise<CachedProducts> {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAMES.reviewsCache, "readonly").objectStore(
+    STORE_NAMES.reviewsCache,
+  );
+  const records = await requestToPromise<ReviewsCacheRecord[]>(store.getAll());
+  if (records.length === 0) {
+    return { count: 0, oldestCachedAt: null };
+  }
+  return {
+    count: records.length,
+    oldestCachedAt: Math.min(...records.map((record) => record.cachedAt)),
+  };
+}
+
+export async function clearReviewsCache(): Promise<void> {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAMES.reviewsCache, "readwrite").objectStore(
+    STORE_NAMES.reviewsCache,
+  );
+  await requestToPromise(store.clear());
+}
+
 // nothing else expires a product the user never opened again
 export async function pruneExpiredReviewsCache(now: number = Date.now()): Promise<number> {
   const db = await openDatabase();

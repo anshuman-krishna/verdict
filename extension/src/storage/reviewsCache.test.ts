@@ -6,6 +6,8 @@ import { DEFAULT_NUM_PERMUTATIONS, DEFAULT_SHINGLE_SIZE } from "../score/textNea
 import { openDatabase, put, STORE_NAMES } from "./database";
 import {
   cacheKey,
+  clearReviewsCache,
+  countCachedProducts,
   deleteCachedReviews,
   getCachedReviews,
   pruneExpiredReviewsCache,
@@ -256,5 +258,37 @@ describe("retention, which PRIVACY.md puts at seven days", () => {
     await writeStaleRecord("p-sweep-future", "amazon", Date.now() + TTL_MS * 2);
     await pruneExpiredReviewsCache();
     expect(await rawRecord("p-sweep-future")).toBeUndefined();
+  });
+});
+
+describe("what the options page reports about the cache", () => {
+  it("counts nothing on an empty cache, with no oldest entry", async () => {
+    await clearReviewsCache();
+    await expect(countCachedProducts()).resolves.toEqual({ count: 0, oldestCachedAt: null });
+  });
+
+  it("counts one record per listing, whatever the site", async () => {
+    await clearReviewsCache();
+    await setCachedReviews("p-a", "amazon", [review]);
+    await setCachedReviews("p-a", "other-site", [review]);
+
+    await expect(countCachedProducts()).resolves.toMatchObject({ count: 2 });
+  });
+
+  it("reports the oldest entry, which is the one closest to expiring", async () => {
+    await clearReviewsCache();
+    await writeStaleRecord("p-old", "amazon", 1_000_000);
+    await setCachedReviews("p-new", "amazon", [review]);
+
+    await expect(countCachedProducts()).resolves.toMatchObject({ oldestCachedAt: 1_000_000 });
+  });
+
+  it("clears every listing at once, expired or not", async () => {
+    await setCachedReviews("p-1", "amazon", [review]);
+    await setCachedReviews("p-2", "amazon", [review]);
+
+    await clearReviewsCache();
+
+    expect((await countCachedProducts()).count).toBe(0);
   });
 });

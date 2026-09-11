@@ -14,6 +14,7 @@ import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
 import { pruneExpiredReviewsCache } from "../storage/reviewsCache";
+import { UNINSTALL_URL } from "../siteLinks";
 import { serveStorageRequest } from "../storage/serveStorage";
 
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
@@ -86,8 +87,6 @@ const RULES_ALARM_NAME = "verdict:refresh-rules";
 const RULES_ALARM_PERIOD_MINUTES = 12 * 60;
 
 const rateLimiter = new BridgeRateLimiter();
-
-const UNINSTALL_URL = "https://verdict.tools/uninstalled";
 
 export default defineBackground(() => {
   browser.runtime.setUninstallURL?.(UNINSTALL_URL);

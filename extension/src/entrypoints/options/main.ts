@@ -1,6 +1,9 @@
 import { setGraphContributionWithPermission } from "../../graph/permission";
 import { setReputationLookupWithPermission } from "../../reputation/permission";
+import { clearContributionQueue } from "../../graph/queue";
+import { readHoldings } from "../../storage/holdings";
 import { deleteAllHistory, exportHistoryAsCsv, exportHistoryAsJson } from "../../storage/history";
+import { clearReviewsCache } from "../../storage/reviewsCache";
 import {
   getGraphContributionEnabled,
   getHistoryEnabled,
@@ -26,9 +29,10 @@ async function refresh(): Promise<void> {
   const historyEnabled = await getHistoryEnabled();
   const reputationLookupEnabled = await getReputationLookupEnabled();
   const graphContributionEnabled = await getGraphContributionEnabled();
+  const holdings = await readHoldings();
   renderOptions(
     app,
-    { historyEnabled, reputationLookupEnabled, graphContributionEnabled },
+    { historyEnabled, reputationLookupEnabled, graphContributionEnabled, holdings },
     {
       onToggleHistory: async (enabled) => {
         await setHistoryEnabled(enabled);
@@ -47,6 +51,14 @@ async function refresh(): Promise<void> {
         download("verdict-history.csv", await exportHistoryAsCsv(), "text/csv"),
       onDeleteAll: async () => {
         await deleteAllHistory();
+        await refresh();
+      },
+      onClearCache: async () => {
+        await clearReviewsCache();
+        await refresh();
+      },
+      onClearQueue: async () => {
+        await clearContributionQueue();
         await refresh();
       },
     },

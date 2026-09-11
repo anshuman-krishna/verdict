@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import {
   addHistoryEntry,
+  countHistory,
   deleteAllHistory,
   exportHistoryAsCsv,
   exportHistoryAsJson,
@@ -217,5 +218,20 @@ describe("the checks of one listing", () => {
     });
 
     expect((await listChecksOfProduct("k1"))[0]?.band).toBeNull();
+  });
+});
+
+describe("countHistory", () => {
+  it("counts nothing on an empty history", async () => {
+    await deleteAllHistory();
+    await expect(countHistory()).resolves.toBe(0);
+  });
+
+  it("agrees with what listHistory returns", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "a", thumbnailUrl: null, report: null });
+    await addHistoryEntry({ title: "b", thumbnailUrl: null, report: null });
+
+    expect(await countHistory()).toBe((await listHistory()).length);
   });
 });

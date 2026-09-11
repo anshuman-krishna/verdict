@@ -18,11 +18,24 @@ export interface NoticeAction {
   pendingLabel?: string;
 }
 
+export interface NoticeLink {
+  label: string;
+  href: string;
+}
+
 export interface NoticeState {
   message: string;
   action?: NoticeAction;
+  link?: NoticeLink;
   busy?: boolean;
   progress?: string;
+}
+
+// only our own pages, never a url anything on the storefront could reach
+const ALLOWED_LINK_PREFIX = "https://verdict.tools/";
+
+export function safeNoticeHref(href: string): string | null {
+  return href.startsWith(ALLOWED_LINK_PREFIX) ? href : null;
 }
 
 export class VerdictNoticeElement extends HTMLElement {
@@ -39,6 +52,10 @@ export class VerdictNoticeElement extends HTMLElement {
     }
 
     const action = state.action;
+    const linkHref = state.link === undefined ? null : safeNoticeHref(state.link.href);
+    const link = state.link !== undefined && linkHref !== null
+      ? { label: state.link.label, href: linkHref }
+      : null;
     const busy = state.busy ?? false;
     const actionLabel = action
       ? (busy ? (action.pendingLabel ?? action.label) : action.label)
@@ -52,6 +69,7 @@ export class VerdictNoticeElement extends HTMLElement {
         ${state.progress === undefined ? "" : `<p class="progress">${escapeHtml(state.progress)}</p>`}
         <div class="actions">
           ${action ? `<button type="button" class="action" ${busy ? "disabled" : ""}>${escapeHtml(actionLabel as string)}</button>` : ""}
+          ${link === null ? "" : `<a class="link" href="${escapeHtml(link.href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(link.label)}</a>`}
           <button type="button" class="close" aria-label="Close">&times;</button>
         </div>
       </div>
@@ -127,6 +145,17 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+}
+
+a.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button.action {

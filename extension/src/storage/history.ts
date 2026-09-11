@@ -45,6 +45,12 @@ export async function listHistory(): Promise<HistoryEntry[]> {
   return entries.sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
 }
 
+export async function countHistory(): Promise<number> {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAMES.history, "readonly").objectStore(STORE_NAMES.history);
+  return requestToPromise<number>(store.count());
+}
+
 // entries written before the key existed belong to no product, so they never match
 export async function listChecksOfProduct(
   productKey: string,

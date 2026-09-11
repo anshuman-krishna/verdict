@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
+import type { Holdings } from "../storage/holdings";
 import { renderOptions } from "./optionsPage";
 
 function callbacks() {
@@ -10,14 +11,25 @@ function callbacks() {
     onExportJson: vi.fn(),
     onExportCsv: vi.fn(),
     onDeleteAll: vi.fn(),
+    onClearCache: vi.fn(),
+    onClearQueue: vi.fn(),
   };
 }
+
+const NOTHING_HELD: Holdings = {
+  checks: 0,
+  cachedProducts: 0,
+  oldestCachedAt: null,
+  queuedContributions: 0,
+  nextContributionAt: null,
+};
 
 function state(overrides: Partial<Parameters<typeof renderOptions>[1]> = {}) {
   return {
     historyEnabled: true,
     reputationLookupEnabled: false,
     graphContributionEnabled: false,
+    holdings: NOTHING_HELD,
     ...overrides,
   };
 }
@@ -167,5 +179,83 @@ describe("the history loss notice", () => {
     const section = container.querySelector(".setting:last-of-type");
     expect(section?.textContent).toContain("Uninstalling Verdict deletes it");
     expect(section?.querySelector(".export-json")).not.toBeNull();
+  });
+});
+
+describe("what this browser is holding", () => {
+  const NOW = Date.parse("2026-03-01T12:00:00Z");
+
+  function held(overrides: Partial<Holdings> = {}) {
+    return state({ holdings: { ...NOTHING_HELD, ...overrides }, now: NOW });
+  }
+
+  it("says plainly when it is holding nothing", () => {
+    const container = document.createElement("div");
+    renderOptions(container, held(), callbacks());
+
+    const text = container.querySelector(".holdings")?.textContent ?? "";
+    expect(text).toContain("No checks saved.");
+    expect(text).toContain("No review pages held.");
+    expect(text).toContain("Nothing waiting to be sent.");
+  });
+
+  it("counts the checks it has saved", () => {
+    const container = document.createElement("div");
+    renderOptions(container, held({ checks: 1204 }), callbacks());
+    expect(container.querySelector(".holdings")?.textContent).toContain("1,204 checks saved");
+  });
+
+  it("counts the listings it has cached, and when the oldest was read", () => {
+    const container = document.createElement("div");
+    renderOptions(
+      container,
+      held({ cachedProducts: 3, oldestCachedAt: NOW - 2 * 86_400_000 }),
+      callbacks(),
+    );
+
+    const text = container.querySelector(".holdings")?.textContent ?? "";
+    expect(text).toContain("3 listings held, without review text.");
+    expect(text).toContain("read 2 days ago");
+  });
+
+  it("says how much is queued and when the first of it leaves", () => {
+    const container = document.createElement("div");
+    renderOptions(
+      container,
+      held({ queuedContributions: 42, nextContributionAt: NOW + 2 * 60 * 60 * 1000 }),
+      callbacks(),
+    );
+
+    const text = container.querySelector(".holdings")?.textContent ?? "";
+    expect(text).toContain("42 hashed rows waiting to be sent.");
+    expect(text).toContain("in about 2 hours");
+  });
+
+  it("clears the cached review pages when asked", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, held({ cachedProducts: 3 }), cbs);
+
+    container.querySelector<HTMLButtonElement>(".clear-cache")?.click();
+
+    expect(cbs.onClearCache).toHaveBeenCalledOnce();
+  });
+
+  it("clears what is waiting to be sent when asked", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, held({ queuedContributions: 42 }), cbs);
+
+    container.querySelector<HTMLButtonElement>(".clear-queue")?.click();
+
+    expect(cbs.onClearQueue).toHaveBeenCalledOnce();
+  });
+
+  it("offers no button to clear something it is not holding", () => {
+    const container = document.createElement("div");
+    renderOptions(container, held(), callbacks());
+
+    expect(container.querySelector<HTMLButtonElement>(".clear-cache")?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>(".clear-queue")?.disabled).toBe(true);
   });
 });

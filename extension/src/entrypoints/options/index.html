@@ -67,6 +67,32 @@
         gap: 12px;
         flex-wrap: wrap;
       }
+      .holdings {
+        margin: 0;
+      }
+      .holdings > div {
+        display: grid;
+        grid-template-columns: 160px 1fr;
+        gap: 4px 16px;
+        padding: 8px 0;
+        border-top: 1px solid var(--rule);
+      }
+      .holdings dt {
+        color: var(--ink-soft);
+        font-size: 0.875rem;
+      }
+      .holdings dd {
+        margin: 0;
+        font-size: 0.875rem;
+      }
+      .holdings dd.actions {
+        grid-column: 2;
+      }
+      .holdings button:disabled {
+        color: var(--ink-soft);
+        cursor: default;
+        opacity: 0.6;
+      }
       button {
         font: inherit;
         color: var(--ink);

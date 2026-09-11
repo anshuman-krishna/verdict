@@ -171,10 +171,12 @@ import Layout from "../../layouts/Layout.astro";
             return "That is not one of the storefronts Verdict currently supports.";
           case "not-a-product-page":
             return "Verdict opened that link but could not find a product on it.";
+          case "unreadable":
+            return "Verdict opened that listing but could not read it. See the status page for whether extraction is healthy.";
           case "timed-out":
             return "That took too long to check. Try again in a moment.";
           case "not-enough-data":
-            return "Not enough data to judge yet.";
+            return "Not enough reviews to judge that one.";
           case "missing-features":
             return "Not enough data to judge yet, in a way not enough reviews explains on its own.";
           case "no-model":

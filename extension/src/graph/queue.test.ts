@@ -2,11 +2,13 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import type { ContributionEdge } from "./edge";
 import {
+  QUEUE_CAP,
+  clearContributionQueue,
   countQueuedContributions,
   deleteContributions,
   enqueueContributionEdges,
   listDueContributions,
-  QUEUE_CAP,
+  nextContributionDueAt,
 } from "./queue";
 
 const FAR_FUTURE = 10_000_000_000_000;
@@ -122,5 +124,31 @@ describe("when the service has been unreachable for a long time", () => {
 
   it("caps high enough that ordinary browsing never reaches it", () => {
     expect(QUEUE_CAP).toBeGreaterThanOrEqual(10_000);
+  });
+});
+
+describe("nextContributionDueAt", () => {
+  it("reports nothing for an empty queue", async () => {
+    await clearQueue();
+    await expect(nextContributionDueAt()).resolves.toBeNull();
+  });
+
+  it("reports the soonest release, not the newest row", async () => {
+    await clearQueue();
+    await enqueueContributionEdges([edge()], () => 1_000_000, () => 1);
+    await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+
+    await expect(nextContributionDueAt()).resolves.toBe(1_000_000 + 60 * 60 * 1000);
+  });
+});
+
+describe("clearContributionQueue", () => {
+  it("removes everything waiting, however far out it was scheduled", async () => {
+    await clearQueue();
+    await enqueueContributionEdges([edge(), edge()], () => 1_000_000, () => 1);
+
+    await clearContributionQueue();
+
+    expect(await countQueuedContributions()).toBe(0);
   });
 });

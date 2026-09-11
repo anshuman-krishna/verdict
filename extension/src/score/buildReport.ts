@@ -7,6 +7,8 @@ import { bootstrap, interquartileRange } from "./bootstrap";
 import { generateSerial, type Report } from "./report";
 
 export type ReportOutcome =
+  // the page parsed as a product url, and nothing on it could be read
+  | { status: "unreadable" }
   | { status: "not-enough-data" }
   | { status: "missing-features"; missing: string[] }
   | { status: "no-model" }

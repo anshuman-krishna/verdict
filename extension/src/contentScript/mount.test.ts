@@ -6,7 +6,11 @@ import type { RulesDocument } from "../extract/rules";
 import { localModelSet, type CombinerModel } from "../score/combine";
 import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
-import { createProgressiveMount, mountResult } from "./mount";
+import {
+  createProgressiveMount,
+  mountResult,
+  notEnoughReviewsMessage,
+} from "./mount";
 import type { AnalysisResult, OrchestratorDeps } from "./orchestrator";
 import { directReviewsCache } from "../storage/reviewsCache";
 
@@ -128,15 +132,50 @@ describe("mountResult", () => {
     expect(document.body.querySelector("verdict-notice")).not.toBeNull();
   });
 
-  it("mounts nothing for missing-features or no-model outcomes", () => {
+  it("says something for every outcome, since silence reads as no product page", () => {
     for (const outcome of [
       { status: "missing-features" as const, missing: ["x"] },
       { status: "no-model" as const },
+      { status: "unreadable" as const },
     ]) {
       document.body.innerHTML = "";
       mountResult(document, { page: PAGE, product: PRODUCT, reviews: [], outcome }, deps());
-      expect(document.body.children).toHaveLength(0);
+      expect(document.body.querySelector("verdict-notice")).not.toBeNull();
     }
+  });
+
+  it("offers the status page for a listing it could not read", async () => {
+    mountResult(
+      document,
+      { page: PAGE, product: null, reviews: [], outcome: { status: "unreadable" } },
+      deps(),
+    );
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    expect(root.querySelector(".message")?.textContent).toBe("Verdict could not read this page.");
+    expect(root.querySelector<HTMLAnchorElement>(".link")?.href).toBe(
+      "https://verdict.tools/status",
+    );
+  });
+
+  it("names the signals it could not read", async () => {
+    mountResult(
+      document,
+      {
+        page: PAGE,
+        product: PRODUCT,
+        reviews: [],
+        outcome: { status: "missing-features", missing: ["rating shape", "arrival timing"] },
+      },
+      deps(),
+    );
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    expect(root.querySelector(".message")?.textContent).toContain("rating shape, arrival timing");
   });
 
   it("shows partial results under the busy notice from the moment checking starts", async () => {
@@ -401,5 +440,23 @@ describe("where the full report button goes", () => {
     getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".full-report")?.click();
 
     expect(openTab).toHaveBeenCalledWith(expect.stringContaining(`#${REPORT.serial}`));
+  });
+});
+
+describe("what the not enough reviews notice says", () => {
+  it("gives the count, so the reader knows how thin it was", () => {
+    expect(notEnoughReviewsMessage(12)).toBe("Not enough reviews to judge this one. 12 reviews found.");
+  });
+
+  it("counts one review as one", () => {
+    expect(notEnoughReviewsMessage(1)).toBe("Not enough reviews to judge this one. 1 review found.");
+  });
+
+  it("says none found rather than leaving the number out", () => {
+    expect(notEnoughReviewsMessage(0)).toContain("0 reviews found");
+  });
+
+  it("groups a large count the way the rest of the panel does", () => {
+    expect(notEnoughReviewsMessage(8431)).toContain("8,431 reviews");
   });
 });
