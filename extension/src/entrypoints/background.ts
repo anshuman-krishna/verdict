@@ -7,6 +7,7 @@ import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
 import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
+import { pruneExpiredReviewsCache } from "../storage/reviewsCache";
 
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
@@ -56,6 +57,9 @@ function senderOrigin(sender: { origin?: string; url?: string }): string | undef
 const CONTRIBUTION_ALARM_NAME = "verdict:flush-graph-contributions";
 const CONTRIBUTION_ALARM_PERIOD_MINUTES = 30;
 
+const RETENTION_ALARM_NAME = "verdict:prune-reviews-cache";
+const RETENTION_ALARM_PERIOD_MINUTES = 6 * 60;
+
 const rateLimiter = new BridgeRateLimiter();
 
 const UNINSTALL_URL = "https://verdict.tools/uninstalled";
@@ -76,10 +80,19 @@ export default defineBackground(() => {
   browser.alarms.create(CONTRIBUTION_ALARM_NAME, {
     periodInMinutes: CONTRIBUTION_ALARM_PERIOD_MINUTES,
   });
+  browser.alarms.create(RETENTION_ALARM_NAME, {
+    periodInMinutes: RETENTION_ALARM_PERIOD_MINUTES,
+  });
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name !== CONTRIBUTION_ALARM_NAME) {
+    if (alarm.name === CONTRIBUTION_ALARM_NAME) {
+      flushDueContributions({ endpoint: DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT }).catch(() => {});
       return;
     }
-    flushDueContributions({ endpoint: DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT }).catch(() => {});
+    if (alarm.name === RETENTION_ALARM_NAME) {
+      pruneExpiredReviewsCache().catch(() => {});
+    }
   });
+
+  // a browser that was closed for a week sweeps on the way back up
+  pruneExpiredReviewsCache().catch(() => {});
 });

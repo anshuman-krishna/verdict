@@ -4,7 +4,13 @@ import type { Review } from "../extract/types";
 import { EMBEDDING_DIMENSIONS, embedText } from "../score/textEmbedding";
 import { DEFAULT_NUM_PERMUTATIONS, DEFAULT_SHINGLE_SIZE } from "../score/textNearDuplication";
 import { openDatabase, put, STORE_NAMES } from "./database";
-import { cacheKey, deleteCachedReviews, getCachedReviews, setCachedReviews } from "./reviewsCache";
+import {
+  cacheKey,
+  deleteCachedReviews,
+  getCachedReviews,
+  pruneExpiredReviewsCache,
+  setCachedReviews,
+} from "./reviewsCache";
 
 const review: Review = {
   rating: 5,
@@ -127,6 +133,7 @@ describe("what the cache is allowed to persist", () => {
       "embeddingDimensions",
       "key",
       "numPermutations",
+      "pagesFetched",
       "reviews",
       "shingleSize",
     ]);
@@ -207,5 +214,47 @@ describe("what the cache is allowed to persist", () => {
     expect(a?.signatures.get(a.reviews[0] as Review)).toEqual(
       b?.signatures.get(b.reviews[0] as Review),
     );
+  });
+});
+
+describe("retention, which PRIVACY.md puts at seven days", () => {
+  async function rawRecord(productId: string): Promise<unknown> {
+    const key = await cacheKey(productId, "amazon");
+    const db = await openDatabase();
+    const store = db
+      .transaction(STORE_NAMES.reviewsCache, "readonly")
+      .objectStore(STORE_NAMES.reviewsCache);
+    return await new Promise((resolve, reject) => {
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  it("deletes a stale entry the user never opened again", async () => {
+    await writeStaleRecord("p-sweep-stale", "amazon", Date.now() - TTL_MS - 1);
+    expect(await rawRecord("p-sweep-stale")).toBeDefined();
+
+    await pruneExpiredReviewsCache();
+
+    expect(await rawRecord("p-sweep-stale")).toBeUndefined();
+  });
+
+  it("leaves an entry still inside the ttl alone", async () => {
+    await setCachedReviews("p-sweep-fresh", "amazon", [review]);
+    await pruneExpiredReviewsCache();
+    await expect(getCachedReviews("p-sweep-fresh", "amazon")).resolves.not.toBeNull();
+  });
+
+  it("reports how many it removed", async () => {
+    await writeStaleRecord("p-sweep-a", "amazon", Date.now() - TTL_MS - 1);
+    await writeStaleRecord("p-sweep-b", "amazon", Date.now() - TTL_MS - 1);
+    expect(await pruneExpiredReviewsCache()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not keep an entry forever because the clock moved backwards", async () => {
+    await writeStaleRecord("p-sweep-future", "amazon", Date.now() + TTL_MS * 2);
+    await pruneExpiredReviewsCache();
+    expect(await rawRecord("p-sweep-future")).toBeUndefined();
   });
 });

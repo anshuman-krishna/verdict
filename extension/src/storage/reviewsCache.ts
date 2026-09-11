@@ -24,6 +24,7 @@ interface CacheRecord {
   key: string;
   reviews: StoredReview[];
   cachedAt: number;
+  pagesFetched: number;
   shingleSize: number;
   numPermutations: number;
   embeddingDimensions: number;
@@ -34,6 +35,12 @@ export interface CachedReviews {
   signatures: WeakMap<Review, bigint[]>;
   embeddings: WeakMap<Review, number[]>;
   cachedAt: number;
+  pagesFetched: number;
+}
+
+export function isExpired(cachedAt: number, now: number): boolean {
+  // a clock that moved backwards must not extend retention
+  return now - cachedAt > TTL_MS || cachedAt > now + TTL_MS;
 }
 
 export async function cacheKey(productId: string, site: string): Promise<string> {
@@ -74,7 +81,7 @@ export async function getCachedReviews(
   if (!record) {
     return null;
   }
-  if (Date.now() - record.cachedAt > TTL_MS) {
+  if (isExpired(record.cachedAt, Date.now())) {
     await deleteCachedReviews(productId, site);
     return null;
   }
@@ -109,13 +116,20 @@ export async function getCachedReviews(
       embeddings.set(review, embedding);
     }
   }
-  return { reviews, signatures, embeddings, cachedAt: record.cachedAt };
+  return {
+    reviews,
+    signatures,
+    embeddings,
+    cachedAt: record.cachedAt,
+    pagesFetched: record.pagesFetched ?? 0,
+  };
 }
 
 export async function setCachedReviews(
   productId: string,
   site: string,
   reviews: readonly Review[],
+  pagesFetched = 0,
 ): Promise<WriteResult> {
   const key = await cacheKey(productId, site);
   const db = await openDatabase();
@@ -126,6 +140,7 @@ export async function setCachedReviews(
     key,
     reviews: reviews.map(toStored),
     cachedAt: Date.now(),
+    pagesFetched,
     shingleSize: DEFAULT_SHINGLE_SIZE,
     numPermutations: DEFAULT_NUM_PERMUTATIONS,
     embeddingDimensions: EMBEDDING_DIMENSIONS,
@@ -140,4 +155,21 @@ export async function deleteCachedReviews(productId: string, site: string): Prom
     STORE_NAMES.reviewsCache,
   );
   await requestToPromise(store.delete(key));
+}
+
+// nothing else expires a product the user never opened again
+export async function pruneExpiredReviewsCache(now: number = Date.now()): Promise<number> {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAMES.reviewsCache, "readwrite").objectStore(
+    STORE_NAMES.reviewsCache,
+  );
+  const records = await requestToPromise<CacheRecord[]>(store.getAll());
+  let pruned = 0;
+  for (const record of records) {
+    if (isExpired(record.cachedAt, now)) {
+      await requestToPromise(store.delete(record.key));
+      pruned++;
+    }
+  }
+  return pruned;
 }

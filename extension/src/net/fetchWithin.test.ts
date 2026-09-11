@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_TIMEOUT_MS, fetchWithin } from "./fetchWithin";
+import { ANONYMOUS_REQUEST_INIT, DEFAULT_TIMEOUT_MS, fetchWithin } from "./fetchWithin";
 
 const OK = { ok: true } as Response;
 
@@ -42,5 +42,47 @@ describe("fetchWithin", () => {
 
   it("defaults to a bound short enough to matter", () => {
     expect(DEFAULT_TIMEOUT_MS).toBeLessThanOrEqual(10_000);
+  });
+
+  describe("what PRIVACY.md section 4 promises every service request looks like", () => {
+    it("sends no cookie, no referer, and no cached copy", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(OK);
+      await fetchWithin(fetchImpl, "https://x", { method: "POST" }, 1000);
+
+      expect(fetchImpl).toHaveBeenCalledWith(
+        "https://x",
+        expect.objectContaining({
+          credentials: "omit",
+          referrer: "",
+          referrerPolicy: "no-referrer",
+          cache: "no-store",
+        }),
+      );
+    });
+
+    it("does not let a caller opt out of any of it", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(OK);
+      await fetchWithin(
+        fetchImpl,
+        "https://x",
+        { credentials: "include", referrerPolicy: "unsafe-url", cache: "force-cache" },
+        1000,
+      );
+
+      const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
+      expect(init.credentials).toBe("omit");
+      expect(init.referrerPolicy).toBe("no-referrer");
+      expect(init.cache).toBe("no-store");
+    });
+
+    it("names every field the guarantee rests on, so removing one fails here", () => {
+      expect(ANONYMOUS_REQUEST_INIT).toEqual({
+        credentials: "omit",
+        referrer: "",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        mode: "cors",
+      });
+    });
   });
 });

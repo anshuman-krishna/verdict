@@ -120,6 +120,43 @@ describe("handleBridgeMessage", () => {
     expect(response).toEqual({ status: "unsupported-domain" });
   });
 
+  it("rejects a supported domain reached over plain http", async () => {
+    const analyzeUrl = vi.fn();
+    const response = await handleBridgeMessage(
+      { type: "verdict:analyze", url: "http://www.amazon.com/dp/B000000000" },
+      options({ analyzeUrl }),
+    );
+    expect(response).toEqual({ status: "unsupported-domain" });
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+
+  it("rejects a url whose scheme is not http at all", async () => {
+    const analyzeUrl = vi.fn();
+    for (const url of [
+      "javascript:alert(1)",
+      "data:text/html,<script></script>",
+      "file:///etc/passwd",
+      "ftp://www.amazon.com/dp/B000000000",
+    ]) {
+      const response = await handleBridgeMessage(
+        { type: "verdict:analyze", url },
+        options({ analyzeUrl }),
+      );
+      expect(response).toEqual({ status: "unsupported-domain" });
+    }
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+
+  it("is not fooled by a supported domain sitting in the userinfo of another host", async () => {
+    const analyzeUrl = vi.fn();
+    const response = await handleBridgeMessage(
+      { type: "verdict:analyze", url: "https://www.amazon.com@evil.example/dp/B000000000" },
+      options({ analyzeUrl }),
+    );
+    expect(response).toEqual({ status: "unsupported-domain" });
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+
   it("rejects an analyze request that is not even a valid url", async () => {
     const response = await handleBridgeMessage(
       { type: "verdict:analyze", url: "not a url" },

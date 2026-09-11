@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Review } from "./types";
 import { fetchReviewPages, type FetchProgress } from "./fetchReviewPages";
 
+// distinct reviewers, so paging is not mistaken for the repeated last page
 function review(text: string): Review {
-  return { rating: 5, text, date: "2026-01-01", verified: true, reviewerId: "r-1" };
+  return { rating: 5, text, date: "2026-01-01", verified: true, reviewerId: `r-${text}` };
 }
 
 describe("fetchReviewPages", () => {
@@ -218,6 +219,120 @@ describe("fetchReviewPages", () => {
         delay: async () => {},
       });
       expect(fresh.signatures.get(fresh.reviews[0] as Review)).toBeUndefined();
+    });
+  });
+
+  describe("when paging goes wrong", () => {
+    it("keeps the pages that already arrived when a later page throws", async () => {
+      const fetchPage = vi.fn(async (page: number) => {
+        if (page === 3) {
+          throw new Error("rate limited");
+        }
+        return [review(`page ${page}`)];
+      });
+      const fetched = await fetchReviewPages({
+        productId: "p-throws",
+        site: "amazon",
+        fetchPage,
+        maxPages: 5,
+        delay: async () => {},
+      });
+
+      expect(fetched.stoppedBecause).toBe("failed");
+      expect(fetched.reviews.map((r) => r.text)).toEqual(["page 1", "page 2"]);
+    });
+
+    it("stops paging once a page comes back empty", async () => {
+      const fetchPage = vi.fn(async (page: number) => (page > 2 ? [] : [review(`page ${page}`)]));
+      const fetched = await fetchReviewPages({
+        productId: "p-empty",
+        site: "amazon",
+        fetchPage,
+        maxPages: 10,
+        delay: async () => {},
+      });
+
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      expect(fetched.stoppedBecause).toBe("exhausted");
+    });
+
+    it("stops rather than paging forever when the storefront repeats its last page", async () => {
+      const fetchPage = vi.fn(async (page: number) => [review(`page ${Math.min(page, 3)}`)]);
+      const fetched = await fetchReviewPages({
+        productId: "p-repeats",
+        site: "amazon",
+        fetchPage,
+        maxPages: 20,
+        delay: async () => {},
+      });
+
+      expect(fetchPage).toHaveBeenCalledTimes(4);
+      expect(fetched.stoppedBecause).toBe("repeated");
+      expect(fetched.reviews).toHaveLength(3);
+    });
+
+    it("caches nothing when the very first page fails, so a retry is still possible", async () => {
+      const failing = vi.fn(async () => {
+        throw new Error("offline");
+      });
+      const first = await fetchReviewPages({
+        productId: "p-firstfails",
+        site: "amazon",
+        fetchPage: failing,
+        maxPages: 3,
+        delay: async () => {},
+      });
+      expect(first.reviews).toEqual([]);
+
+      const working = vi.fn(async (page: number) => [review(`page ${page}`)]);
+      const second = await fetchReviewPages({
+        productId: "p-firstfails",
+        site: "amazon",
+        fetchPage: working,
+        maxPages: 3,
+        delay: async () => {},
+      });
+      expect(second.reviews).toHaveLength(3);
+    });
+  });
+
+  describe("checking more deeply than the cached run", () => {
+    it("fetches again when asked for more pages than the cache holds", async () => {
+      const fetchPage = vi.fn(async (page: number) => [review(`page ${page}`)]);
+      await fetchReviewPages({
+        productId: "p-deeper",
+        site: "amazon",
+        fetchPage,
+        maxPages: 2,
+        delay: async () => {},
+      });
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+
+      const deeper = await fetchReviewPages({
+        productId: "p-deeper",
+        site: "amazon",
+        fetchPage,
+        maxPages: 6,
+        delay: async () => {},
+      });
+
+      expect(fetchPage).toHaveBeenCalledTimes(8);
+      expect(deeper.reviews).toHaveLength(6);
+      expect(deeper.pagesFetched).toBe(6);
+    });
+
+    it("still serves the cache when the shallower depth is enough", async () => {
+      const fetchPage = vi.fn(async (page: number) => [review(`page ${page}`)]);
+      const options = {
+        productId: "p-shallower",
+        site: "amazon",
+        fetchPage,
+        delay: async () => {},
+      };
+      await fetchReviewPages({ ...options, maxPages: 5 });
+      await fetchReviewPages({ ...options, maxPages: 3 });
+
+      expect(fetchPage).toHaveBeenCalledTimes(5);
     });
   });
 });

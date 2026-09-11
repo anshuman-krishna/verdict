@@ -57,3 +57,11 @@ export async function countQueuedContributions(): Promise<number> {
     .objectStore(STORE_NAMES.graphContributionQueue);
   return requestToPromise<number>(store.count());
 }
+
+export async function clearContributionQueue(): Promise<void> {
+  const db = await openDatabase();
+  const store = db
+    .transaction(STORE_NAMES.graphContributionQueue, "readwrite")
+    .objectStore(STORE_NAMES.graphContributionQueue);
+  await requestToPromise(store.clear());
+}

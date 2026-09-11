@@ -139,21 +139,28 @@ describe("mountResult", () => {
   });
 
   it("shows partial results under the busy notice from the moment checking starts", async () => {
-    const reviews = Array.from({ length: 4 }, (_, i) => ({
-      rating: 5,
-      text: `body number ${i} has enough distinguishing words to avoid near duplication`,
-      date: `2024-01-0${i + 1}`,
-      verified: true,
-      reviewerId: `reviewer-${i}`,
-    }));
+    // each page carries its own four reviewers, as a real second page would
+    const pageOfReviews = (page: number) =>
+      Array.from({ length: 4 }, (_, i) => ({
+        rating: 5,
+        text: `page ${page} body number ${i} has enough distinguishing words to avoid near duplication`,
+        date: `2024-01-0${i + 1}`,
+        verified: true,
+        reviewerId: `reviewer-${page}-${i}`,
+      }));
+    let pageNumber = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        text: () =>
-          Promise.resolve(
-            `<script type="application/ld+json">${JSON.stringify({ reviewsData: { reviews } })}</script>`,
-          ),
+      vi.fn().mockImplementation(() => {
+        pageNumber++;
+        const reviews = pageOfReviews(pageNumber);
+        return Promise.resolve({
+          ok: true,
+          text: () =>
+            Promise.resolve(
+              `<script type="application/ld+json">${JSON.stringify({ reviewsData: { reviews } })}</script>`,
+            ),
+        });
       }),
     );
 

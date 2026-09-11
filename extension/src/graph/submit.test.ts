@@ -6,6 +6,8 @@ import { flushDueContributions } from "./submit";
 
 const FAR_FUTURE = 10_000_000_000_000;
 
+const optedIn = async () => true;
+
 async function clearQueue(): Promise<void> {
   const due = await listDueContributions(FAR_FUTURE);
   await deleteContributions(due.map((d) => d.id));
@@ -27,7 +29,7 @@ describe("flushDueContributions", () => {
   it("does nothing, and never calls fetch, when nothing is due", async () => {
     await clearQueue();
     const fetchImpl = vi.fn();
-    const result = await flushDueContributions({ endpoint: "https://x", fetchImpl });
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl });
     expect(result).toEqual({ submitted: 0 });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -40,6 +42,7 @@ describe("flushDueContributions", () => {
     const result = await flushDueContributions({
       endpoint: "https://api.verdict.tools/v1/graph/contribute",
       fetchImpl,
+      isEnabled: optedIn,
       now: () => FAR_FUTURE,
     });
 
@@ -59,7 +62,7 @@ describe("flushDueContributions", () => {
     await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
 
-    await flushDueContributions({ endpoint: "https://x", fetchImpl, now: () => FAR_FUTURE });
+    await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(init.credentials).not.toBe("include");
@@ -71,7 +74,7 @@ describe("flushDueContributions", () => {
     await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false });
 
-    const result = await flushDueContributions({ endpoint: "https://x", fetchImpl, now: () => FAR_FUTURE });
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
     expect(result).toEqual({ submitted: 0 });
     expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
@@ -82,7 +85,7 @@ describe("flushDueContributions", () => {
     await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
     const fetchImpl = vi.fn().mockRejectedValue(new Error("offline"));
 
-    const result = await flushDueContributions({ endpoint: "https://x", fetchImpl, now: () => FAR_FUTURE });
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
     expect(result).toEqual({ submitted: 0 });
     expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
@@ -98,11 +101,31 @@ describe("a service that never answers", () => {
     const result = await flushDueContributions({
       endpoint: "https://api.example.com/contribute",
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      isEnabled: optedIn,
       now: () => FAR_FUTURE,
       timeoutMs: 0,
     });
 
     expect(result.submitted).toBe(0);
     expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
+  });
+
+  describe("after the user turns contribution off", () => {
+    it("sends nothing that was already queued, and empties the queue", async () => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const fetchImpl = vi.fn();
+
+      const result = await flushDueContributions({
+        endpoint: "https://x",
+        fetchImpl,
+        isEnabled: async () => false,
+        now: () => FAR_FUTURE,
+      });
+
+      expect(result).toEqual({ submitted: 0 });
+      expect(fetchImpl).not.toHaveBeenCalled();
+      await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
+    });
   });
 });

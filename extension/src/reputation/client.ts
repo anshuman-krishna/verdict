@@ -1,6 +1,12 @@
-import { fetchWithin } from "../net/fetchWithin";
-import { buildLookupRequest, matchFlaggedReviewers, type LookupResponse } from "./lookup";
+import { ANONYMOUS_REQUEST_INIT, fetchWithin } from "../net/fetchWithin";
+import {
+  buildLookupBatches,
+  cryptoRandom,
+  matchFlaggedReviewers,
+  type LookupResponse,
+} from "./lookup";
 
+export { ANONYMOUS_REQUEST_INIT };
 
 export interface LookupOptions {
   endpoint: string;
@@ -26,26 +32,33 @@ export async function lookupFlaggedReviewers(
     return new Set();
   }
   const fetchImpl = options.fetchImpl ?? fetch;
-  const random = options.random ?? Math.random;
+  const random = options.random ?? cryptoRandom;
   const delay = options.delay ?? defaultDelay;
   try {
-    const request = await buildLookupRequest(reviewerIds, options.salt, random);
-    await delay(MIN_DELAY_MS + random() * (MAX_DELAY_MS - MIN_DELAY_MS));
-    const response = await fetchWithin(
-      fetchImpl,
-      options.endpoint,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(request),
-      },
-      options.timeoutMs,
-    );
-    if (response === null || !response.ok) {
+    const batches = await buildLookupBatches(reviewerIds, options.salt, random);
+    const responses: LookupResponse[] = [];
+    for (const batch of batches) {
+      // independent per batch, so the requests do not arrive as a recognisable burst
+      await delay(MIN_DELAY_MS + random() * (MAX_DELAY_MS - MIN_DELAY_MS));
+      const response = await fetchWithin(
+        fetchImpl,
+        options.endpoint,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(batch),
+        },
+        options.timeoutMs,
+      );
+      if (response === null || !response.ok) {
+        continue;
+      }
+      responses.push((await response.json()) as LookupResponse);
+    }
+    if (responses.length === 0) {
       return new Set();
     }
-    const body = (await response.json()) as LookupResponse;
-    return await matchFlaggedReviewers(reviewerIds, options.salt, body);
+    return await matchFlaggedReviewers(reviewerIds, options.salt, responses);
   } catch {
     return new Set();
   }

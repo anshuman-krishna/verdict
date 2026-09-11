@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
+import { BUCKET_COUNT } from "../reputation/lookup";
 import type { RulesDocument } from "../extract/rules";
 import { localModelSet, type CombinerModel } from "../score/combine";
 import { analyzePage, checkMoreDeeply, mergeReviews } from "./orchestrator";
@@ -353,7 +354,29 @@ describe("analyzePage, staged results (SPEC.md section 13, 400ms first paint)", 
     });
 
     expect(order).toEqual(["provisional", "final"]);
-    expect(sent).toEqual(["lookup"]);
+    expect(sent.length).toBeGreaterThan(0);
+  });
+
+  it("pads every lookup request it sends to the full bucket count", async () => {
+    const bodies: string[] = [];
+    const testDeps = stagedDeps({
+      reputation: {
+        isEnabled: vi.fn().mockResolvedValue(true),
+        endpoint: "https://x",
+        salt: "s",
+        delay: () => Promise.resolve(),
+        fetchImpl: vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+          bodies.push(init.body as string);
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ matches: {} }) });
+        }),
+      },
+    });
+    await analyzePage(parse(pageHtml(30)), "https://www.amazon.com/dp/B0BXYZ1234", testDeps);
+
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies) {
+      expect((JSON.parse(body) as { prefixes: string[] }).prefixes).toHaveLength(BUCKET_COUNT);
+    }
   });
 
   it("names the reviewer network as what the provisional estimate is still missing", async () => {

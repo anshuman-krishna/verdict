@@ -30,13 +30,17 @@ async function handleAnalyze(
   allowedHostnames: readonly string[],
   analyzeUrl: AnalyzeUrl,
 ): Promise<AnalyzeResponse> {
-  let hostname: string;
+  let parsed: URL;
   try {
-    hostname = new URL(url).hostname;
+    parsed = new URL(url);
   } catch {
     return { status: "unsupported-domain" };
   }
-  if (!isAllowedHostname(hostname, allowedHostnames)) {
+  // a storefront reached over http is not the storefront
+  if (parsed.protocol !== "https:") {
+    return { status: "unsupported-domain" };
+  }
+  if (!isAllowedHostname(parsed.hostname, allowedHostnames)) {
     return { status: "unsupported-domain" };
   }
   return analyzeUrl(url);

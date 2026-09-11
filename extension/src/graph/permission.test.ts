@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import { getGraphContributionEnabled } from "../storage/settings";
 import { originPattern, setGraphContributionWithPermission } from "./permission";
+import { countQueuedContributions, enqueueContributionEdges } from "./queue";
 
 describe("originPattern", () => {
   it("derives a manifest style origin pattern from an endpoint url", () => {
@@ -80,5 +81,50 @@ describe("setGraphContributionWithPermission", () => {
 
     await setGraphContributionWithPermission(true, { permissionApi: { request, remove } });
     await expect(getGraphContributionEnabled()).resolves.toBe(true);
+  });
+
+  it("discards anything still queued when contribution is turned off", async () => {
+    const clearQueue = vi.fn().mockResolvedValue(undefined);
+
+    await setGraphContributionWithPermission(false, {
+      permissionApi: { request: vi.fn(), remove: vi.fn().mockResolvedValue(true) },
+      setEnabled: vi.fn().mockResolvedValue(undefined),
+      isReputationLookupStillEnabled: async () => false,
+      clearQueue,
+    });
+
+    expect(clearQueue).toHaveBeenCalled();
+  });
+
+  it("empties the real queue, so nothing held back for its delay survives the opt out", async () => {
+    await enqueueContributionEdges([
+      {
+        reviewerHash: "a".repeat(64),
+        productHash: "b".repeat(64),
+        starRating: 5,
+        weekBucket: 2800,
+        verified: true,
+        minhashSignature: [],
+      },
+    ]);
+    expect(await countQueuedContributions()).toBeGreaterThan(0);
+
+    await setGraphContributionWithPermission(false, {
+      permissionApi: { request: vi.fn(), remove: vi.fn().mockResolvedValue(true) },
+    });
+
+    expect(await countQueuedContributions()).toBe(0);
+  });
+
+  it("leaves the queue alone when contribution is being turned on", async () => {
+    const clearQueue = vi.fn().mockResolvedValue(undefined);
+
+    await setGraphContributionWithPermission(true, {
+      permissionApi: { request: vi.fn().mockResolvedValue(true), remove: vi.fn() },
+      setEnabled: vi.fn().mockResolvedValue(undefined),
+      clearQueue,
+    });
+
+    expect(clearQueue).not.toHaveBeenCalled();
   });
 });
