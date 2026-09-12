@@ -9,7 +9,7 @@ dependencies = [
     # the asgi server that actually runs the app; fastapi is only the
     # framework. needed for main.py to be runnable at all, not just
     # importable.
-    "uvicorn==0.38.0",
+    "uvicorn==0.52.4",
 ]
 
 [dependency-groups]
