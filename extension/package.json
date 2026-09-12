@@ -12,7 +12,7 @@
     "zip": "rm -rf .output && wxt zip && wxt zip -b firefox"
   },
   "devDependencies": {
-    "@types/chrome": "0.2.8",
+    "@types/chrome": "0.2.9",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "fake-indexeddb": "6.2.5",
