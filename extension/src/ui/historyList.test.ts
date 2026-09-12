@@ -300,3 +300,47 @@ describe("repeat checks of one listing", () => {
     expect(grouped[0]?.checkCount).toBe(2);
   });
 });
+
+describe("the privacy notice in the popup", () => {
+  const CHANGE = {
+    version: 4,
+    effectiveAt: Date.UTC(2026, 5, 1),
+    summary: "Reputation lookups will batch across tabs.",
+  };
+  const NOW = Date.UTC(2026, 2, 1);
+
+  it("is absent when nothing has changed", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry()], callbacks());
+    expect(container.querySelector(".policy-notice")).toBeNull();
+  });
+
+  it("shows above an empty history too, since that is where a new user lands", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks(), "", { pendingPolicyChanges: [CHANGE], now: NOW });
+    expect(container.querySelector(".policy-notice")).not.toBeNull();
+  });
+
+  it("acknowledges on request", () => {
+    const container = document.createElement("div");
+    const onAcknowledgePolicy = vi.fn();
+    renderPopup(container, [entry()], callbacks({ onAcknowledgePolicy }), "", {
+      pendingPolicyChanges: [CHANGE],
+      now: NOW,
+    });
+    container.querySelector<HTMLButtonElement>(".policy-ack")?.click();
+    expect(onAcknowledgePolicy).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives a search, which rerenders the whole popup", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry()], callbacks(), "", { pendingPolicyChanges: [CHANGE], now: NOW });
+    const search = container.querySelector<HTMLInputElement>(".search-input");
+    if (search === null) {
+      throw new Error("no search box");
+    }
+    search.value = "nothing matches this";
+    search.dispatchEvent(new Event("input"));
+    expect(container.querySelector(".policy-notice")).not.toBeNull();
+  });
+});

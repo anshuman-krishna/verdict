@@ -1,8 +1,10 @@
 import { safeThumbnailUrl } from "../extract/sites";
+import type { PolicyChange } from "../privacy/commitments";
 import type { Rescored } from "../score/rescore";
 import { BAND_COLORS, BAND_LABELS, summarizeReport } from "../score/report";
 import type { HistoryEntry } from "../storage/history";
 import { escapeHtml } from "./escape";
+import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
 
 export interface PopupCallbacks {
   onExportJson: () => void;
@@ -10,6 +12,7 @@ export interface PopupCallbacks {
   onDeleteAll: () => void;
   onOpenSettings: () => void;
   onOpenEntry?: (id: number) => void;
+  onAcknowledgePolicy?: () => void;
 }
 
 export interface HistoryRow extends HistoryEntry {
@@ -53,11 +56,17 @@ export function matchesQuery(entry: HistoryEntry, query: string): boolean {
   return trimmed === "" || entry.title.toLowerCase().includes(trimmed);
 }
 
+export interface PopupOptions {
+  pendingPolicyChanges?: readonly PolicyChange[];
+  now?: number;
+}
+
 export function renderPopup(
   container: HTMLElement,
   entries: readonly HistoryRow[],
   callbacks: PopupCallbacks,
   query = "",
+  options: PopupOptions = {},
 ): void {
   const shown = groupByProduct(entries).filter((entry) => matchesQuery(entry, query));
   container.innerHTML = `
@@ -65,6 +74,7 @@ export function renderPopup(
       <span class="wordmark">verdict</span>
       <button type="button" class="open-settings" aria-label="Settings">&#9881;</button>
     </header>
+    ${policyNoticeMarkup(options.pendingPolicyChanges ?? [], options.now ?? Date.now())}
     ${
       entries.length === 0
         ? ""
@@ -89,13 +99,17 @@ export function renderPopup(
     </footer>
   `;
 
+  bindPolicyNotice(container, {
+    onAcknowledge: () => callbacks.onAcknowledgePolicy?.(),
+  });
+
   container.querySelector(".open-settings")?.addEventListener("click", callbacks.onOpenSettings);
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);
 
   const search = container.querySelector<HTMLInputElement>(".search-input");
   search?.addEventListener("input", () => {
-    renderPopup(container, entries, callbacks, search.value);
+    renderPopup(container, entries, callbacks, search.value, options);
     // rerendering replaces the box, so the caret goes back where it was
     const refreshed = container.querySelector<HTMLInputElement>(".search-input");
     refreshed?.focus();

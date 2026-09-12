@@ -2,6 +2,11 @@ import { browser } from "wxt/browser";
 import { rescore } from "../../score/rescore";
 import { BUNDLED_MODEL } from "../../score/model";
 import { parseStoredReport } from "../../score/report";
+import { PRIVACY_POLICY_VERSION, pendingPolicyChanges } from "../../privacy/commitments";
+import {
+  getAcknowledgedPolicyVersion,
+  setAcknowledgedPolicyVersion,
+} from "../../storage/settings";
 import {
   deleteAllHistory,
   exportHistoryAsCsv,
@@ -60,6 +65,7 @@ async function refresh(openId: number | null = null): Promise<void> {
     return;
   }
 
+  const policyChanges = pendingPolicyChanges(await getAcknowledgedPolicyVersion());
   renderPopup(
     app,
     entries.map((entry) => ({ ...entry, rescored: rescore(entry, BUNDLED_MODEL) })),
@@ -74,7 +80,13 @@ async function refresh(openId: number | null = null): Promise<void> {
       },
       onOpenSettings: () => browser.runtime.openOptionsPage(),
       onOpenEntry: (id) => void refresh(id),
+      onAcknowledgePolicy: async () => {
+        await setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION);
+        await refresh();
+      },
     },
+    "",
+    { pendingPolicyChanges: policyChanges },
   );
 }
 

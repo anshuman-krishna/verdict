@@ -13,6 +13,7 @@ function callbacks() {
     onDeleteAll: vi.fn(),
     onClearCache: vi.fn(),
     onClearQueue: vi.fn(),
+    onAcknowledgePolicy: vi.fn(),
   };
 }
 
@@ -257,5 +258,39 @@ describe("what this browser is holding", () => {
 
     expect(container.querySelector<HTMLButtonElement>(".clear-cache")?.disabled).toBe(true);
     expect(container.querySelector<HTMLButtonElement>(".clear-queue")?.disabled).toBe(true);
+  });
+});
+
+describe("the privacy notice", () => {
+  const CHANGE = {
+    version: 4,
+    effectiveAt: Date.UTC(2026, 5, 1),
+    summary: "Reputation lookups will batch across tabs.",
+  };
+
+  it("is absent when nothing has changed", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    expect(container.querySelector(".policy-notice")).toBeNull();
+  });
+
+  it("sits above the switches it is about", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ pendingPolicyChanges: [CHANGE] }), callbacks());
+    const notice = container.querySelector(".policy-notice");
+    const firstSetting = container.querySelector(".setting");
+    if (notice === null || firstSetting === null) {
+      throw new Error("the notice and the settings should both be rendered");
+    }
+    const position = notice.compareDocumentPosition(firstSetting);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("acknowledges on request", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state({ pendingPolicyChanges: [CHANGE] }), cbs);
+    container.querySelector<HTMLButtonElement>(".policy-ack")?.click();
+    expect(cbs.onAcknowledgePolicy).toHaveBeenCalledTimes(1);
   });
 });

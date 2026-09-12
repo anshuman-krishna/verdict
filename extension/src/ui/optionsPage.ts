@@ -1,15 +1,18 @@
+import type { PolicyChange } from "../privacy/commitments";
 import {
   cacheLine,
   checksLine,
   contributionLine,
   type Holdings,
 } from "../storage/holdings";
+import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
 
 export interface OptionsState {
   historyEnabled: boolean;
   reputationLookupEnabled: boolean;
   graphContributionEnabled: boolean;
   holdings: Holdings;
+  pendingPolicyChanges?: readonly PolicyChange[];
   now?: number;
 }
 
@@ -22,6 +25,7 @@ export interface OptionsCallbacks {
   onDeleteAll: () => void;
   onClearCache: () => void;
   onClearQueue: () => void;
+  onAcknowledgePolicy: () => void;
 }
 
 export function renderOptions(
@@ -34,6 +38,7 @@ export function renderOptions(
     <header>
       <span class="wordmark">verdict</span>
     </header>
+    ${policyNoticeMarkup(state.pendingPolicyChanges ?? [], now)}
     <section class="setting">
       <label>
         <input type="checkbox" class="history-toggle" ${state.historyEnabled ? "checked" : ""} />
@@ -135,6 +140,8 @@ export function renderOptions(
       </p>
     </section>
   `;
+
+  bindPolicyNotice(container, { onAcknowledge: callbacks.onAcknowledgePolicy });
 
   container.querySelector<HTMLInputElement>(".history-toggle")?.addEventListener("change", (event) => {
     callbacks.onToggleHistory((event.target as HTMLInputElement).checked);

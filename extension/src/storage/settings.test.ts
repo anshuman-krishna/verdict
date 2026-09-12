@@ -8,6 +8,8 @@ import {
   setGraphContributionEnabled,
   setHistoryEnabled,
   setReputationLookupEnabled,
+  getAcknowledgedPolicyVersion,
+  setAcknowledgedPolicyVersion,
 } from "./settings";
 
 describe("settings", () => {
@@ -52,5 +54,23 @@ describe("settings", () => {
 
     await setGraphContributionEnabled(false);
     await expect(getGraphContributionEnabled()).resolves.toBe(false);
+  });
+});
+
+describe("the acknowledged privacy policy version", () => {
+  it("is zero before anything is acknowledged, so a change is shown rather than skipped", async () => {
+    await expect(getAcknowledgedPolicyVersion()).resolves.toBe(0);
+  });
+
+  it("round trips", async () => {
+    await setAcknowledgedPolicyVersion(4);
+    await expect(getAcknowledgedPolicyVersion()).resolves.toBe(4);
+  });
+
+  it("treats a value that is not a whole count as nothing acknowledged", async () => {
+    await setAcknowledgedPolicyVersion(-1);
+    await expect(getAcknowledgedPolicyVersion()).resolves.toBe(0);
+    await setAcknowledgedPolicyVersion(2.5);
+    await expect(getAcknowledgedPolicyVersion()).resolves.toBe(0);
   });
 });

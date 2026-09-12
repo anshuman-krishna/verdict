@@ -14,7 +14,9 @@ import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
 import { pruneExpiredReviewsCache } from "../storage/reviewsCache";
+import { PRIVACY_POLICY_VERSION } from "../privacy/commitments";
 import { UNINSTALL_URL } from "../siteLinks";
+import { setAcknowledgedPolicyVersion } from "../storage/settings";
 import { serveStorageRequest } from "../storage/serveStorage";
 
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
@@ -90,6 +92,13 @@ const rateLimiter = new BridgeRateLimiter();
 
 export default defineBackground(() => {
   browser.runtime.setUninstallURL?.(UNINSTALL_URL);
+
+  browser.runtime.onInstalled.addListener((details) => {
+    // an update leaves it alone, so whatever changed since shows up as pending
+    if (details.reason === "install") {
+      setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION).catch(() => {});
+    }
+  });
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
     handleBridgeMessage(message, {

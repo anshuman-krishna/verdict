@@ -1,13 +1,16 @@
 import { setGraphContributionWithPermission } from "../../graph/permission";
 import { setReputationLookupWithPermission } from "../../reputation/permission";
 import { clearContributionQueue } from "../../graph/queue";
+import { PRIVACY_POLICY_VERSION, pendingPolicyChanges } from "../../privacy/commitments";
 import { readHoldings } from "../../storage/holdings";
 import { deleteAllHistory, exportHistoryAsCsv, exportHistoryAsJson } from "../../storage/history";
 import { clearReviewsCache } from "../../storage/reviewsCache";
 import {
+  getAcknowledgedPolicyVersion,
   getGraphContributionEnabled,
   getHistoryEnabled,
   getReputationLookupEnabled,
+  setAcknowledgedPolicyVersion,
   setHistoryEnabled,
 } from "../../storage/settings";
 import { renderOptions } from "../../ui/optionsPage";
@@ -30,9 +33,16 @@ async function refresh(): Promise<void> {
   const reputationLookupEnabled = await getReputationLookupEnabled();
   const graphContributionEnabled = await getGraphContributionEnabled();
   const holdings = await readHoldings();
+  const policyChanges = pendingPolicyChanges(await getAcknowledgedPolicyVersion());
   renderOptions(
     app,
-    { historyEnabled, reputationLookupEnabled, graphContributionEnabled, holdings },
+    {
+      historyEnabled,
+      reputationLookupEnabled,
+      graphContributionEnabled,
+      holdings,
+      pendingPolicyChanges: policyChanges,
+    },
     {
       onToggleHistory: async (enabled) => {
         await setHistoryEnabled(enabled);
@@ -59,6 +69,10 @@ async function refresh(): Promise<void> {
       },
       onClearQueue: async () => {
         await clearContributionQueue();
+        await refresh();
+      },
+      onAcknowledgePolicy: async () => {
+        await setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION);
         await refresh();
       },
     },
