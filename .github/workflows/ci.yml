@@ -149,3 +149,30 @@ jobs:
       - name: verify the default analysis path makes no network requests
         working-directory: extension
         run: npx vitest run tests/no-network.spec.ts
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@v5
+      - name: audit extension javascript dependencies
+        working-directory: extension
+        run: npm audit --omit=dev --audit-level=high
+      - name: audit site javascript dependencies
+        working-directory: site
+        run: npm audit --omit=dev --audit-level=high
+      # the local packages themselves are not on pypi and cannot be looked up,
+      # so --no-emit-project keeps this to third party dependencies only
+      - name: audit research python dependencies
+        working-directory: research
+        run: |
+          uv export --frozen --no-hashes --no-emit-project -o requirements.txt -q
+          uvx pip-audit --strict -r requirements.txt
+      - name: audit service python dependencies
+        working-directory: service
+        run: |
+          uv export --frozen --no-hashes --no-emit-project -o requirements.txt -q
+          uvx pip-audit --strict -r requirements.txt
