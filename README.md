@@ -77,6 +77,14 @@ just preflight   check the built bundle against what gets extensions removed
 just release     build the zips and write the release manifest
 ```
 
+## Deploying the service
+
+`service/deploy/docker-compose.yml` brings up the reviewer graph service behind the Caddy
+config `service/deploy/Caddyfile` already describes and `service/tests/test_deploy_config.py`
+checks on every run: `docker compose -f service/deploy/docker-compose.yml up -d`. The service
+container publishes no port of its own; Caddy is the only path in, and only to the two
+endpoints the Caddyfile allows.
+
 ## Build it yourself
 
 ```
