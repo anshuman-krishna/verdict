@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, field_validator
 
 from verdict_service.api.store import FlaggedHashStore
+from verdict_service.metrics import MetricsRegistry
 
 PREFIX_LENGTH = 4
 BUCKET_COUNT = 32
@@ -28,11 +29,15 @@ class ReputationLookupResponse(BaseModel):
     matches: dict[str, list[str]]
 
 
-def create_reputation_router(store: FlaggedHashStore) -> APIRouter:
+def create_reputation_router(
+    store: FlaggedHashStore, metrics: MetricsRegistry | None = None
+) -> APIRouter:
     router = APIRouter()
 
     @router.post("/v1/reputation/lookup", response_model=ReputationLookupResponse)
     def lookup(body: ReputationLookupRequest) -> ReputationLookupResponse:
+        if metrics is not None:
+            metrics.record_lookup()
         return ReputationLookupResponse(
             matches={prefix: store.matches(prefix) for prefix in body.prefixes}
         )

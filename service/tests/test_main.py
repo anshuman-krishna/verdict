@@ -28,6 +28,41 @@ def test_lifespan_starts_and_stops_without_error():
         pass
 
 
+def test_health_reflects_a_completed_recompute():
+    from verdict_service.main import _recompute_job, app, contribution_edge_store, health_tracker
+
+    contribution_edge_store._edges.clear()
+
+    with TestClient(app) as client:
+        asyncio.run(_recompute_job())
+        body = client.get("/v1/health").json()
+
+    assert body["status"] == "ok"
+    assert body["store"] == "memory"
+    assert body["recompute"]["lastCompletedAt"] == health_tracker.last.completed_at
+
+
+def test_metrics_count_a_contribution_a_lookup_and_a_recompute():
+    # the lifespan itself runs one recompute on startup (scheduler.py), so
+    # runs_total is asserted as a lower bound rather than an exact count
+    from verdict_service.main import _recompute_job, app, contribution_edge_store, metrics
+
+    contribution_edge_store._edges.clear()
+    edges_before = metrics.contribution_edges_total
+    lookups_before = metrics.reputation_lookups_total
+    runs_before = metrics.recompute_runs_total
+
+    with TestClient(app) as client:
+        client.post("/v1/graph/contribute", json={"edges": [contribution_edge("m1", "p1")]})
+        client.post("/v1/reputation/lookup", json={"prefixes": [f"{i:04x}" for i in range(32)]})
+        asyncio.run(_recompute_job())
+        body = client.get("/v1/metrics").text
+
+    assert f"verdict_contribution_edges_total {edges_before + 1}" in body
+    assert f"verdict_reputation_lookups_total {lookups_before + 1}" in body
+    assert metrics.recompute_runs_total > runs_before
+
+
 def test_a_contributed_batch_becomes_a_flagged_lookup_result_once_recomputed():
     from verdict_service.main import (
         _recompute_job,

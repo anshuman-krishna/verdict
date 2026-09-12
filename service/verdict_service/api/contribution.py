@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from verdict_service.graph.contribution_store import ContributionEdge, ContributionEdgeStore
+from verdict_service.metrics import MetricsRegistry
 
 _HEX_DIGITS = set("0123456789abcdef")
 _ASCII_DIGITS = set("0123456789")
@@ -72,7 +73,9 @@ class ContributionResponse(BaseModel):
 
 
 def create_contribution_router(
-    store: ContributionEdgeStore, now: Callable[[], float] = time.time
+    store: ContributionEdgeStore,
+    now: Callable[[], float] = time.time,
+    metrics: MetricsRegistry | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -91,6 +94,8 @@ def create_contribution_router(
                     received_at=received_at,
                 )
             )
+        if metrics is not None:
+            metrics.record_contribution(len(body.edges))
         return ContributionResponse(accepted=len(body.edges))
 
     return router

@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from verdict_service.api.contribution import create_contribution_router
+from verdict_service.api.health import create_health_router
+from verdict_service.api.metrics import create_metrics_router
 from verdict_service.api.reputation import create_reputation_router
 from verdict_service.api.store import FlaggedHashStore, InMemoryFlaggedHashStore
 from verdict_service.graph.contribution_store import (
@@ -19,11 +21,14 @@ from verdict_service.graph.sqlite_store import (
     SqliteFlaggedHashStore,
     connect,
 )
+from verdict_service.health import HealthTracker
 from verdict_service.logging_config import configure_logging
+from verdict_service.metrics import MetricsRegistry
 
 configure_logging()
 
 DATABASE_PATH = os.environ.get("VERDICT_DATABASE_PATH")
+STORE_KIND = "sqlite" if DATABASE_PATH else "memory"
 
 if DATABASE_PATH:
     _connection = connect(DATABASE_PATH)
@@ -35,10 +40,19 @@ else:
 
 RECOMPUTE_INTERVAL_SECONDS = 60 * 60
 
+health_tracker = HealthTracker()
+metrics = MetricsRegistry()
+
 
 def _recompute() -> None:
-    recompute_flagged_hashes(contribution_edge_store, flagged_hash_store)
-    contribution_edge_store.prune_older_than(time.time() - RETENTION_SECONDS)
+    try:
+        flagged_count = recompute_flagged_hashes(contribution_edge_store, flagged_hash_store)
+        contribution_edge_store.prune_older_than(time.time() - RETENTION_SECONDS)
+    except Exception as error:  # a recompute crash must still surface on /v1/health
+        health_tracker.record_failure(error)
+        raise
+    health_tracker.record_success(flagged_count)
+    metrics.record_recompute(flagged_count)
 
 
 async def _recompute_job() -> None:
@@ -56,5 +70,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="verdict-service", lifespan=lifespan)
 
-app.include_router(create_reputation_router(flagged_hash_store))
-app.include_router(create_contribution_router(contribution_edge_store))
+app.include_router(create_reputation_router(flagged_hash_store, metrics))
+app.include_router(create_contribution_router(contribution_edge_store, metrics=metrics))
+app.include_router(create_health_router(health_tracker, STORE_KIND))
+app.include_router(create_metrics_router(metrics))

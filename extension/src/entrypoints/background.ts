@@ -17,6 +17,7 @@ import { PRIVACY_POLICY_VERSION } from "../privacy/commitments";
 import { UNINSTALL_URL } from "../siteLinks";
 import { setAcknowledgedPolicyVersion } from "../storage/settings";
 import { serveStorageRequest } from "../storage/serveStorage";
+import { badgeForOutcome } from "../ui/badge";
 
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
@@ -132,4 +133,11 @@ export default defineBackground(() => {
   pruneExpiredReviewsCache().catch(() => {});
   // a service worker wakes far more often than rules change, so the ttl decides
   loadRulesForEverySite().catch(() => {});
+
+  // one glance at the toolbar, no need to open the popup
+  addResultListener((tabId, outcome) => {
+    const badge = badgeForOutcome(outcome);
+    browser.action.setBadgeText({ tabId, text: badge.text }).catch(() => {});
+    browser.action.setBadgeBackgroundColor({ tabId, color: badge.color }).catch(() => {});
+  });
 });
