@@ -46,10 +46,11 @@ export function readSettings(send: SendToBackground = realSend): Promise<Content
 }
 
 export function readRules(
+  site: string,
   bundledDefault: RulesDocument,
   send: SendToBackground = realSend,
 ): Promise<RulesDocument> {
-  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "rules" }, bundledDefault);
+  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "rules", site }, bundledDefault);
 }
 
 export function readChecksOfProduct(

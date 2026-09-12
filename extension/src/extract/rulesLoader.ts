@@ -1,4 +1,7 @@
 import { fetchWithin } from "../net/fetchWithin";
+import { BUNDLED_RULES, emptyRules } from "./bundledRules";
+import { REMOTE_RULES_PUBLIC_KEY_JWK, remoteRulesCacheKey, remoteRulesUrl } from "./remoteRules";
+import { SITES } from "./sites";
 import { getPref, setPref } from "../storage/prefs";
 import { canonicalJson } from "./canonicalJson";
 import type { RulesDocument } from "./rules";
@@ -138,4 +141,70 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
     return await trustedRules(options);
   }
   return await refreshRules(options);
+}
+
+export type RulesSet = Readonly<Record<string, RulesDocument>>;
+
+export interface SiteRulesOptions {
+  bundled?: Readonly<Record<string, RulesDocument>>;
+  publicKeyJwk?: JsonWebKey;
+  cacheTtlMs?: number;
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+  fetchTimeoutMs?: number;
+  onProblems?: (problems: readonly string[]) => void;
+}
+
+export function optionsForSite(siteId: string, options: SiteRulesOptions = {}): RulesLoaderOptions {
+  const bundled = options.bundled ?? BUNDLED_RULES;
+  return {
+    url: remoteRulesUrl(siteId),
+    cacheKey: remoteRulesCacheKey(siteId),
+    publicKeyJwk: options.publicKeyJwk ?? REMOTE_RULES_PUBLIC_KEY_JWK,
+    bundledDefault: bundled[siteId] ?? emptyRules(siteId),
+    cacheTtlMs: options.cacheTtlMs,
+    fetchImpl: options.fetchImpl,
+    now: options.now,
+    fetchTimeoutMs: options.fetchTimeoutMs,
+    onProblems: options.onProblems,
+  };
+}
+
+export function trustedRulesForSite(
+  siteId: string,
+  options: SiteRulesOptions = {},
+): Promise<RulesDocument> {
+  return trustedRules(optionsForSite(siteId, options));
+}
+
+async function forEverySite(
+  siteIds: readonly string[],
+  load: (siteId: string) => Promise<RulesDocument>,
+): Promise<RulesSet> {
+  const loaded = await Promise.all(
+    // one site failing must not take the others with it
+    siteIds.map(async (siteId) => {
+      try {
+        return [siteId, await load(siteId)] as const;
+      } catch {
+        return [siteId, emptyRules(siteId)] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(loaded);
+}
+
+export function trustedRulesForEverySite(
+  siteIds: readonly string[] = SITES.map((site) => site.id),
+  options: SiteRulesOptions = {},
+): Promise<RulesSet> {
+  return forEverySite(siteIds, (siteId) => trustedRulesForSite(siteId, options));
+}
+
+// every site refreshes on the same alarm, each against its own ttl
+export function loadRulesForEverySite(
+  siteIds: readonly string[] = SITES.map((site) => site.id),
+  options: SiteRulesOptions = {},
+): Promise<RulesSet> {
+  return forEverySite(siteIds, (siteId) => loadRules(optionsForSite(siteId, options)));
 }

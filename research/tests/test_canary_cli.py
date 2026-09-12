@@ -160,6 +160,53 @@ class TestMain:
         assert code == 1
         assert "no targets" in capsys.readouterr().err
 
+    def test_alerts_go_to_the_injected_sender_over_stdout(self, tmp_path, capsys):
+        sent = []
+        main(
+            [targets_file(tmp_path), "--history", str(tmp_path / "h.json")],
+            fetch_html=lambda url: "<html></html>",
+            extract=broken_extract,
+            now=clock(),
+            send=sent.append,
+        )
+        assert len(sent) == 1
+        assert "amazon com" not in capsys.readouterr().out
+
+    def test_an_alert_webhook_flag_reaches_the_alert_sender(self, tmp_path, monkeypatch):
+        posted = []
+        monkeypatch.setattr(
+            "verdict_research.canary.cli.resolve_sender",
+            lambda url: posted.append(url) or (lambda message: posted.append(message)),
+        )
+        main(
+            [
+                targets_file(tmp_path),
+                "--history",
+                str(tmp_path / "h.json"),
+                "--alert-webhook",
+                "https://hooks.example/x",
+            ],
+            fetch_html=lambda url: "<html></html>",
+            extract=broken_extract,
+            now=clock(),
+        )
+        assert posted[0] == "https://hooks.example/x"
+
+    def test_the_alert_webhook_env_var_is_the_flags_default(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("VERDICT_CANARY_ALERT_WEBHOOK", "https://hooks.example/env")
+        posted = []
+        monkeypatch.setattr(
+            "verdict_research.canary.cli.resolve_sender",
+            lambda url: posted.append(url) or (lambda message: None),
+        )
+        main(
+            [targets_file(tmp_path), "--history", str(tmp_path / "h.json")],
+            fetch_html=lambda url: "<html></html>",
+            extract=healthy_extract,
+            now=clock(),
+        )
+        assert posted == ["https://hooks.example/env"]
+
     def test_carries_an_existing_history_forward(self, tmp_path):
         history = tmp_path / "h.json"
         write_run_history(

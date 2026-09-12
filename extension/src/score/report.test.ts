@@ -154,3 +154,59 @@ describe("what summarizeReport counts as a number", () => {
     expect(summarizeReport({ estimatedInorganicShare: Infinity }).estimatedInorganicShare).toBeNull();
   });
 });
+
+describe("provenance on a stored report", () => {
+  const STORED = {
+    serial: "7QK2-M4P9",
+    band: "mixed",
+    claimedRating: 4.6,
+    adjustedRating: 3.9,
+    totalReviewCount: 120,
+    excludedReviewCount: 30,
+    estimatedInorganicShare: 0.25,
+    confidence: { low: 0.18, high: 0.33 },
+    evidence: [],
+    unavailableSignals: [],
+    generatedAt: 1_700_000_000_000,
+  };
+
+  const PROVENANCE = {
+    extensionVersion: "0.1.0",
+    rulesVersion: 41,
+    rulesSite: "amazon",
+    modelTrainedAt: 1_700_000_000_000,
+    modelDigest: "7KQ2M4XZ",
+    signals: ["rating shape"],
+  };
+
+  it("round trips through storage", () => {
+    const stored = { ...STORED, provenance: PROVENANCE };
+    expect(parseStoredReport(stored)?.provenance).toEqual(PROVENANCE);
+  });
+
+  it("is simply absent on a report written before it existed", () => {
+    expect(parseStoredReport(STORED)?.provenance).toBeUndefined();
+  });
+
+  it("does not fail the whole report when provenance is unreadable", () => {
+    const stored = { ...STORED, provenance: { rulesVersion: "recent" } };
+    const parsed = parseStoredReport(stored);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.provenance).toBeUndefined();
+  });
+
+  it("drops a signal list that is not a list of strings", () => {
+    const stored = { ...STORED, provenance: { ...PROVENANCE, signals: [1, "rating shape"] } };
+    expect(parseStoredReport(stored)?.provenance?.signals).toEqual(["rating shape"]);
+  });
+
+  it("keeps a null model rather than inventing one", () => {
+    const stored = {
+      ...STORED,
+      provenance: { ...PROVENANCE, modelTrainedAt: null, modelDigest: null },
+    };
+    const parsed = parseStoredReport(stored)?.provenance;
+    expect(parsed?.modelTrainedAt).toBeNull();
+    expect(parsed?.modelDigest).toBeNull();
+  });
+});

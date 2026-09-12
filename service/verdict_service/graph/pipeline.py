@@ -8,6 +8,12 @@ from verdict_service.graph.community_scoring import (
 )
 from verdict_service.graph.contribution_store import ContributionEdge
 from verdict_service.graph.hashing import reviewer_hash
+from verdict_service.graph.sanitise import (
+    MAX_PRODUCTS_PER_REVIEWER,
+    MAX_REVIEWERS_PER_PRODUCT,
+    SanitisedContributions,
+    sanitise_contributions,
+)
 
 
 def compute_flagged_hashes(
@@ -34,15 +40,24 @@ def compute_flagged_hashes(
 _DAYS_PER_WEEK = 7
 
 
-def compute_flagged_hashes_from_contributions(
+def flagged_hashes_with_sanitation(
     edges: list[ContributionEdge],
     significance_level: float = DEFAULT_SIGNIFICANCE_LEVEL,
     alpha: float = DEFAULT_ALPHA,
     flag_threshold: float = DEFAULT_FLAG_THRESHOLD,
-) -> set[str]:
+    max_products_per_reviewer: int = MAX_PRODUCTS_PER_REVIEWER,
+    max_reviewers_per_product: int = MAX_REVIEWERS_PER_PRODUCT,
+) -> tuple[set[str], SanitisedContributions]:
+    """the flagged set, and what the edges looked like before they were trusted."""
+    sanitised = sanitise_contributions(
+        edges,
+        max_products_per_reviewer=max_products_per_reviewer,
+        max_reviewers_per_product=max_reviewers_per_product,
+    )
     reviewer_products: dict[str, set[str]] = {}
     reviews: list[ReviewRecord] = []
-    for edge in edges:
+    # one record per distinct review, so repeating a submission buys no weight
+    for edge in sanitised.edges:
         reviewer_products.setdefault(edge.reviewer_hash, set()).add(edge.product_hash)
         reviews.append(
             ReviewRecord(
@@ -62,4 +77,14 @@ def compute_flagged_hashes_from_contributions(
         score = score_community(community, backbone, reviews, flag_threshold)
         if score.flagged:
             flagged_hashes.update(community)
-    return flagged_hashes
+    return flagged_hashes, sanitised
+
+
+def compute_flagged_hashes_from_contributions(
+    edges: list[ContributionEdge],
+    significance_level: float = DEFAULT_SIGNIFICANCE_LEVEL,
+    alpha: float = DEFAULT_ALPHA,
+    flag_threshold: float = DEFAULT_FLAG_THRESHOLD,
+) -> set[str]:
+    flagged, _ = flagged_hashes_with_sanitation(edges, significance_level, alpha, flag_threshold)
+    return flagged

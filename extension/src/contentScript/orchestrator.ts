@@ -49,6 +49,14 @@ export interface OrchestratorDeps {
   bootstrapResamples?: number;
   reputation?: ReputationLookupDeps;
   graphContribution?: GraphContributionDeps;
+  // what this build is, so a report can say what produced it
+  provenance?: BuildProvenance;
+}
+
+export interface BuildProvenance {
+  extensionVersion: string;
+  modelTrainedAt: number | null;
+  modelDigest: string | null;
 }
 
 export interface GraphContributionDeps {
@@ -171,6 +179,11 @@ async function scoreAndMaybeSave(
       signatureCache: signatures,
       embeddingCache: embeddings,
       flaggedReviewerIds,
+      provenance: deps.provenance === undefined ? undefined : {
+        ...deps.provenance,
+        rulesVersion: deps.rules.version,
+        rulesSite: deps.rules.site,
+      },
     });
 
   const lookingUp = deps.reputation !== undefined && (await deps.reputation.isEnabled());

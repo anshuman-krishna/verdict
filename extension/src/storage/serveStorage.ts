@@ -1,4 +1,5 @@
 import type { RulesDocument } from "../extract/rules";
+import { isSafeSiteId } from "../extract/remoteRules";
 import { storefrontHosts } from "../extract/sites";
 import { enqueueContributionEdges } from "../graph/queue";
 import { addHistoryEntry, listChecksOfProduct } from "./history";
@@ -16,7 +17,7 @@ export interface StorageSender {
 }
 
 export interface ServeStorageDeps {
-  rules: () => Promise<RulesDocument>;
+  rules: (siteId: string) => Promise<RulesDocument>;
   hosts?: readonly string[];
 }
 
@@ -63,7 +64,11 @@ async function run(request: StorageRequest, deps: ServeStorageDeps) {
         graphContributionEnabled: await getGraphContributionEnabled(),
       };
     case "rules":
-      return await deps.rules();
+      // the site the caller claims, never a path this build did not build itself
+      if (!isSafeSiteId(request.site)) {
+        throw new Error("not a site id");
+      }
+      return await deps.rules(request.site);
     case "history-add":
       if (!(await getHistoryEnabled())) {
         return null;

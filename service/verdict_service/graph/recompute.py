@@ -1,11 +1,14 @@
+import logging
 import time
 from collections.abc import Callable
 
 from verdict_service.api.store import FlaggedHashStore
 from verdict_service.graph.contribution_store import ContributionEdgeStore
-from verdict_service.graph.pipeline import compute_flagged_hashes_from_contributions
+from verdict_service.graph.pipeline import flagged_hashes_with_sanitation
 
 RETENTION_SECONDS = 90 * 24 * 60 * 60
+
+logger = logging.getLogger("verdict_service.recompute")
 
 
 def recompute_flagged_hashes(
@@ -30,7 +33,16 @@ def recompute_flagged_hashes(
     """
     cutoff = now() - retention_seconds
     edges = contribution_store.list_since(cutoff)
-    flagged = compute_flagged_hashes_from_contributions(edges)
+    flagged, sanitised = flagged_hashes_with_sanitation(edges)
+    # counts only, so a run that quietly discards most of its input is visible
+    logger.info(
+        "recompute: %d edges in, %d scored, %d repeated, %d contradicted, %d over degree",
+        len(edges),
+        sanitised.accepted,
+        sanitised.duplicates,
+        sanitised.conflicts,
+        sanitised.over_degree,
+    )
     add_many = getattr(flagged_store, "add_many", None)
     if callable(add_many):
         add_many(list(flagged))

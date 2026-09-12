@@ -5,7 +5,11 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { BUNDLED_AMAZON_RULES } from "../src/extract/bundledRules";
+import { bundledRulesFor } from "../src/extract/bundledRules";
+
+import type { RulesDocument } from "../src/extract/rules";
+
+const BUNDLED_AMAZON_RULES = bundledRulesFor("amazon") as RulesDocument;
 import { loadRules, type SignedRulesEnvelope } from "../src/extract/rulesLoader";
 
 

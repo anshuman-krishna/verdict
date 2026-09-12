@@ -3,13 +3,12 @@ import type { ReportOutcome } from "../score/buildReport";
 import { analyzeViaHiddenTab } from "../bridge/analyzeViaTab";
 import { handleBridgeMessage } from "../bridge/handler";
 import { BridgeRateLimiter } from "../bridge/rateLimit";
-import { BUNDLED_AMAZON_RULES } from "../extract/bundledRules";
+import { BUNDLED_RULES } from "../extract/bundledRules";
 import {
-  REMOTE_RULES_CACHE_KEY,
-  REMOTE_RULES_PUBLIC_KEY_JWK,
-  REMOTE_RULES_URL,
-} from "../extract/remoteRules";
-import { loadRules, trustedRules, type RulesLoaderOptions } from "../extract/rulesLoader";
+  loadRulesForEverySite,
+  trustedRulesForEverySite,
+  trustedRulesForSite,
+} from "../extract/rulesLoader";
 import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
@@ -22,13 +21,6 @@ import { serveStorageRequest } from "../storage/serveStorage";
 type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
 
-const RULES_OPTIONS: RulesLoaderOptions = {
-  url: REMOTE_RULES_URL,
-  publicKeyJwk: REMOTE_RULES_PUBLIC_KEY_JWK,
-  bundledDefault: BUNDLED_AMAZON_RULES,
-  cacheKey: REMOTE_RULES_CACHE_KEY,
-};
-
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isAnalysisResultMessage(message) && sender.tab?.id !== undefined) {
     const tabId = sender.tab.id;
@@ -38,7 +30,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return undefined;
   }
   // the storefront page shares its storage with our content script, so the writing happens here
-  serveStorageRequest(message, sender, { rules: () => trustedRules(RULES_OPTIONS) }).then(
+  serveStorageRequest(message, sender, { rules: (siteId) => trustedRulesForSite(siteId) }).then(
     sendResponse,
   );
   return true;
@@ -101,12 +93,15 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-    handleBridgeMessage(message, {
-      bundledRules: BUNDLED_AMAZON_RULES,
-      analyzeUrl,
-      rateLimiter,
-      origin: senderOrigin(sender),
-    }).then(sendResponse);
+    // what this build can read right now, not only what it shipped with
+    trustedRulesForEverySite().catch(() => BUNDLED_RULES).then((rules) =>
+      handleBridgeMessage(message, {
+        bundledRules: rules,
+        analyzeUrl,
+        rateLimiter,
+        origin: senderOrigin(sender),
+      })
+    ).then(sendResponse);
     return true;
   });
 
@@ -129,12 +124,12 @@ export default defineBackground(() => {
       return;
     }
     if (alarm.name === RULES_ALARM_NAME) {
-      loadRules(RULES_OPTIONS).catch(() => {});
+      loadRulesForEverySite().catch(() => {});
     }
   });
 
   // a browser that was closed for a week sweeps on the way back up
   pruneExpiredReviewsCache().catch(() => {});
   // a service worker wakes far more often than rules change, so the ttl decides
-  loadRules(RULES_OPTIONS).catch(() => {});
+  loadRulesForEverySite().catch(() => {});
 });

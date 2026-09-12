@@ -59,6 +59,16 @@ export function parseProductUrl(
   return null;
 }
 
+// which storefront a page belongs to, before anything has been parsed off it
+export function siteForHost(
+  hostname: string,
+  sites: readonly SiteDefinition[] = SITES,
+): SiteDefinition | null {
+  return sites.find((site) =>
+    Object.values(site.locales).some((entry) => entry.host === hostname)
+  ) ?? null;
+}
+
 export function reviewPageUrl(
   page: ParsedProductPage,
   pageNumber: number,

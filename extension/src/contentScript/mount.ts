@@ -177,6 +177,13 @@ export function mountResult(
   }
 }
 
+// our own tag names, so this cannot miss one and cannot touch anything of the page's
+export function removeMountedElements(document: Document): void {
+  for (const element of document.querySelectorAll("verdict-panel, verdict-notice")) {
+    element.remove();
+  }
+}
+
 export interface ProgressiveMount {
   waiting: () => void;
   show: (result: AnalysisResult, pending: readonly string[]) => void;

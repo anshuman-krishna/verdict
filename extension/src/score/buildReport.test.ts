@@ -173,3 +173,51 @@ function seededRandom(seed: number): () => number {
     return state / 0x100000000;
   };
 }
+
+describe("provenance on a built report", () => {
+  const INPUTS = {
+    extensionVersion: "0.1.0",
+    rulesVersion: 41,
+    rulesSite: "amazon",
+    modelTrainedAt: 1_700_000_000_000,
+    modelDigest: "7KQ2M4XZ",
+  };
+
+  function build(provenance?: typeof INPUTS) {
+    return buildReport({
+      reviews: skewedReviews(),
+      seed: "product-1",
+      claimedRating: 4.6,
+      model: localModelSet(WORKING_MODEL),
+      priors: PRIORS,
+      bootstrapResamples: 4,
+      random: seededRandom(3),
+      provenance,
+    });
+  }
+
+  it("records what read the page and what scored it", () => {
+    const outcome = build(INPUTS);
+    expect(outcome.status).toBe("ok");
+    if (outcome.status !== "ok") {
+      return;
+    }
+    expect(outcome.report.provenance).toMatchObject(INPUTS);
+  });
+
+  it("names the signals the model actually weighs", () => {
+    const outcome = build(INPUTS);
+    if (outcome.status !== "ok") {
+      throw new Error("expected a report");
+    }
+    expect(outcome.report.provenance?.signals).toEqual(["rating shape"]);
+  });
+
+  it("is absent when the caller recorded nothing, rather than guessed at", () => {
+    const outcome = build();
+    if (outcome.status !== "ok") {
+      throw new Error("expected a report");
+    }
+    expect(outcome.report.provenance).toBeUndefined();
+  });
+});

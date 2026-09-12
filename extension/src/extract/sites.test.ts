@@ -5,6 +5,7 @@ import {
   contentScriptMatches,
   parseProductUrl,
   reviewPageUrl,
+  siteForHost,
   type SiteDefinition,
 } from "./sites";
 
@@ -119,5 +120,31 @@ describe("a storefront the registry gained without a code change", () => {
 
   it("does not answer for a host no site declares", () => {
     expect(parseProductUrl("https://shop.example.fr/item/123456", SECOND)).toBeNull();
+  });
+});
+
+describe("siteForHost", () => {
+  it("names the storefront a page belongs to before anything is parsed", () => {
+    expect(siteForHost("www.amazon.co.uk")?.id).toBe("amazon");
+  });
+
+  it("works for a host with no product on it", () => {
+    expect(siteForHost("www.amazon.de")?.id).toBe("amazon");
+  });
+
+  it("is null for a host the registry does not carry", () => {
+    expect(siteForHost("www.example.com")).toBeNull();
+  });
+
+  it("does not match a lookalike host", () => {
+    expect(siteForHost("www.amazon.com.evil.example")).toBeNull();
+    expect(siteForHost("amazon.com")).toBeNull();
+  });
+
+  it("agrees with the content script matches, so every matched page has a site", () => {
+    for (const match of contentScriptMatches()) {
+      const hostname = new URL(match.replace("/*", "/")).hostname;
+      expect(siteForHost(hostname), hostname).not.toBeNull();
+    }
   });
 });

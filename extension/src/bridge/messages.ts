@@ -49,6 +49,19 @@ export interface ReportGetResponse {
   report: Report | null;
 }
 
+export type ReportExportFormat = "text" | "json";
+
+export interface ReportExportRequest {
+  type: "verdict:report:export";
+  id: number;
+  format: ReportExportFormat;
+}
+
+export interface ReportExportResponse {
+  filename: string;
+  content: string;
+}
+
 export interface AnalyzeRequest {
   type: "verdict:analyze";
   url: string;
@@ -65,12 +78,14 @@ export type BridgeRequest =
   | HistoryClearRequest
   | HistoryExportRequest
   | ReportGetRequest
+  | ReportExportRequest
   | AnalyzeRequest;
 export type BridgeResponse =
   | HistoryListResponse
   | HistoryClearResponse
   | HistoryExportResponse
   | ReportGetResponse
+  | ReportExportResponse
   | AnalyzeResponse;
 
 export function isBridgeRequest(value: unknown): value is BridgeRequest {
@@ -86,6 +101,8 @@ export function isBridgeRequest(value: unknown): value is BridgeRequest {
       return record.format === "json" || record.format === "csv";
     case "verdict:report:get":
       return Number.isInteger(record.id);
+    case "verdict:report:export":
+      return Number.isInteger(record.id) && (record.format === "text" || record.format === "json");
     case "verdict:analyze":
       return typeof record.url === "string";
     default:

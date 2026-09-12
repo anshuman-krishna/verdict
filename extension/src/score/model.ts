@@ -1,4 +1,6 @@
+import { canonicalJson } from "../extract/canonicalJson";
 import type { CalibrationPoint, CombinerModel, ModelSet } from "./combine";
+import { shortDigest } from "./digest";
 import artifact from "./model.json";
 
 
@@ -111,3 +113,42 @@ function parseCalibration(value: unknown): CalibrationPoint[] | null {
 }
 
 export const BUNDLED_MODEL: ModelSet | null = parseModelArtifact(artifact);
+
+export interface ModelIdentity {
+  present: boolean;
+  trainedAt: number | null;
+  // over the coefficients themselves, so two models are told apart by what they do
+  digest: string | null;
+}
+
+export const NO_MODEL: ModelIdentity = { present: false, trainedAt: null, digest: null };
+
+export function modelDigest(models: ModelSet): string {
+  return shortDigest(canonicalJson({
+    local: models.local,
+    reviewerGraph: models.reviewerGraph,
+  } as unknown as Record<string, unknown>));
+}
+
+export function modelIdentity(
+  models: ModelSet | null,
+  trainedAt: number | null = null,
+): ModelIdentity {
+  if (models === null) {
+    return NO_MODEL;
+  }
+  return { present: true, trainedAt, digest: modelDigest(models) };
+}
+
+function trainedAtOf(value: unknown): number | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const at = (value as Record<string, unknown>).trainedAt;
+  return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
+export const BUNDLED_MODEL_IDENTITY: ModelIdentity = modelIdentity(
+  BUNDLED_MODEL,
+  trainedAtOf(artifact),
+);

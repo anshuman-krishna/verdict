@@ -59,19 +59,49 @@ class TestContributionEdges:
 
     def test_prune_removes_only_what_is_older_and_reports_how_many(self, connection):
         store = SqliteContributionEdgeStore(connection)
-        store.add(edge(received_at=100.0))
-        store.add(edge(received_at=200.0))
+        store.add(edge(reviewer="r1", received_at=100.0))
+        store.add(edge(reviewer="r2", received_at=200.0))
         assert store.prune_older_than(150.0) == 1
         assert [e.received_at for e in store.list_since(0.0)] == [200.0]
 
     def test_prune_on_an_empty_store_removes_nothing(self, connection):
         assert SqliteContributionEdgeStore(connection).prune_older_than(150.0) == 0
 
-    def test_keeps_two_edges_that_are_otherwise_identical(self, connection):
+    def test_the_same_claim_sent_twice_is_stored_once(self, connection):
         store = SqliteContributionEdgeStore(connection)
         store.add(edge())
         store.add(edge())
+        assert len(store.list_since(0.0)) == 1
+
+    def test_a_resubmission_keeps_the_time_it_was_first_seen(self, connection):
+        store = SqliteContributionEdgeStore(connection)
+        store.add(edge(received_at=100.0))
+        store.add(edge(received_at=9_000_000.0))
+        # retention runs from first sight, so resending cannot hold an edge open
+        assert [e.received_at for e in store.list_since(0.0)] == [100.0]
+
+    def test_a_conflicting_claim_is_kept_so_the_pipeline_can_see_it(self, connection):
+        store = SqliteContributionEdgeStore(connection)
+        store.add(edge(verified=True))
+        store.add(edge(verified=False))
         assert len(store.list_since(0.0)) == 2
+
+    def test_a_file_written_before_the_claim_index_is_collapsed_on_open(self, tmp_path):
+        path = tmp_path / "verdict.db"
+        connect(path)
+        raw = sqlite3.connect(path)
+        raw.execute("DROP INDEX contribution_edges_claim")
+        row = ("r1", "p1", 5, 2900, 1, "[]", 100.0)
+        raw.executemany(
+            "INSERT INTO contribution_edges (reviewer_hash, product_hash, star_rating, "
+            "week_bucket, verified, minhash_signature, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [row, row, row],
+        )
+        raw.commit()
+        raw.close()
+
+        reopened = connect(path)
+        assert len(SqliteContributionEdgeStore(reopened).list_since(0.0)) == 1
 
 
 class TestFlaggedHashes:

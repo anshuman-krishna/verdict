@@ -1,13 +1,25 @@
 {
-  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules, not a code change. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered.",
+  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules and its line in extension/src/extract/bundledRules.ts, and bundledRules.test.ts checks all three against each other so a missing one fails the build rather than shipping a storefront nothing can read. the id becomes a path segment in the signed rules url, so it stays lowercase letters, digits and hyphens. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered.",
   "sites": [
     {
       "id": "amazon",
       "locales": {
-        "com": { "host": "www.amazon.com", "domain": "amazon.com" },
-        "fr": { "host": "www.amazon.fr", "domain": "amazon.fr" },
-        "de": { "host": "www.amazon.de", "domain": "amazon.de" },
-        "co.uk": { "host": "www.amazon.co.uk", "domain": "amazon.co.uk" }
+        "com": {
+          "host": "www.amazon.com",
+          "domain": "amazon.com"
+        },
+        "fr": {
+          "host": "www.amazon.fr",
+          "domain": "amazon.fr"
+        },
+        "de": {
+          "host": "www.amazon.de",
+          "domain": "amazon.de"
+        },
+        "co.uk": {
+          "host": "www.amazon.co.uk",
+          "domain": "amazon.co.uk"
+        }
       },
       "productPath": "/(?:dp|gp/product)/([A-Za-z0-9]{10})(?:[/?]|$)",
       "productId": "^[A-Z0-9]{10}$",

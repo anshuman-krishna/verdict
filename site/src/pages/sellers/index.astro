@@ -22,6 +22,19 @@ import Layout from "../../layouts/Layout.astro";
     signal and its number, and if the analysis is wrong we will say so publicly on the
     <a href="/status">status page</a> and use it to improve the model.
   </p>
+  <h2>Send the report itself</h2>
+  <p>
+    Every report carries a serial and a record of what produced it: the version of Verdict
+    that ran, the version of the extraction rules that read the page, and the model that
+    scored it. Anyone holding the report can export it from Verdict, as plain text or as
+    JSON, and that export contains every signal and every number behind the reading.
+  </p>
+  <p>
+    Send that file rather than a screenshot. Reports are held only in the browser that
+    produced them, so a serial on its own tells us nothing, and a screenshot does not say
+    which version of anything was involved. With the export we can reproduce the exact
+    reading, which is what makes a dispute answerable.
+  </p>
   <p>
     <a class="button-secondary" href="mailto:sellers@verdict.tools">Contact us about a listing</a>
   </p>

@@ -10,6 +10,7 @@ import {
   createProgressiveMount,
   mountResult,
   notEnoughReviewsMessage,
+  removeMountedElements,
 } from "./mount";
 import type { AnalysisResult, OrchestratorDeps } from "./orchestrator";
 import { directReviewsCache } from "../storage/reviewsCache";
@@ -458,5 +459,38 @@ describe("what the not enough reviews notice says", () => {
 
   it("groups a large count the way the rest of the panel does", () => {
     expect(notEnoughReviewsMessage(8431)).toContain("8,431 reviews");
+  });
+});
+
+describe("removeMountedElements", () => {
+  it("takes down a panel", () => {
+    document.body.innerHTML = "<verdict-panel></verdict-panel>";
+    removeMountedElements(document);
+    expect(document.querySelector("verdict-panel")).toBeNull();
+  });
+
+  it("takes down a notice", () => {
+    document.body.innerHTML = "<verdict-notice></verdict-notice>";
+    removeMountedElements(document);
+    expect(document.querySelector("verdict-notice")).toBeNull();
+  });
+
+  it("takes down more than one at a time", () => {
+    document.body.innerHTML =
+      "<verdict-panel></verdict-panel><verdict-notice></verdict-notice><verdict-notice></verdict-notice>";
+    removeMountedElements(document);
+    expect(document.body.children).toHaveLength(0);
+  });
+
+  it("leaves the storefront's own page alone", () => {
+    document.body.innerHTML = '<div id="productTitle">a product</div><verdict-panel></verdict-panel>';
+    removeMountedElements(document);
+    expect(document.getElementById("productTitle")).not.toBeNull();
+  });
+
+  it("does nothing when nothing is mounted", () => {
+    document.body.innerHTML = "<div>just the page</div>";
+    expect(() => removeMountedElements(document)).not.toThrow();
+    expect(document.body.children).toHaveLength(1);
   });
 });

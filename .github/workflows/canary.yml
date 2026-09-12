@@ -1,0 +1,44 @@
+name: canary
+
+on:
+  # once a day: extraction health does not shift hour to hour, and this
+  # hits real amazon pages, so it stays off the per push and pr triggers
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - uses: astral-sh/setup-uv@v5
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: check live extraction health
+        env:
+          VERDICT_CANARY_ALERT_WEBHOOK: ${{ secrets.VERDICT_CANARY_ALERT_WEBHOOK }}
+        run: |
+          if [ -f research/canary-targets.json ]; then
+            just canary research/canary-targets.json --write
+          else
+            echo "no research/canary-targets.json yet, see canary-targets.example.json"
+          fi
+      - name: commit the updated status page and history
+        if: hashFiles('research/canary-targets.json') != ''
+        run: |
+          git config user.name "verdict-canary[bot]"
+          git config user.email "actions@github.com"
+          git add site/src/data/status.json research/canary-history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "canary run"
+            git push
+          fi

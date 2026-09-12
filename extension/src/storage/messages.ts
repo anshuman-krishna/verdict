@@ -22,7 +22,7 @@ export interface HistoryDraft {
 
 export type StorageRequest =
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "settings" }
-  | { type: typeof STORAGE_MESSAGE_TYPE; op: "rules" }
+  | { type: typeof STORAGE_MESSAGE_TYPE; op: "rules"; site: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-add"; entry: HistoryDraft }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-of-product"; productKey: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "contribution-enqueue"; edges: ContributionEdge[] }

@@ -70,6 +70,41 @@ const dataInventory = [
     </table>
   </div>
 
+  <h2>What the contribution graph can and cannot be made to say</h2>
+  <p>
+    Contributions carry no identifier of any kind, and the published proxy configuration
+    discards access logs and strips the headers that would carry a client address. That is
+    what keeps a submission from being tied to a person. It also means the service cannot
+    tell one submitter from another, so nothing here can be enforced per contributor.
+  </p>
+  <p>The defences are structural instead.</p>
+  <ul>
+    <li>
+      A review counts once, however many people submit it and however many times. Sending the
+      same edge again buys no weight, which is also what stops a listing that many people
+      happen to check from being weighted more heavily than one nobody checks.
+    </li>
+    <li>
+      When submissions disagree about the same review, the review is dropped rather than
+      decided by whichever claim arrived more often. Outvoting is the one thing a high volume
+      submitter would otherwise be able to do.
+    </li>
+    <li>
+      No single reviewer or product can be turned into a hub by volume. Past a fixed degree,
+      further edges are discarded, oldest kept first, so a later flood cannot displace what
+      was already there.
+    </li>
+  </ul>
+  <p>
+    What this does not do is make the graph unforgeable. The hashing salt ships inside the
+    extension, so anyone willing to read the code can compute the hash of a reviewer they
+    want to target and submit fabricated edges around it. Deduplication and the degree cap
+    raise the cost and bound the damage. They do not reduce it to zero, and no design without
+    a persistent identity for contributors would. This is written down rather than left out
+    because the reviewer network is the one signal where what other people submit affects
+    what you are shown.
+  </p>
+
   <h2>What we will not build, ever</h2>
   <ul>
     <li>No account system</li>

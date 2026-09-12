@@ -192,3 +192,56 @@ describe("the earlier checks of the same listing", () => {
     expect(container.querySelector(".earlier")).toBeNull();
   });
 });
+
+describe("provenance and export in the detail view", () => {
+  const PROVENANCE = {
+    extensionVersion: "0.1.0",
+    rulesVersion: 41,
+    rulesSite: "amazon",
+    modelTrainedAt: Date.parse("2026-01-05T00:00:00Z"),
+    modelDigest: "7KQ2M4XZ",
+    signals: ["rating shape"],
+  };
+
+  it("says what read the page and what scored it", () => {
+    const container = document.createElement("div");
+    renderReportDetail(
+      container,
+      entry({ report: { ...report(), provenance: PROVENANCE } }),
+      null,
+      { onBack: vi.fn() },
+    );
+    const text = container.querySelector(".provenance")?.textContent ?? "";
+    expect(text).toContain("rules version 41");
+    expect(text).toContain("7KQ2M4XZ");
+  });
+
+  it("says nothing was recorded for a check saved by an older build", () => {
+    const container = document.createElement("div");
+    renderReportDetail(container, entry(), null, { onBack: vi.fn() });
+    expect(container.querySelector(".provenance")?.textContent).toContain("Not recorded");
+  });
+
+  it("hands the parsed report to the text export", () => {
+    const container = document.createElement("div");
+    const onExportText = vi.fn();
+    renderReportDetail(container, entry(), null, { onBack: vi.fn(), onExportText });
+    container.querySelector<HTMLButtonElement>(".export-report")?.click();
+    expect(onExportText).toHaveBeenCalledTimes(1);
+    expect(onExportText.mock.calls[0]?.[0]).toMatchObject({ band: "mixed" });
+  });
+
+  it("hands the parsed report to the json export", () => {
+    const container = document.createElement("div");
+    const onExportJson = vi.fn();
+    renderReportDetail(container, entry(), null, { onBack: vi.fn(), onExportJson });
+    container.querySelector<HTMLButtonElement>(".export-report-json")?.click();
+    expect(onExportJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no export for a check whose report cannot be read", () => {
+    const container = document.createElement("div");
+    renderReportDetail(container, entry({ report: { nonsense: true } }), null, { onBack: vi.fn() });
+    expect(container.querySelector(".export-report")).toBeNull();
+  });
+});

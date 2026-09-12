@@ -4,7 +4,7 @@ import { applyModel, MEDIAN_FRACTION, selectModel, signalsFor, type ModelSet } f
 import { buildEvidence } from "./evidence";
 import { buildFeatureVector, type FeatureVector, type FeatureVectorInputs } from "./featureVector";
 import { bootstrap, interquartileRange } from "./bootstrap";
-import { generateSerial, type Report } from "./report";
+import { generateSerial, type Report, type ReportProvenance } from "./report";
 
 export type ReportOutcome =
   // the page parsed as a product url, and nothing on it could be read
@@ -27,6 +27,20 @@ export interface BuildReportOptions {
   signatureCache?: WeakMap<Review, bigint[]>;
   embeddingCache?: WeakMap<Review, number[]>;
   flaggedReviewerIds?: ReadonlySet<string>;
+  provenance?: ProvenanceInputs;
+}
+
+export interface ProvenanceInputs {
+  extensionVersion: string;
+  rulesVersion: number;
+  rulesSite: string;
+  modelTrainedAt: number | null;
+  modelDigest: string | null;
+}
+
+// what the model actually weighs, so a dispute can be answered signal by signal
+function provenanceOf(inputs: ProvenanceInputs, model: { coefficients: Record<string, number> }): ReportProvenance {
+  return { ...inputs, signals: signalsFor(Object.keys(model.coefficients)) };
 }
 
 function estimatedInorganicShare(vector: FeatureVector): number {
@@ -109,6 +123,9 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     evidence: buildEvidence(vector),
     unavailableSignals: signalsFor(result.imputed),
     generatedAt,
+    ...(options.provenance === undefined
+      ? {}
+      : { provenance: provenanceOf(options.provenance, model) }),
   };
 
   return { status: "ok", report, featureVector: vector };

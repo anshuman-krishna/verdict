@@ -1,3 +1,5 @@
+import { shortDigest } from "./digest";
+
 export type Band = "clean" | "mostly-clean" | "mixed" | "doubtful" | "heavily-manipulated";
 
 export const BAND_LABELS: Record<Band, string> = {
@@ -30,6 +32,17 @@ export interface ConfidenceInterval {
   high: number;
 }
 
+// SITE.md /sellers promises a disputed report will be re run. that is only
+// possible if the report says what read the page and what scored it.
+export interface ReportProvenance {
+  extensionVersion: string;
+  rulesVersion: number;
+  rulesSite: string;
+  modelTrainedAt: number | null;
+  modelDigest: string | null;
+  signals: string[];
+}
+
 export interface Report {
   serial: string;
   band: Band;
@@ -42,6 +55,8 @@ export interface Report {
   evidence: EvidenceRow[];
   unavailableSignals: string[];
   generatedAt: number;
+  // absent on reports written before this build recorded it
+  provenance?: ReportProvenance;
 }
 
 export interface ReportSummary {
@@ -89,6 +104,29 @@ function evidenceRow(value: unknown): EvidenceRow | null {
   return { signal: row.signal, strength, detail: row.detail, value: numberAt(row, "value") };
 }
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export function parseProvenance(value: unknown): ReportProvenance | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const rulesVersion = numberAt(record, "rulesVersion");
+  if (typeof record.extensionVersion !== "string" || typeof record.rulesSite !== "string" || rulesVersion === null) {
+    return null;
+  }
+  return {
+    extensionVersion: record.extensionVersion,
+    rulesVersion,
+    rulesSite: record.rulesSite,
+    modelTrainedAt: numberAt(record, "modelTrainedAt"),
+    modelDigest: typeof record.modelDigest === "string" ? record.modelDigest : null,
+    signals: stringList(record.signals),
+  };
+}
+
 // a report read back from storage was written by an older build, so nothing is assumed
 export function parseStoredReport(value: unknown): Report | null {
   if (typeof value !== "object" || value === null) {
@@ -117,9 +155,8 @@ export function parseStoredReport(value: unknown): Report | null {
     return null;
   }
   const evidence = stored.evidence.map(evidenceRow).filter((row): row is EvidenceRow => row !== null);
-  const unavailable = Array.isArray(stored.unavailableSignals)
-    ? stored.unavailableSignals.filter((signal): signal is string => typeof signal === "string")
-    : [];
+  const unavailable = stringList(stored.unavailableSignals);
+  const provenance = parseProvenance(stored.provenance);
   return {
     serial: typeof stored.serial === "string" ? stored.serial : "",
     band: summary.band,
@@ -132,32 +169,11 @@ export function parseStoredReport(value: unknown): Report | null {
     evidence,
     unavailableSignals: unavailable,
     generatedAt,
+    ...(provenance === null ? {} : { provenance }),
   };
 }
 
-const SERIAL_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
 export function generateSerial(seed: string, generatedAt: number): string {
-  const hash = fnv1a32(`${seed}:${generatedAt}`);
-  const digits = toBase(hash, SERIAL_ALPHABET, 8);
+  const digits = shortDigest(`${seed}:${generatedAt}`);
   return `${digits.slice(0, 4)}-${digits.slice(4, 8)}`;
-}
-
-function fnv1a32(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
-}
-
-function toBase(value: number, alphabet: string, length: number): string {
-  let remaining = value;
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result = alphabet[remaining % alphabet.length] + result;
-    remaining = Math.floor(remaining / alphabet.length);
-  }
-  return result;
 }

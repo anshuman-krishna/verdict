@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import committed from "./model.json";
-import { ARTIFACT_VERSION, BUNDLED_MODEL, parseModelArtifact } from "./model";
+import {
+  ARTIFACT_VERSION,
+  BUNDLED_MODEL,
+  BUNDLED_MODEL_IDENTITY,
+  modelDigest,
+  modelIdentity,
+  parseModelArtifact,
+} from "./model";
+import { localModelSet, type CombinerModel } from "./combine";
 
 const PRESENT = {
   artifactVersion: ARTIFACT_VERSION,
@@ -156,5 +164,47 @@ describe("a calibration curve that is not a probability", () => {
     expect(
       parseModelArtifact({ ...PRESENT, calibration: [{ x: 0, y: Number.NaN }] }),
     ).toBeNull();
+  });
+});
+
+describe("model identity", () => {
+  const MODEL: CombinerModel = {
+    intercept: -1,
+    coefficients: { "temporalBurst.burstFraction": 2 },
+    calibration: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    featureQuantiles: {},
+  };
+
+  it("is absent when this build carries no model", () => {
+    expect(modelIdentity(null)).toEqual({ present: false, trainedAt: null, digest: null });
+  });
+
+  it("is the same digest for the same model", () => {
+    expect(modelDigest(localModelSet(MODEL))).toBe(modelDigest(localModelSet(MODEL)));
+  });
+
+  it("changes when a coefficient changes, since that changes what is claimed", () => {
+    const moved = { ...MODEL, coefficients: { "temporalBurst.burstFraction": 2.0001 } };
+    expect(modelDigest(localModelSet(moved))).not.toBe(modelDigest(localModelSet(MODEL)));
+  });
+
+  it("changes when calibration changes", () => {
+    const recalibrated = { ...MODEL, calibration: [{ x: 0, y: 0.2 }, { x: 1, y: 1 }] };
+    expect(modelDigest(localModelSet(recalibrated))).not.toBe(modelDigest(localModelSet(MODEL)));
+  });
+
+  it("does not depend on the order the coefficients were written in", () => {
+    const first: CombinerModel = { ...MODEL, coefficients: { a: 1, b: 2 } };
+    const second: CombinerModel = { ...MODEL, coefficients: { b: 2, a: 1 } };
+    expect(modelDigest(localModelSet(first))).toBe(modelDigest(localModelSet(second)));
+  });
+
+  it("tells a graph model apart from a local one", () => {
+    const withGraph = { local: MODEL, reviewerGraph: MODEL };
+    expect(modelDigest(withGraph)).not.toBe(modelDigest(localModelSet(MODEL)));
+  });
+
+  it("matches what this build actually ships", () => {
+    expect(BUNDLED_MODEL_IDENTITY.present).toBe(BUNDLED_MODEL !== null);
   });
 });

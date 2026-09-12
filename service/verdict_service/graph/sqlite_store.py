@@ -5,7 +5,7 @@ from pathlib import Path
 
 from verdict_service.graph.contribution_store import ContributionEdge
 
-SCHEMA = """
+_BASE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS contribution_edges (
     id INTEGER PRIMARY KEY,
     reviewer_hash TEXT NOT NULL,
@@ -23,6 +23,14 @@ CREATE INDEX IF NOT EXISTS contribution_edges_received_at
 CREATE TABLE IF NOT EXISTS flagged_hashes (
     full_hash TEXT PRIMARY KEY
 ) WITHOUT ROWID;
+"""
+
+# the same claim sent again is the same claim, so repetition cannot grow the
+# table. a conflicting claim differs in these columns and is kept, because the
+# pipeline has to see the disagreement in order to drop the pair.
+_CLAIM_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS contribution_edges_claim
+    ON contribution_edges (reviewer_hash, product_hash, star_rating, week_bucket, verified);
 """
 
 
@@ -44,11 +52,23 @@ class Database:
             self._connection.executemany(sql, rows)
 
 
+# a file written before the claim index existed may hold repeats, and the index
+# cannot be created over them
+_COLLAPSE_REPEATS = """
+DELETE FROM contribution_edges WHERE id NOT IN (
+    SELECT MIN(id) FROM contribution_edges
+    GROUP BY reviewer_hash, product_hash, star_rating, week_bucket, verified
+);
+"""
+
+
 def connect(path: str | Path) -> Database:
     connection = sqlite3.connect(str(path), check_same_thread=False)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
-    connection.executescript(SCHEMA)
+    connection.executescript(_BASE_SCHEMA)
+    connection.execute(_COLLAPSE_REPEATS)
+    connection.executescript(_CLAIM_INDEX)
     connection.commit()
     return Database(connection)
 
@@ -61,7 +81,7 @@ class SqliteContributionEdgeStore:
 
     def add(self, edge: ContributionEdge) -> None:
         self._database.write(
-            "INSERT INTO contribution_edges "
+            "INSERT OR IGNORE INTO contribution_edges "
             "(reviewer_hash, product_hash, star_rating, week_bucket, verified, "
             "minhash_signature, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (

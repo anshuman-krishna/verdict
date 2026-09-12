@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 import time
 from collections.abc import Callable
@@ -25,11 +26,13 @@ from verdict_research.canary.status_document import (
     write_status_document_file,
 )
 from verdict_research.canary.targets import read_targets
+from verdict_research.canary.webhook_alert import resolve_sender
 from verdict_research.shipped_extractor import NodeExtractor
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_STATUS_OUTPUT = REPOSITORY / "site" / "src" / "data" / "status.json"
 DEFAULT_HISTORY = REPOSITORY / "research" / "canary-history.json"
+ALERT_WEBHOOK_ENV_VAR = "VERDICT_CANARY_ALERT_WEBHOOK"
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,7 @@ def main(
     fetch_html: Callable[[str], str] | None = None,
     extract: Callable[[str, str], object] | None = None,
     now: Callable[[], float] = time.time,
+    send: Callable[[str], None] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="canary", description="check live extraction health")
     parser.add_argument("targets", help="the targets json file")
@@ -81,6 +85,11 @@ def main(
     parser.add_argument("--retained-checks", type=int, default=DEFAULT_RETAINED_CHECKS)
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument("--write", action="store_true", help="update the history and status files")
+    parser.add_argument(
+        "--alert-webhook",
+        default=os.environ.get(ALERT_WEBHOOK_ENV_VAR, ""),
+        help=f"post alerts here as json instead of stdout, or set {ALERT_WEBHOOK_ENV_VAR}",
+    )
     args = parser.parse_args(argv)
 
     targets = read_targets(args.targets)
@@ -99,7 +108,7 @@ def main(
     )
     _report(run.results)
 
-    send_alerts(run.alerts, print)
+    send_alerts(run.alerts, send or resolve_sender(args.alert_webhook))
 
     if not args.write:
         print("nothing written, pass --write to update the status page")

@@ -72,7 +72,7 @@ describe("when the background cannot be reached", () => {
 
   it("falls back to the bundled rules so the page is still read", async () => {
     const send = vi.fn().mockRejectedValue(new Error("no receiver"));
-    await expect(readRules(BUNDLED, send)).resolves.toEqual(BUNDLED);
+    await expect(readRules("amazon", BUNDLED, send)).resolves.toEqual(BUNDLED);
   });
 
   it("reports an empty cache rather than failing the deep check", async () => {

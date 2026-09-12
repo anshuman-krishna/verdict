@@ -1,6 +1,7 @@
-import type { RulesDocument } from "../extract/rules";
+import type { RulesSet } from "../extract/rulesLoader";
 import { allowedDomains } from "../extract/sites";
 import { parseStoredReport, summarizeReport } from "../score/report";
+import { reportAsText, reportDocumentJson, reportFilename } from "../score/reportDocument";
 import {
   deleteAllHistory,
   exportHistoryAsCsv,
@@ -15,8 +16,12 @@ import {
   isBridgeRequest,
 } from "./messages";
 
-export function deriveAllowedHostnames(rules: RulesDocument): string[] {
-  return allowedDomains(rules.site, rules.locales);
+// the union across every site this build carries rules for, so a storefront
+// with no rules yet cannot be analysed through the bridge either
+export function deriveAllowedHostnames(rules: RulesSet): string[] {
+  return Object.values(rules).flatMap((document) =>
+    allowedDomains(document.site, document.locales)
+  );
 }
 
 function isAllowedHostname(hostname: string, allowed: readonly string[]): boolean {
@@ -47,7 +52,7 @@ async function handleAnalyze(
 }
 
 export interface BridgeHandlerOptions {
-  bundledRules: RulesDocument;
+  bundledRules: RulesSet;
   analyzeUrl: AnalyzeUrl;
   rateLimiter?: BridgeRateLimiter;
   origin?: string;
@@ -106,6 +111,25 @@ async function handleRequest(
       const entry = entries.find((candidate) => candidate.id === request.id);
       // the report only, never the url or the id of anything else
       return { report: entry === undefined ? null : parseStoredReport(entry.report) };
+    }
+    case "verdict:report:export": {
+      const entries = await listHistory();
+      const entry = entries.find((candidate) => candidate.id === request.id);
+      const report = entry === undefined ? null : parseStoredReport(entry.report);
+      if (entry === undefined || report === null) {
+        // nothing to export is an empty document, never another entry's
+        return { filename: "", content: "" };
+      }
+      const exportedAt = Date.now();
+      return request.format === "json"
+        ? {
+          filename: reportFilename(report, "json"),
+          content: reportDocumentJson(report, entry.title, exportedAt),
+        }
+        : {
+          filename: reportFilename(report, "txt"),
+          content: reportAsText(report, entry.title, exportedAt),
+        };
     }
     case "verdict:analyze": {
       return handleAnalyze(

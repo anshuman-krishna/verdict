@@ -17,6 +17,7 @@ import {
 } from "../../storage/history";
 import { renderPopup } from "../../ui/historyList";
 import { renderReportDetail } from "../../ui/reportDetail";
+import { reportAsText, reportDocumentJson, reportFilename } from "../../score/reportDocument";
 
 function download(filename: string, content: string, mimeType: string): void {
   const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
@@ -59,7 +60,21 @@ async function refresh(openId: number | null = null): Promise<void> {
       app,
       open,
       rescore(open, BUNDLED_MODEL),
-      { onBack: () => void refresh() },
+      {
+        onBack: () => void refresh(),
+        onExportText: (report) =>
+          download(
+            reportFilename(report, "txt"),
+            reportAsText(report, open.title, Date.now()),
+            "text/plain",
+          ),
+        onExportJson: (report) =>
+          download(
+            reportFilename(report, "json"),
+            reportDocumentJson(report, open.title, Date.now()),
+            "application/json",
+          ),
+      },
       earlier,
     );
     return;

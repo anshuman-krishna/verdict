@@ -1,11 +1,14 @@
 import { safeThumbnailUrl } from "../extract/sites";
 import type { Rescored } from "../score/rescore";
 import { BAND_COLORS, BAND_LABELS, parseStoredReport, type Report } from "../score/report";
+import { provenanceLines } from "../score/reportDocument";
 import type { HistoryEntry, PreviousCheck } from "../storage/history";
 import { escapeHtml } from "./escape";
 
 export interface ReportDetailCallbacks {
   onBack: () => void;
+  onExportText?: (report: Report) => void;
+  onExportJson?: (report: Report) => void;
 }
 
 function percent(share: number): number {
@@ -90,6 +93,14 @@ export function renderReportDetail(
   `;
 
   container.querySelector(".back")?.addEventListener("click", callbacks.onBack);
+  if (report !== null) {
+    container
+      .querySelector(".export-report")
+      ?.addEventListener("click", () => callbacks.onExportText?.(report));
+    container
+      .querySelector(".export-report-json")
+      ?.addEventListener("click", () => callbacks.onExportJson?.(report));
+  }
   wireEvidence(container);
 }
 
@@ -121,6 +132,14 @@ function body(report: Report, rescored: Rescored | null): string {
     <h2>evidence</h2>
     <div class="register" role="list">
       ${report.evidence.map(evidenceRow).join("")}
+    </div>
+    <h2>how this was produced</h2>
+    <ul class="provenance">
+      ${provenanceLines(report.provenance).map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
+    </ul>
+    <div class="actions">
+      <button type="button" class="export-report">Export this report</button>
+      <button type="button" class="export-report-json">Export as JSON</button>
     </div>
     ${report.serial === "" ? "" : `<p class="serial">${escapeHtml(report.serial)}</p>`}
   `;

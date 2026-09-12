@@ -1,3 +1,5 @@
+import logging
+
 from verdict_service.api.store import InMemoryFlaggedHashStore
 from verdict_service.graph.contribution_store import ContributionEdge, InMemoryContributionEdgeStore
 from verdict_service.graph.recompute import RETENTION_SECONDS, recompute_flagged_hashes
@@ -82,3 +84,53 @@ def test_recompute_with_no_contributions_flags_nothing():
         InMemoryContributionEdgeStore(), InMemoryFlaggedHashStore(), now=lambda: 0.0
     )
     assert count == 0
+
+
+def _edge(reviewer, product, rating=5, received_at=100.0):
+    return ContributionEdge(
+        reviewer_hash=reviewer,
+        product_hash=product,
+        star_rating=rating,
+        week_bucket=2900,
+        verified=True,
+        minhash_signature=[],
+        received_at=received_at,
+    )
+
+
+def test_recompute_sanitises_before_it_scores():
+    contributions = InMemoryContributionEdgeStore()
+    for index in range(50):
+        contributions.add(_edge("f1", "p1", received_at=float(index)))
+    flagged = InMemoryFlaggedHashStore()
+
+    recompute_flagged_hashes(contributions, flagged, now=lambda: 1000.0)
+
+    # one reviewer on one product is no community, however many times it is sent
+    assert flagged.matches("") == []
+
+
+def test_recompute_reports_what_it_discarded(caplog):
+    contributions = InMemoryContributionEdgeStore()
+    for index in range(10):
+        contributions.add(_edge("f1", "p1", received_at=float(index)))
+    contributions.add(_edge("f2", "p2", rating=5, received_at=1.0))
+    contributions.add(_edge("f2", "p2", rating=1, received_at=2.0))
+
+    with caplog.at_level(logging.INFO, logger="verdict_service.recompute"):
+        recompute_flagged_hashes(contributions, InMemoryFlaggedHashStore(), now=lambda: 1000.0)
+
+    message = caplog.text
+    assert "9 repeated" in message
+    assert "2 contradicted" in message
+
+
+def test_the_recompute_log_carries_counts_and_no_hashes(caplog):
+    contributions = InMemoryContributionEdgeStore()
+    contributions.add(_edge("secret-reviewer-hash", "secret-product-hash"))
+
+    with caplog.at_level(logging.INFO, logger="verdict_service.recompute"):
+        recompute_flagged_hashes(contributions, InMemoryFlaggedHashStore(), now=lambda: 1000.0)
+
+    assert "secret-reviewer-hash" not in caplog.text
+    assert "secret-product-hash" not in caplog.text

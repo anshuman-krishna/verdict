@@ -12,12 +12,14 @@ import { deriveAllowedHostnames, handleBridgeMessage, type BridgeHandlerOptions 
 import { isBridgeRequest } from "./messages";
 import { BridgeRateLimiter, RATE_LIMITS } from "./rateLimit";
 
-const RULES: RulesDocument = {
+const AMAZON: RulesDocument = {
   version: 1,
   site: "amazon",
   locales: ["com", "co.uk"],
   fields: {},
 };
+
+const RULES: Readonly<Record<string, RulesDocument>> = { amazon: AMAZON };
 
 function options(overrides: Partial<BridgeHandlerOptions> = {}): BridgeHandlerOptions {
   return {
@@ -55,13 +57,25 @@ describe("deriveAllowedHostnames", () => {
   });
 
   it("drops a locale the registry does not know", () => {
-    expect(deriveAllowedHostnames({ ...RULES, locales: ["com", "invented"] })).toEqual([
+    expect(deriveAllowedHostnames({ amazon: { ...AMAZON, locales: ["com", "invented"] } })).toEqual([
       "amazon.com",
     ]);
   });
 
   it("returns nothing for a site the registry does not carry", () => {
-    expect(deriveAllowedHostnames({ ...RULES, site: "nowhere" })).toEqual([]);
+    expect(deriveAllowedHostnames({ nowhere: { ...AMAZON, site: "nowhere" } })).toEqual([]);
+  });
+
+  it("allows every site this build carries rules for", () => {
+    const hostnames = deriveAllowedHostnames({
+      amazon: { ...AMAZON, locales: ["com"] },
+      other: { ...AMAZON, site: "other", locales: ["com"] },
+    });
+    expect(hostnames).toEqual(["amazon.com"]);
+  });
+
+  it("returns nothing when this build carries rules for no site at all", () => {
+    expect(deriveAllowedHostnames({})).toEqual([]);
   });
 });
 
@@ -215,7 +229,7 @@ describe("rate limiting", () => {
 
   function options(rateLimiter: BridgeRateLimiter, origin: string | undefined): BridgeHandlerOptions {
     return {
-      bundledRules: rules,
+      bundledRules: { amazon: rules },
       analyzeUrl: async () => ({ status: "not-a-product-page" }) as const,
       rateLimiter,
       origin,
@@ -225,7 +239,12 @@ describe("rate limiting", () => {
   it("rejects a request past the limit without touching storage or a tab", async () => {
     const limiter = new BridgeRateLimiter(() => 1_000);
     const analyzeUrl = vi.fn(async () => ({ status: "not-a-product-page" }) as const);
-    const deps = { bundledRules: rules, analyzeUrl, rateLimiter: limiter, origin: "https://verdict.tools" };
+    const deps = {
+      bundledRules: { amazon: rules },
+      analyzeUrl,
+      rateLimiter: limiter,
+      origin: "https://verdict.tools",
+    };
     const request = { type: "verdict:analyze", url: "https://www.amazon.com/dp/B0ABCDEF12" };
 
     for (let index = 0; index < RATE_LIMITS["verdict:analyze"].limit; index += 1) {
@@ -412,5 +431,78 @@ describe("the product key the site groups by", () => {
     };
 
     expect(response.entries[0]?.productKey).toBeNull();
+  });
+});
+
+describe("verdict:report:export", () => {
+  beforeEach(async () => {
+    await deleteAllHistory();
+  });
+
+  const stored = {
+    serial: "7QK2-M4P9",
+    band: "mixed",
+    claimedRating: 4.6,
+    adjustedRating: 3.9,
+    totalReviewCount: 120,
+    excludedReviewCount: 30,
+    estimatedInorganicShare: 0.25,
+    confidence: { low: 0.18, high: 0.33 },
+    evidence: [],
+    unavailableSignals: [],
+    generatedAt: 1_700_000_000_000,
+  };
+
+  it("is a recognised request only with a whole id and a known format", () => {
+    expect(isBridgeRequest({ type: "verdict:report:export", id: 1, format: "text" })).toBe(true);
+    expect(isBridgeRequest({ type: "verdict:report:export", id: 1, format: "csv" })).toBe(false);
+    expect(isBridgeRequest({ type: "verdict:report:export", id: 1.5, format: "text" })).toBe(false);
+    expect(isBridgeRequest({ type: "verdict:report:export", format: "text" })).toBe(false);
+  });
+
+  it("returns the report as text, named after its serial", async () => {
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: stored });
+    const [entry] = await listHistory();
+    const response = await handleBridgeMessage(
+      { type: "verdict:report:export", id: entry?.id, format: "text" },
+      options(),
+    );
+    expect(response).toMatchObject({ filename: "verdict-report-7qk2-m4p9.txt" });
+    expect((response as { content: string }).content).toContain("VERDICT REPORT");
+  });
+
+  it("returns the report as json", async () => {
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: stored });
+    const [entry] = await listHistory();
+    const response = await handleBridgeMessage(
+      { type: "verdict:report:export", id: entry?.id, format: "json" },
+      options(),
+    );
+    const parsed = JSON.parse((response as { content: string }).content);
+    expect(parsed.report.serial).toBe("7QK2-M4P9");
+    expect(parsed.title).toBe("a product");
+  });
+
+  it("returns nothing for an id that is not there, never another entry", async () => {
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: stored });
+    const response = await handleBridgeMessage(
+      { type: "verdict:report:export", id: 999_999, format: "text" },
+      options(),
+    );
+    expect(response).toEqual({ filename: "", content: "" });
+  });
+
+  it("returns nothing for an entry whose report cannot be read", async () => {
+    await addHistoryEntry({ title: "a product", thumbnailUrl: null, report: { nope: true } });
+    const [entry] = await listHistory();
+    const response = await handleBridgeMessage(
+      { type: "verdict:report:export", id: entry?.id, format: "text" },
+      options(),
+    );
+    expect(response).toEqual({ filename: "", content: "" });
+  });
+
+  it("is rate limited like the other exports", () => {
+    expect(RATE_LIMITS["verdict:report:export"].limit).toBe(12);
   });
 });

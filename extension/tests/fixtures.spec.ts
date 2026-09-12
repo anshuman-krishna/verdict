@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { BUNDLED_AMAZON_RULES } from "../src/extract/bundledRules";
+import { bundledRulesFor } from "../src/extract/bundledRules";
+
+import type { RulesDocument } from "../src/extract/rules";
+
+const BUNDLED_AMAZON_RULES = bundledRulesFor("amazon") as RulesDocument;
 import { runFixture, type FixtureResult } from "../src/fixtures/harness";
 import { buildCorpusReport, formatReport } from "../src/fixtures/report";
 import { loadCorpus } from "./fixtureCorpus";

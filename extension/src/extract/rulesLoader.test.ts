@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalJson,
   loadRules,
+  loadRulesForEverySite,
+  optionsForSite,
   refreshRules,
   trustedRules,
+  trustedRulesForEverySite,
   type SignedRulesEnvelope,
 } from "./rulesLoader";
 import type { RulesDocument } from "./rules";
@@ -594,5 +597,71 @@ describe("loadRules reporting what it had to drop", () => {
       onProblems: (lines) => problems.push([...lines]),
     });
     expect(problems).toEqual([]);
+  });
+});
+
+describe("rules across every site", () => {
+  const ONE: RulesDocument = { version: 3, site: "one", locales: ["com"], fields: {} };
+  const TWO: RulesDocument = { version: 7, site: "two", locales: ["com"], fields: {} };
+  const BUNDLED = { one: ONE, two: TWO };
+
+  it("gives each site its own url and its own cache entry", () => {
+    const first = optionsForSite("one", { bundled: BUNDLED });
+    const second = optionsForSite("two", { bundled: BUNDLED });
+    expect(first.url).not.toBe(second.url);
+    expect(first.cacheKey).not.toBe(second.cacheKey);
+    expect(first.bundledDefault).toBe(ONE);
+  });
+
+  it("falls back to rules that read nothing for a site this build does not carry", () => {
+    const options = optionsForSite("three", { bundled: BUNDLED });
+    expect(options.bundledDefault).toEqual({
+      version: 0,
+      site: "three",
+      locales: [],
+      fields: {},
+    });
+  });
+
+  it("loads every site in one pass", async () => {
+    const rules = await trustedRulesForEverySite(["one", "two"], { bundled: BUNDLED });
+    expect(Object.keys(rules).sort()).toEqual(["one", "two"]);
+    expect(rules.two?.version).toBe(7);
+  });
+
+  it("does not let one site failing take the others with it", async () => {
+    const rules = await trustedRulesForEverySite(["one", "NOT A SITE ID"], { bundled: BUNDLED });
+    expect(rules.one).toBe(ONE);
+    expect(rules["NOT A SITE ID"]).toEqual({
+      version: 0,
+      site: "NOT A SITE ID",
+      locales: [],
+      fields: {},
+    });
+  });
+
+  it("reads nothing from the network on the trusted path", async () => {
+    const fetchImpl = vi.fn(() => {
+      throw new Error("the trusted path must not fetch");
+    });
+    await expect(
+      trustedRulesForEverySite(["one", "two"], { bundled: BUNDLED, fetchImpl }),
+    ).resolves.toBeTruthy();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("refreshes every site against its own ttl", async () => {
+    const fetched: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      fetched.push(url);
+      return new Response("nope", { status: 404 });
+    });
+    await loadRulesForEverySite(["one", "two"], {
+      bundled: BUNDLED,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(fetched).toHaveLength(2);
+    expect(fetched.some((url) => url.endsWith("/one.json"))).toBe(true);
+    expect(fetched.some((url) => url.endsWith("/two.json"))).toBe(true);
   });
 });

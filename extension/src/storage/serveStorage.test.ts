@@ -125,11 +125,32 @@ describe("what a content script may ask for", () => {
     expect(after).toMatchObject({ value: { graphContributionEnabled: false } });
   });
 
-  it("hands back the rules the background trusts", async () => {
-    await expect(serveStorageRequest(request("rules"), STOREFRONT, DEPS)).resolves.toEqual({
-      ok: true,
-      value: RULES,
+  it("hands back the rules the background trusts for the site that asked", async () => {
+    await expect(
+      serveStorageRequest(request("rules", { site: "amazon" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: true, value: RULES });
+  });
+
+  it("asks for the site named in the request, not a site named here", async () => {
+    const rules = vi.fn(async () => RULES);
+    await serveStorageRequest(request("rules", { site: "ebay" }), STOREFRONT, {
+      rules,
+      hosts: ["www.amazon.com"],
     });
+    expect(rules).toHaveBeenCalledWith("ebay");
+  });
+
+  it("refuses a site id that would become a path of its own", async () => {
+    const rules = vi.fn(async () => RULES);
+    for (const site of ["../../secrets", "a/b", "", "AMAZON"]) {
+      await expect(
+        serveStorageRequest(request("rules", { site }), STOREFRONT, {
+          rules,
+          hosts: ["www.amazon.com"],
+        }),
+      ).resolves.toEqual({ ok: false });
+    }
+    expect(rules).not.toHaveBeenCalled();
   });
 
   it("writes history into the extension's own database", async () => {
@@ -192,9 +213,9 @@ describe("what a content script may ask for", () => {
 
   it("reports a refusal rather than throwing when a store is unreachable", async () => {
     const failing = { rules: () => Promise.reject(new Error("no")), hosts: ["www.amazon.com"] };
-    await expect(serveStorageRequest(request("rules"), STOREFRONT, failing)).resolves.toEqual({
-      ok: false,
-    });
+    await expect(
+      serveStorageRequest(request("rules", { site: "amazon" }), STOREFRONT, failing),
+    ).resolves.toEqual({ ok: false });
   });
 });
 
@@ -202,9 +223,13 @@ describe("settings the content script reads", () => {
   it("does not reach indexeddb from the page's side at all", async () => {
     const send = vi.fn().mockResolvedValue({ ok: true, value: RULES });
     const { readRules } = await import("./viaBackground");
-    await readRules({ ...RULES, version: 99 }, send);
+    await readRules("amazon", { ...RULES, version: 99 }, send);
 
-    expect(send).toHaveBeenCalledWith({ type: STORAGE_MESSAGE_TYPE, op: "rules" });
+    expect(send).toHaveBeenCalledWith({
+      type: STORAGE_MESSAGE_TYPE,
+      op: "rules",
+      site: "amazon",
+    });
   });
 });
 
