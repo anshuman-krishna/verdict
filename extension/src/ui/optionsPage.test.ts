@@ -14,6 +14,7 @@ function callbacks() {
     onClearCache: vi.fn(),
     onClearQueue: vi.fn(),
     onAcknowledgePolicy: vi.fn(),
+    onImport: vi.fn(),
   };
 }
 
@@ -292,5 +293,69 @@ describe("the privacy notice", () => {
     renderOptions(container, state({ pendingPolicyChanges: [CHANGE] }), cbs);
     container.querySelector<HTMLButtonElement>(".policy-ack")?.click();
     expect(cbs.onAcknowledgePolicy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("importing history", () => {
+  it("offers an import next to the exports", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    expect(container.querySelector(".import-history")).not.toBeNull();
+  });
+
+  it("says that csv cannot come back in", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    expect(container.textContent).toContain("CSV is for spreadsheets and cannot be imported");
+  });
+
+  it("accepts only json, so a csv is not offered in the picker", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    const input = container.querySelector<HTMLInputElement>(".import-file");
+    expect(input?.accept).toBe("application/json,.json");
+  });
+
+  it("hands the chosen file to the callback", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state(), cbs);
+    const input = container.querySelector<HTMLInputElement>(".import-file");
+    if (input === null) {
+      throw new Error("no file input");
+    }
+    const file = new File(["[]"], "verdict-history.json", { type: "application/json" });
+    Object.defineProperty(input, "files", { value: [file] });
+    input.dispatchEvent(new Event("change"));
+    expect(cbs.onImport).toHaveBeenCalledWith(file);
+  });
+
+  it("says nothing when no file was chosen", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state(), cbs);
+    const input = container.querySelector<HTMLInputElement>(".import-file");
+    input?.dispatchEvent(new Event("change"));
+    expect(cbs.onImport).not.toHaveBeenCalled();
+  });
+
+  it("shows nothing until an import has run", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    expect(container.querySelector(".import-result")).toBeNull();
+  });
+
+  it("reports the result where a screen reader will announce it", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ importMessage: "Added 23 checks." }), callbacks());
+    const result = container.querySelector(".import-result");
+    expect(result?.textContent).toContain("Added 23 checks.");
+    expect(result?.getAttribute("role")).toBe("status");
+  });
+
+  it("escapes a message rather than rendering it", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ importMessage: "<img src=x onerror=alert(1)>" }), callbacks());
+    expect(container.querySelector(".import-result img")).toBeNull();
   });
 });

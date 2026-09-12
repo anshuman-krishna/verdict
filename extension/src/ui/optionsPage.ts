@@ -1,4 +1,5 @@
 import type { PolicyChange } from "../privacy/commitments";
+import { escapeHtml } from "./escape";
 import {
   cacheLine,
   checksLine,
@@ -13,6 +14,7 @@ export interface OptionsState {
   graphContributionEnabled: boolean;
   holdings: Holdings;
   pendingPolicyChanges?: readonly PolicyChange[];
+  importMessage?: string | null;
   now?: number;
 }
 
@@ -23,6 +25,7 @@ export interface OptionsCallbacks {
   onExportJson: () => void;
   onExportCsv: () => void;
   onDeleteAll: () => void;
+  onImport: (file: File) => void;
   onClearCache: () => void;
   onClearQueue: () => void;
   onAcknowledgePolicy: () => void;
@@ -128,8 +131,22 @@ export function renderOptions(
       <div class="actions">
         <button type="button" class="export-json">Export as JSON</button>
         <button type="button" class="export-csv">Export as CSV</button>
+        <button type="button" class="import-history">Import from JSON</button>
         <button type="button" class="delete-all">Delete everything</button>
       </div>
+      <input type="file" class="import-file" accept="application/json,.json" hidden />
+      ${
+        state.importMessage === undefined || state.importMessage === null
+          ? ""
+          : `<p class="hint import-result" role="status">${escapeHtml(state.importMessage)}</p>`
+      }
+      <!-- PRIVACY.md section 6: history across devices is an export and an import,
+           not a server. Only the JSON carries the report and the feature vector,
+           so the csv cannot come back in. -->
+      <p class="hint">
+        Import merges a JSON export from another browser into this one, and never replaces
+        what is already here. CSV is for spreadsheets and cannot be imported.
+      </p>
       <!-- PRIVACY.md section 6: history is local, so uninstalling takes it
            with it. That is worth one sentence next to the export buttons,
            where somebody is already thinking about their data, as well as
@@ -181,6 +198,15 @@ export function renderOptions(
 
   container.querySelector(".clear-cache")?.addEventListener("click", callbacks.onClearCache);
   container.querySelector(".clear-queue")?.addEventListener("click", callbacks.onClearQueue);
+
+  const fileInput = container.querySelector<HTMLInputElement>(".import-file");
+  container.querySelector(".import-history")?.addEventListener("click", () => fileInput?.click());
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (file !== undefined) {
+      callbacks.onImport(file);
+    }
+  });
 
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);

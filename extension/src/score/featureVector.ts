@@ -180,3 +180,156 @@ export function buildFeatureVector(
     reviewerGraph: reviewerGraphResult,
   };
 }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function finite(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function nullableFinite(value: unknown): number | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  return finite(value) ?? undefined;
+}
+
+function allPresent(values: readonly (number | null | undefined)[]): boolean {
+  return values.every((value) => value !== undefined && value !== null);
+}
+
+// a vector read out of a file was written by nobody we can vouch for, and an absent
+// feature imputed as zero is a number nobody measured, so a bad one is refused whole
+export function parseFeatureVector(value: unknown): FeatureVector | null {
+  const record = asRecord(value);
+  if (record === null || typeof record.meetsMinimumData !== "boolean") {
+    return null;
+  }
+
+  const duplication = asRecord(record.textNearDuplication);
+  const drift = asRecord(record.listingDrift);
+  if (duplication === null || drift === null) {
+    return null;
+  }
+
+  const clusterCount = finite(duplication.clusterCount);
+  const largestClusterShare = finite(duplication.largestClusterShare);
+  const offTopicCount = finite(drift.offTopicCount);
+  const driftStatistic = finite(drift.driftStatistic);
+  const embeddedCount = finite(drift.embeddedCount);
+  if (!allPresent([clusterCount, largestClusterShare, offTopicCount, driftStatistic, embeddedCount])) {
+    return null;
+  }
+
+  const duplicateReviewShare = nullableFinite(duplication.duplicateReviewShare);
+  const offTopicShare = nullableFinite(drift.offTopicShare);
+  const meanDistance = nullableFinite(drift.meanDistance);
+  if (duplicateReviewShare === undefined || offTopicShare === undefined || meanDistance === undefined) {
+    return null;
+  }
+
+  const rating = parseRatingDeconvolution(record.ratingDeconvolution);
+  const burst = parseTemporalBurst(record.temporalBurst);
+  const verification = parseVerificationConcentration(record.verificationConcentration);
+  const graph = parseReviewerGraph(record.reviewerGraph);
+  if (rating === undefined || burst === undefined || verification === undefined || graph === undefined) {
+    return null;
+  }
+
+  return {
+    meetsMinimumData: record.meetsMinimumData,
+    ratingDeconvolution: rating,
+    temporalBurst: burst,
+    verificationConcentration: verification,
+    textNearDuplication: {
+      duplicateReviewShare,
+      clusterCount: clusterCount as number,
+      largestClusterShare: largestClusterShare as number,
+    },
+    listingDrift: {
+      offTopicShare,
+      offTopicCount: offTopicCount as number,
+      meanDistance,
+      // nothing reads these back, so they do not cross a file boundary
+      changePoint: null,
+      driftStatistic: driftStatistic as number,
+      embeddedCount: embeddedCount as number,
+    },
+    reviewerGraph: graph,
+  };
+}
+
+// undefined means the field was there and unreadable, which fails the whole vector
+function parseRatingDeconvolution(value: unknown): RatingDeconvolutionResult | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const record = asRecord(value);
+  const injectedShare = finite(record?.injectedShare);
+  const residualError = finite(record?.residualError);
+  return allPresent([injectedShare, residualError])
+    ? { injectedShare: injectedShare as number, residualError: residualError as number }
+    : undefined;
+}
+
+function parseTemporalBurst(value: unknown): TemporalBurstResult | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const record = asRecord(value);
+  const burstFraction = finite(record?.burstFraction);
+  const burstCount = finite(record?.burstCount);
+  const largestBurstShare = finite(record?.largestBurstShare);
+  return allPresent([burstFraction, burstCount, largestBurstShare])
+    ? {
+      bursts: [],
+      burstFraction: burstFraction as number,
+      burstCount: burstCount as number,
+      largestBurstShare: largestBurstShare as number,
+    }
+    : undefined;
+}
+
+function parseVerificationConcentration(
+  value: unknown,
+): VerificationConcentrationResult | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const record = asRecord(value);
+  const lift = nullableFinite(record?.lift);
+  const baseCount = finite(record?.baseCount);
+  if (lift === undefined || baseCount === null) {
+    return undefined;
+  }
+  return { lift, baseCount };
+}
+
+function parseReviewerGraph(value: unknown): ReviewerGraphResult | null | undefined {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const record = asRecord(value);
+  const flaggedReviewShare = nullableFinite(record?.flaggedReviewShare);
+  const flaggedReviewCount = finite(record?.flaggedReviewCount);
+  const flaggedReviewerCount = finite(record?.flaggedReviewerCount);
+  const knownReviewerCount = finite(record?.knownReviewerCount);
+  const identifiedReviewCount = finite(record?.identifiedReviewCount);
+  if (
+    flaggedReviewShare === undefined ||
+    !allPresent([flaggedReviewCount, flaggedReviewerCount, knownReviewerCount, identifiedReviewCount])
+  ) {
+    return undefined;
+  }
+  return {
+    flaggedReviewShare,
+    flaggedReviewCount: flaggedReviewCount as number,
+    flaggedReviewerCount: flaggedReviewerCount as number,
+    knownReviewerCount: knownReviewerCount as number,
+    identifiedReviewCount: identifiedReviewCount as number,
+  };
+}

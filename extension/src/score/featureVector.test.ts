@@ -10,7 +10,10 @@ import {
   MINIMUM_DATED_REVIEW_COUNT,
   MINIMUM_HISTORY_DAYS,
   MINIMUM_REVIEW_COUNT,
+  parseFeatureVector,
+  type FeatureVector,
 } from "./featureVector";
+import { flattenFeatureVector } from "./combine";
 
 function review(overrides: Partial<Review> = {}): Review {
   return { rating: null, text: null, date: null, verified: null, reviewerId: null, ...overrides };
@@ -202,5 +205,79 @@ describe("the reviewer graph signal", () => {
       flaggedReviewerIds: new Set(),
     });
     expect(vector.reviewerGraph?.flaggedReviewShare).toBe(0);
+  });
+});
+
+describe("parseFeatureVector", () => {
+  const VECTOR = {
+    meetsMinimumData: true,
+    ratingDeconvolution: { injectedShare: 0.2, residualError: 0.01 },
+    temporalBurst: { bursts: [{ start: 1, end: 2 }], burstFraction: 0.1, burstCount: 2, largestBurstShare: 0.05 },
+    verificationConcentration: { lift: 1.8, baseCount: 40 },
+    textNearDuplication: { duplicateReviewShare: 0.1, clusterCount: 2, largestClusterShare: 0.05 },
+    listingDrift: {
+      offTopicShare: 0.03,
+      offTopicCount: 4,
+      meanDistance: 0.4,
+      changePoint: { day: 5 },
+      driftStatistic: 1.2,
+      embeddedCount: 90,
+    },
+    reviewerGraph: {
+      flaggedReviewShare: 0.02,
+      flaggedReviewCount: 3,
+      flaggedReviewerCount: 2,
+      knownReviewerCount: 100,
+      identifiedReviewCount: 120,
+    },
+  };
+
+  it("round trips a vector the scorer produced", () => {
+    const parsed = parseFeatureVector(VECTOR);
+    expect(parsed?.ratingDeconvolution).toEqual({ injectedShare: 0.2, residualError: 0.01 });
+    expect(parsed?.verificationConcentration).toEqual({ lift: 1.8, baseCount: 40 });
+    expect(parsed?.reviewerGraph?.flaggedReviewShare).toBe(0.02);
+  });
+
+  it("stays scoreable, which is the only thing a stored vector is for", () => {
+    const parsed = parseFeatureVector(VECTOR);
+    expect(() => flattenFeatureVector(parsed as FeatureVector)).not.toThrow();
+  });
+
+  it("accepts a signal that was genuinely absent", () => {
+    const parsed = parseFeatureVector({ ...VECTOR, temporalBurst: null, reviewerGraph: null });
+    expect(parsed?.temporalBurst).toBeNull();
+    expect(parsed?.reviewerGraph).toBeNull();
+  });
+
+  it("refuses a signal that is present and unreadable rather than downgrading it", () => {
+    expect(parseFeatureVector({ ...VECTOR, ratingDeconvolution: { injectedShare: 0.2 } })).toBeNull();
+    expect(parseFeatureVector({ ...VECTOR, reviewerGraph: { flaggedReviewShare: 0.1 } })).toBeNull();
+  });
+
+  it("refuses a vector whose required leaves are missing", () => {
+    expect(parseFeatureVector({ ...VECTOR, textNearDuplication: null })).toBeNull();
+    expect(parseFeatureVector({ ...VECTOR, listingDrift: {} })).toBeNull();
+  });
+
+  it("refuses a non finite number, which would score as NaN", () => {
+    const broken = { ...VECTOR, listingDrift: { ...VECTOR.listingDrift, driftStatistic: "high" } };
+    expect(parseFeatureVector(broken)).toBeNull();
+  });
+
+  it("refuses anything that is not a vector", () => {
+    expect(parseFeatureVector(null)).toBeNull();
+    expect(parseFeatureVector([])).toBeNull();
+    expect(parseFeatureVector({ meetsMinimumData: "yes" })).toBeNull();
+  });
+
+  it("keeps a nullable leaf as null", () => {
+    const parsed = parseFeatureVector({
+      ...VECTOR,
+      textNearDuplication: { ...VECTOR.textNearDuplication, duplicateReviewShare: null },
+      verificationConcentration: { lift: null, baseCount: 0 },
+    });
+    expect(parsed?.textNearDuplication.duplicateReviewShare).toBeNull();
+    expect(parsed?.verificationConcentration?.lift).toBeNull();
   });
 });

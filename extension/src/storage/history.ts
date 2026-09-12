@@ -2,7 +2,7 @@ import type { FeatureVector } from "../score/featureVector";
 import { summarizeReport, type Band } from "../score/report";
 import { openDatabase, put, requestToPromise, STORE_NAMES, type WriteResult } from "./database";
 
-const HISTORY_CAP = 500;
+export const HISTORY_CAP = 500;
 
 export interface HistoryEntry {
   id: number;
@@ -108,17 +108,24 @@ function csvField(value: string): string {
   return disarmed;
 }
 
-async function evictBeyondCap(db: IDBDatabase): Promise<void> {
+export async function trimHistoryToCap(): Promise<number> {
+  return evictBeyondCap(await openDatabase());
+}
+
+// by timestamp rather than by insertion key, so importing old checks from another
+// browser cannot push out the newer ones already here
+async function evictBeyondCap(db: IDBDatabase): Promise<number> {
   const store = db.transaction(STORE_NAMES.history, "readwrite").objectStore(
     STORE_NAMES.history,
   );
-  const keys = await requestToPromise<number[]>(store.getAllKeys() as IDBRequest<number[]>);
-  if (keys.length <= HISTORY_CAP) {
-    return;
+  const entries = await requestToPromise<HistoryEntry[]>(store.getAll());
+  if (entries.length <= HISTORY_CAP) {
+    return 0;
   }
-  const oldestFirst = [...keys].sort((a, b) => a - b);
-  const toDeleteCount = oldestFirst.length - HISTORY_CAP;
-  for (const key of oldestFirst.slice(0, toDeleteCount)) {
-    await requestToPromise(store.delete(key));
+  const newestFirst = [...entries].sort((a, b) => b.timestamp - a.timestamp || b.id - a.id);
+  const doomed = newestFirst.slice(HISTORY_CAP);
+  for (const entry of doomed) {
+    await requestToPromise(store.delete(entry.id));
   }
+  return doomed.length;
 }

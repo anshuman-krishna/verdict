@@ -8,8 +8,12 @@ import {
   exportHistoryAsJson,
   listChecksOfProduct,
   listHistory,
+  trimHistoryToCap,
 } from "./history";
 import type { FeatureVector } from "../score/featureVector";
+import { openDatabase, STORE_NAMES } from "./database";
+
+const NOW = Date.parse("2026-03-01T12:00:00Z");
 
 const VECTOR: FeatureVector = {
   meetsMinimumData: true,
@@ -55,6 +59,26 @@ describe("history", () => {
     expect(entries).toHaveLength(500);
     expect(entries.some((entry) => entry.title === "entry 0")).toBe(false);
     expect(entries.some((entry) => entry.title === "entry 501")).toBe(true);
+  }, 20000);
+
+  it("evicts by when a check happened, not by when it was written", async () => {
+    await deleteAllHistory();
+    const db = await openDatabase();
+    const store = db.transaction(STORE_NAMES.history, "readwrite").objectStore(
+      STORE_NAMES.history,
+    );
+    // written newest first, so insertion order and timestamp order disagree
+    for (let i = 0; i < 502; i++) {
+      store.put({ timestamp: NOW - i * 1000, title: `entry ${i}`, thumbnailUrl: null, report: {} });
+    }
+    await new Promise((resolve) => {
+      store.transaction.oncomplete = resolve;
+    });
+    await trimHistoryToCap();
+    const entries = await listHistory();
+    expect(entries).toHaveLength(500);
+    expect(entries.some((entry) => entry.title === "entry 0")).toBe(true);
+    expect(entries.some((entry) => entry.title === "entry 501")).toBe(false);
   }, 20000);
 
   it("exports as json round tripping every field", async () => {

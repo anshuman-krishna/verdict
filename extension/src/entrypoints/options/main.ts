@@ -4,6 +4,7 @@ import { clearContributionQueue } from "../../graph/queue";
 import { PRIVACY_POLICY_VERSION, pendingPolicyChanges } from "../../privacy/commitments";
 import { readHoldings } from "../../storage/holdings";
 import { deleteAllHistory, exportHistoryAsCsv, exportHistoryAsJson } from "../../storage/history";
+import { importHistory, importResultLine } from "../../storage/importHistory";
 import { clearReviewsCache } from "../../storage/reviewsCache";
 import {
   getAcknowledgedPolicyVersion,
@@ -24,7 +25,7 @@ function download(filename: string, content: string, mimeType: string): void {
   URL.revokeObjectURL(url);
 }
 
-async function refresh(): Promise<void> {
+async function refresh(importMessage: string | null = null): Promise<void> {
   const app = document.getElementById("app");
   if (app === null) {
     return;
@@ -42,6 +43,7 @@ async function refresh(): Promise<void> {
       graphContributionEnabled,
       holdings,
       pendingPolicyChanges: policyChanges,
+      importMessage,
     },
     {
       onToggleHistory: async (enabled) => {
@@ -70,6 +72,9 @@ async function refresh(): Promise<void> {
       onClearQueue: async () => {
         await clearContributionQueue();
         await refresh();
+      },
+      onImport: async (file) => {
+        await refresh(importResultLine(await importHistory(await file.text())));
       },
       onAcknowledgePolicy: async () => {
         await setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION);
