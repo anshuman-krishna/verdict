@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,11 +12,19 @@ from verdict_service.api.health import create_health_router
 from verdict_service.api.metrics import create_metrics_router
 from verdict_service.api.reputation import create_reputation_router
 from verdict_service.api.store import FlaggedHashStore, InMemoryFlaggedHashStore
-from verdict_service.graph.backup import DEFAULT_RETAINED_BACKUPS, run_backup
+from verdict_service.graph.backup import (
+    BACKUP_INTERVAL_SECONDS,
+    DEFAULT_RETAINED_BACKUPS,
+    backup_is_due,
+    default_backup_dir,
+    newest_backup_time,
+    run_backup,
+)
 from verdict_service.graph.contribution_store import (
     ContributionEdgeStore,
     InMemoryContributionEdgeStore,
 )
+from verdict_service.graph.database_lock import DatabaseLock
 from verdict_service.graph.recompute import RETENTION_SECONDS, recompute_flagged_hashes
 from verdict_service.graph.scheduler import run_periodically
 from verdict_service.graph.sqlite_store import (
@@ -32,8 +41,9 @@ configure_logging()
 
 DATABASE_PATH = os.environ.get("VERDICT_DATABASE_PATH")
 STORE_KIND = "sqlite" if DATABASE_PATH else "memory"
-BACKUP_INTERVAL_SECONDS = 24 * 60 * 60
-BACKUP_DIR = Path(DATABASE_PATH).parent / "backups" if DATABASE_PATH else None
+BACKUP_CHECK_INTERVAL_SECONDS = 60 * 60
+BACKUP_MAX_AGE_SECONDS = 2 * BACKUP_INTERVAL_SECONDS
+BACKUP_DIR = default_backup_dir(Path(DATABASE_PATH)) if DATABASE_PATH else None
 
 _connection: Database | None = None
 
@@ -66,10 +76,13 @@ async def _recompute_job() -> None:
     await asyncio.to_thread(_recompute)
 
 
-def _backup() -> None:
+def _backup(now: Callable[[], float] = time.time) -> None:
     assert _connection is not None and BACKUP_DIR is not None
+    # checked hourly, so a crash looping container cannot rotate out good backups
+    if not backup_is_due(BACKUP_DIR, now(), BACKUP_INTERVAL_SECONDS):
+        return
     try:
-        path = run_backup(_connection, BACKUP_DIR, retained=DEFAULT_RETAINED_BACKUPS)
+        path = run_backup(_connection, BACKUP_DIR, now=now, retained=DEFAULT_RETAINED_BACKUPS)
     except Exception as error:
         metrics.record_backup_failure()
         health_tracker.record_backup_failure(error)
@@ -82,21 +95,45 @@ async def _backup_job() -> None:
     await asyncio.to_thread(_backup)
 
 
+def _newest_backup_at() -> float | None:
+    return newest_backup_time(BACKUP_DIR) if BACKUP_DIR is not None else None
+
+
+def _gauges() -> dict[str, float]:
+    newest = _newest_backup_at()
+    return {} if newest is None else {"verdict_backup_newest_timestamp_seconds": newest}
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    lock = DatabaseLock(Path(DATABASE_PATH)) if DATABASE_PATH else None
+    if lock is not None:
+        lock.acquire()
     tasks = [asyncio.create_task(run_periodically(RECOMPUTE_INTERVAL_SECONDS, _recompute_job))]
     if _connection is not None:
-        tasks.append(asyncio.create_task(run_periodically(BACKUP_INTERVAL_SECONDS, _backup_job)))
+        tasks.append(
+            asyncio.create_task(run_periodically(BACKUP_CHECK_INTERVAL_SECONDS, _backup_job))
+        )
     try:
         yield
     finally:
         for task in tasks:
             task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        if lock is not None:
+            lock.release()
 
 
 app = FastAPI(title="verdict-service", lifespan=lifespan)
 
 app.include_router(create_reputation_router(flagged_hash_store, metrics))
 app.include_router(create_contribution_router(contribution_edge_store, metrics=metrics))
-app.include_router(create_health_router(health_tracker, STORE_KIND))
-app.include_router(create_metrics_router(metrics))
+app.include_router(
+    create_health_router(
+        health_tracker,
+        STORE_KIND,
+        newest_backup_at=_newest_backup_at if BACKUP_DIR is not None else None,
+        max_backup_age_seconds=BACKUP_MAX_AGE_SECONDS,
+    )
+)
+app.include_router(create_metrics_router(metrics, gauges=_gauges))

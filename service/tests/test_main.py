@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -112,6 +113,7 @@ class TestStoreSelection:
 
         import verdict_service.main as main
 
+        monkeypatch.delenv("VERDICT_BACKUP_DIR", raising=False)
         if path is None:
             monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
         else:
@@ -155,57 +157,90 @@ class TestStoreSelection:
             self._load(monkeypatch, None)
 
 
+@pytest.fixture
+def file_backed_main(monkeypatch, tmp_path):
+    import importlib
+
+    import verdict_service.main as main
+
+    monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
+    monkeypatch.delenv("VERDICT_BACKUP_DIR", raising=False)
+    try:
+        yield importlib.reload(main)
+    finally:
+        monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+        importlib.reload(main)
+
+
 class TestBackupJob:
-    def test_running_it_writes_a_backup_and_counts_it(self, monkeypatch, tmp_path):
-        import importlib
+    def test_running_it_writes_a_backup_and_counts_it(self, file_backed_main):
+        main = file_backed_main
+        backups_before = main.metrics.backups_total
+        asyncio.run(main._backup_job())
+        assert main.metrics.backups_total == backups_before + 1
+        assert list(main.BACKUP_DIR.glob("verdict-*.db"))
+        assert main.health_tracker.last_backup.error is None
+        assert main.health_tracker.last_backup.path is not None
 
-        import verdict_service.main as main
+    def test_a_restarting_process_does_not_rotate_out_good_backups(self, file_backed_main):
+        main = file_backed_main
+        for minute in range(20):
+            main._backup(now=lambda minute=minute: 1_000_000.0 + minute * 60)
+        assert len(list(main.BACKUP_DIR.glob("verdict-*.db"))) == 1
 
-        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
-        main = importlib.reload(main)
-        try:
-            backups_before = main.metrics.backups_total
+    def test_a_new_backup_is_taken_once_a_day_has_passed(self, file_backed_main):
+        main = file_backed_main
+        main._backup(now=lambda: 1_000_000.0)
+        main._backup(now=lambda: 1_000_000.0 + main.BACKUP_INTERVAL_SECONDS)
+        assert len(list(main.BACKUP_DIR.glob("verdict-*.db"))) == 2
+
+    def test_a_failed_backup_is_visible_on_the_health_tracker(self, file_backed_main, monkeypatch):
+        main = file_backed_main
+
+        def fail(*_args, **_kwargs):
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(main, "run_backup", fail)
+        failures_before = main.metrics.backup_failures_total
+        with pytest.raises(RuntimeError):
+            main._backup()
+        assert main.metrics.backup_failures_total == failures_before + 1
+        assert main.health_tracker.last_backup.error == "disk full"
+
+    def test_a_file_backed_lifespan_starts_and_stops_without_error(self, file_backed_main):
+        with TestClient(file_backed_main.app):
+            pass
+
+    def test_the_lifespan_holds_the_database_lock_until_shutdown(self, file_backed_main):
+        from verdict_service.graph.database_lock import database_in_use
+
+        main = file_backed_main
+        with TestClient(main.app):
+            assert database_in_use(Path(main.DATABASE_PATH))
+        assert not database_in_use(Path(main.DATABASE_PATH))
+
+    def test_health_and_metrics_report_backups_already_on_disk(self, file_backed_main):
+        main = file_backed_main
+        with TestClient(main.app) as client:
             asyncio.run(main._backup_job())
-            assert main.metrics.backups_total == backups_before + 1
-            assert list(main.BACKUP_DIR.glob("verdict-*.db"))
-            assert main.health_tracker.last_backup.error is None
-            assert main.health_tracker.last_backup.path is not None
-        finally:
-            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
-            importlib.reload(main)
+            health = client.get("/v1/health").json()
+            metrics_text = client.get("/v1/metrics").text
+        assert health["backup"]["newestAt"] is not None
+        assert health["backup"]["stale"] is False
+        assert "verdict_backup_newest_timestamp_seconds" in metrics_text
 
-    def test_a_failed_backup_is_visible_on_the_health_tracker(self, monkeypatch, tmp_path):
+    def test_backups_can_be_directed_to_a_separate_volume(self, monkeypatch, tmp_path):
         import importlib
 
         import verdict_service.main as main
 
-        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
-        main = importlib.reload(main)
+        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "data" / "verdict.db"))
+        monkeypatch.setenv("VERDICT_BACKUP_DIR", str(tmp_path / "offsite"))
+        (tmp_path / "data").mkdir()
         try:
-            monkeypatch.setattr(
-                main,
-                "run_backup",
-                lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("disk full")),
-            )
-            failures_before = main.metrics.backup_failures_total
-            with pytest.raises(RuntimeError):
-                main._backup()
-            assert main.metrics.backup_failures_total == failures_before + 1
-            assert main.health_tracker.last_backup.error == "disk full"
+            main = importlib.reload(main)
+            assert main.BACKUP_DIR == tmp_path / "offsite"
         finally:
             monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
-            importlib.reload(main)
-
-    def test_a_file_backed_lifespan_starts_and_stops_without_error(self, monkeypatch, tmp_path):
-        import importlib
-
-        import verdict_service.main as main
-
-        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
-        main = importlib.reload(main)
-        try:
-            with TestClient(main.app):
-                pass
-        finally:
-            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+            monkeypatch.delenv("VERDICT_BACKUP_DIR", raising=False)
             importlib.reload(main)

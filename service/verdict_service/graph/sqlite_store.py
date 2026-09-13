@@ -35,9 +35,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS contribution_edges_claim
 
 
 class Database:
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: sqlite3.Connection, path: Path | None = None) -> None:
         self._connection = connection
         self._lock = threading.Lock()
+        self.path = path
 
     def read(self, sql: str, params: tuple = ()) -> list[tuple]:
         with self._lock:
@@ -52,17 +53,25 @@ class Database:
             self._connection.executemany(sql, rows)
 
     def backup_to(self, destination: str | Path) -> None:
-        """Writes a consistent point-in-time copy using sqlite's own backup API.
+        target = sqlite3.connect(str(destination))
+        try:
+            if self.path is None:
+                with self._lock:
+                    self._connection.backup(target)
+            else:
+                copy_database(self.path, target)
+            target.execute("PRAGMA journal_mode=DELETE")
+        finally:
+            target.close()
 
-        A plain file copy of a WAL-mode database can catch a write
-        mid-page; this API only ever hands the destination committed data.
-        """
-        with self._lock:
-            target = sqlite3.connect(str(destination))
-            try:
-                self._connection.backup(target)
-            finally:
-                target.close()
+
+def copy_database(source_path: Path, target: sqlite3.Connection) -> None:
+    # one step, so concurrent writers never restart it
+    source = sqlite3.connect(str(source_path))
+    try:
+        source.backup(target, pages=-1)
+    finally:
+        source.close()
 
 
 # a file written before the claim index existed may hold repeats, and the index
@@ -76,6 +85,7 @@ DELETE FROM contribution_edges WHERE id NOT IN (
 
 
 def connect(path: str | Path) -> Database:
+    file_path = None if str(path) in ("", ":memory:") else Path(path)
     connection = sqlite3.connect(str(path), check_same_thread=False)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
@@ -83,7 +93,7 @@ def connect(path: str | Path) -> Database:
     connection.execute(_COLLAPSE_REPEATS)
     connection.executescript(_CLAIM_INDEX)
     connection.commit()
-    return Database(connection)
+    return Database(connection, file_path)
 
 
 class SqliteContributionEdgeStore:

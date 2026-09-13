@@ -85,10 +85,42 @@ checks on every run: `docker compose -f service/deploy/docker-compose.yml up -d`
 container publishes no port of its own; Caddy is the only path in, and only to the two
 endpoints the Caddyfile allows.
 
-Once a day the service writes a timestamped snapshot of its database into a `backups/`
-folder next to it in the same `verdict-data` volume, keeping the most recent 7 and pruning
-older ones automatically — flagged hashes are never removed by the graph itself
-(`recompute.py`), so this is the only recovery path if the volume is ever lost or corrupted.
+The service checks hourly and takes a backup once a day into its own `verdict-backups`
+volume, separate from `verdict-data`, so losing the database volume does not also lose its
+backups. Each backup is written to a temporary file, integrity checked, and only then renamed
+into place, so a crash mid backup never leaves a file that looks like a good one. The newest 7
+are kept. A restarting container does not take a fresh backup on every boot, so a crash loop
+cannot rotate the good ones out. Flagged hashes are never removed by the graph itself
+(`recompute.py`), so for a lost or corrupted database these backups are the recovery path.
+Copy them off the host as well if the host itself is at risk.
+
+`/v1/health` reports `degraded` when the last backup failed or the newest one is more than two
+days old, and `/v1/metrics` exposes `verdict_backup_newest_timestamp_seconds` for alerting.
+Neither endpoint is reachable through Caddy.
+
+```
+cd service/deploy
+docker compose exec verdict-service python -m verdict_service.graph.backup_cli list /data/verdict.db
+docker compose exec verdict-service python -m verdict_service.graph.backup_cli create /data/verdict.db
+docker compose exec verdict-service python -m verdict_service.graph.backup_cli verify /data/verdict.db
+```
+
+To restore, stop the service first. The restore refuses to run while the service holds the
+database, verifies the backup and the copied file, and keeps the replaced database and its
+WAL beside it as `*.pre-restore-<time>` rather than deleting them.
+
+```
+docker compose stop verdict-service
+docker compose run --rm --no-deps verdict-service \
+  python -m verdict_service.graph.backup_cli restore /data/verdict.db --force
+docker compose start verdict-service
+```
+
+Locally, `just backups list|verify|create|restore <database>` runs the same tool.
+
+The container runs as an unprivileged user (uid 10001) on a read only root filesystem. A
+volume created by an earlier image that ran as root needs its ownership changed once:
+`docker compose run --rm --user root --no-deps verdict-service chown -R 10001:10001 /data /backups`.
 
 ## Build it yourself
 

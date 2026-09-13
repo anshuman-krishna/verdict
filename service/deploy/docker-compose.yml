@@ -1,9 +1,4 @@
-# brings up the two-container deployment PRIVACY.md section 4 and this
-# directory's Caddyfile already describe: caddy terminates tls and enforces
-# the guarantees, verdict-service never sees the internet directly. the
-# Caddyfile's reverse_proxy target, verdict-service:8000, is this file's
-# service name and Dockerfile's exposed port, resolved by compose's own
-# dns rather than anything hardcoded here.
+# caddy is the only path in, see Caddyfile
 services:
   verdict-service:
     build:
@@ -11,18 +6,37 @@ services:
     restart: unless-stopped
     environment:
       VERDICT_DATABASE_PATH: /data/verdict.db
+      VERDICT_BACKUP_DIR: /backups
     volumes:
       - verdict-data:/data
-    # no ports published: caddy is the only path in, matching the Caddyfile
-    # allowlist rather than duplicating it here.
+      # separate volume, survives losing the database volume
+      - verdict-backups:/backups
     expose:
       - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/health', timeout=4)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - verdict-service
+      verdict-service:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -33,5 +47,6 @@ services:
 
 volumes:
   verdict-data:
+  verdict-backups:
   caddy-data:
   caddy-config:

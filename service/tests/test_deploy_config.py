@@ -82,3 +82,42 @@ def test_problems_name_each_broken_guarantee():
     assert any("admin api" in problem for problem in problems)
     assert any("X-Forwarded-For" in problem for problem in problems)
     assert any("Referer" in problem for problem in problems)
+
+
+def test_a_metrics_endpoint_added_to_the_allowlist_is_a_problem(tmp_path):
+    body = CADDYFILE.read_text(encoding="utf-8").replace(
+        "@allowed path /v1/reputation/lookup", "@allowed path /v1/metrics /v1/reputation/lookup"
+    )
+    problems = proxy_problems(read_proxy_guarantees(_write(tmp_path, body)))
+    assert problems == ["/v1/metrics is reachable from the internet but is not a public endpoint"]
+
+
+def test_a_wildcard_allowlist_is_a_problem(tmp_path):
+    body = CADDYFILE.read_text(encoding="utf-8").replace(
+        "@allowed path /v1/reputation/lookup /v1/graph/contribute", "@allowed path /v1/*"
+    )
+    assert any(
+        "/v1/*" in problem
+        for problem in proxy_problems(read_proxy_guarantees(_write(tmp_path, body)))
+    )
+
+
+def test_a_second_upstream_outside_the_allowlist_is_a_problem(tmp_path):
+    body = CADDYFILE.read_text(encoding="utf-8").replace(
+        "\thandle {\n\t\trespond 404",
+        "\thandle /v1/health {\n\t\treverse_proxy verdict-service:8000\n\t}\n\n"
+        "\thandle {\n\t\trespond 404",
+    )
+    assert body != CADDYFILE.read_text(encoding="utf-8")
+    guarantees = read_proxy_guarantees(_write(tmp_path, body))
+    assert guarantees.unguarded_upstreams == 1
+    assert any("outside handle @allowed" in problem for problem in proxy_problems(guarantees))
+
+
+def test_an_upstream_at_the_site_level_is_a_problem(tmp_path):
+    path = _write(tmp_path, "api.example {\n\treverse_proxy app:8000\n}\n")
+    assert read_proxy_guarantees(path).unguarded_upstreams == 1
+
+
+def test_the_published_configuration_has_no_unguarded_upstream():
+    assert read_proxy_guarantees().unguarded_upstreams == 0

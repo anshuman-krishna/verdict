@@ -54,3 +54,22 @@ class TestMetricsRegistry:
         assert "verdict_backups_total 1" in rendered
         assert "verdict_backup_failures_total 1" in rendered
         assert rendered.endswith("\n")
+
+
+def test_concurrent_increments_are_never_lost():
+    import threading
+
+    metrics = MetricsRegistry()
+
+    def hammer():
+        for _ in range(5000):
+            metrics.record_lookup()
+            metrics.record_contribution(2)
+
+    threads = [threading.Thread(target=hammer) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert metrics.reputation_lookups_total == 40000
+    assert metrics.contribution_edges_total == 80000

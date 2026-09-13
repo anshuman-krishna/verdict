@@ -205,3 +205,28 @@ def test_backup_to_writes_a_file_that_opens_on_its_own(tmp_path):
     database.backup_to(destination)
 
     assert SqliteFlaggedHashStore(connect(destination)).matches("abcd") == ["abcd1111"]
+
+
+def test_backup_to_does_not_stall_requests_on_the_store_lock(tmp_path):
+    import threading
+
+    database = connect(tmp_path / "verdict.db")
+    SqliteFlaggedHashStore(database).add("abcd1111")
+    finished = threading.Event()
+
+    def take_backup():
+        database.backup_to(tmp_path / "copy.db")
+        finished.set()
+
+    with database._lock:
+        thread = threading.Thread(target=take_backup)
+        thread.start()
+        assert finished.wait(timeout=5)
+    thread.join()
+
+
+def test_an_in_memory_store_can_still_be_backed_up(tmp_path):
+    database = connect(":memory:")
+    SqliteFlaggedHashStore(database).add("abcd1111")
+    database.backup_to(tmp_path / "copy.db")
+    assert SqliteFlaggedHashStore(connect(tmp_path / "copy.db")).matches("abcd") == ["abcd1111"]

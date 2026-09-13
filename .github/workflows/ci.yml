@@ -136,19 +136,37 @@ jobs:
       - name: check the built bundle against what gets extensions removed
         run: just preflight
 
-  # service/tests/test_deploy_config.py only parses the Caddyfile text; a
-  # docker daemon is what actually resolves docker-compose.yml and builds
-  # the image the README's "Deploying the service" section documents, so
-  # this is the only place a broken Dockerfile or a compose file that only
-  # looks right would be caught before it reaches production.
+  # only a docker daemon proves the image boots
   deploy-config:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service/deploy
     steps:
       - uses: actions/checkout@v4
       - name: validate docker-compose.yml against the compose spec
-        run: docker compose -f service/deploy/docker-compose.yml config --quiet
+        run: docker compose config --quiet
+      - name: the service publishes no host port, caddy is the only way in
+        run: |
+          ports=$(docker compose config --format json | jq '.services["verdict-service"].ports // [] | length')
+          test "$ports" -eq 0
       - name: build the service image the compose file references
-        run: docker compose -f service/deploy/docker-compose.yml build
+        run: docker compose build verdict-service
+      - name: boot the service and wait for its healthcheck
+        run: docker compose up --detach --wait --wait-timeout 120 verdict-service
+      - name: health answers and the startup backup exists and verifies
+        run: |
+          docker compose exec -T verdict-service python -c "import json, urllib.request; body = json.load(urllib.request.urlopen('http://127.0.0.1:8000/v1/health')); print(body); assert body['store'] == 'sqlite'"
+          docker compose exec -T verdict-service python -m verdict_service.graph.backup_cli list /data/verdict.db
+          docker compose exec -T verdict-service python -m verdict_service.graph.backup_cli verify /data/verdict.db
+      - name: the service runs as an unprivileged user
+        run: test "$(docker compose exec -T verdict-service id -u)" != "0"
+      - name: show service logs on failure
+        if: failure()
+        run: docker compose logs verdict-service
+      - name: tear down
+        if: always()
+        run: docker compose down --volumes
 
   no-network:
     runs-on: ubuntu-latest

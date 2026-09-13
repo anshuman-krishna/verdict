@@ -5,6 +5,7 @@ from pathlib import Path
 CADDYFILE = Path(__file__).resolve().parents[1] / "deploy" / "Caddyfile"
 
 CLIENT_ADDRESS_HEADERS = ("X-Forwarded-For", "X-Forwarded-Host", "X-Real-IP")
+PUBLIC_ENDPOINTS = frozenset({"/v1/reputation/lookup", "/v1/graph/contribute"})
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class ProxyGuarantees:
     stripped_request_headers: frozenset[str]
     stripped_upstream_headers: frozenset[str]
     allowed_paths: frozenset[str]
+    unguarded_upstreams: int = 0
 
 
 class DeployConfigError(ValueError):
@@ -22,6 +24,35 @@ class DeployConfigError(ValueError):
 
 def _strip_comments(text: str) -> str:
     return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
+def _enclosing_block_headers(body: str, index: int) -> list[str]:
+    headers: list[str] = []
+    depth = 0
+    for position in range(index - 1, -1, -1):
+        character = body[position]
+        if character == "}":
+            depth += 1
+        elif character == "{":
+            if depth:
+                depth -= 1
+                continue
+            line_start = body.rfind("\n", 0, position) + 1
+            headers.append(body[line_start:position].strip())
+    return headers
+
+
+def _unguarded_upstreams(body: str) -> int:
+    unguarded = 0
+    for match in re.finditer(r"\breverse_proxy\b", body):
+        handles = [
+            header
+            for header in _enclosing_block_headers(body, match.start())
+            if header.split()[:1] in (["handle"], ["route"], ["handle_path"])
+        ]
+        if not handles or handles[0] != "handle @allowed":
+            unguarded += 1
+    return unguarded
 
 
 def read_proxy_guarantees(path: Path = CADDYFILE) -> ProxyGuarantees:
@@ -50,6 +81,7 @@ def read_proxy_guarantees(path: Path = CADDYFILE) -> ProxyGuarantees:
         stripped_request_headers=frozenset(stripped_request),
         stripped_upstream_headers=frozenset(stripped_upstream),
         allowed_paths=frozenset(allowed),
+        unguarded_upstreams=_unguarded_upstreams(body),
     )
 
 
@@ -67,4 +99,11 @@ def proxy_problems(guarantees: ProxyGuarantees) -> list[str]:
     for header in ("Referer", "Cookie"):
         if header not in guarantees.stripped_request_headers:
             problems.append(f"{header} is not stripped, and PRIVACY.md section 4 says it is")
+    for path in sorted(guarantees.allowed_paths - PUBLIC_ENDPOINTS):
+        problems.append(f"{path} is reachable from the internet but is not a public endpoint")
+    if guarantees.unguarded_upstreams:
+        problems.append(
+            f"{guarantees.unguarded_upstreams} reverse_proxy directive(s) sit outside "
+            "handle @allowed, so any path reaches the application"
+        )
     return problems

@@ -98,12 +98,14 @@ canary targets *args: canary-extractor
     set -euo pipefail
     uv --directory research run python -m verdict_research.canary.cli "{{targets}}" {{args}}
 
-#   just restore-backup /data/verdict.db --force
-# restore the reviewer graph database from its newest backup
-restore-backup database *args:
+#   just backups list data/verdict.db
+#   just backups restore data/verdict.db --force
+# list, verify, create, or restore graph backups
+[positional-arguments]
+backups *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    uv --directory service run python -m verdict_service.graph.restore_cli "{{database}}" {{args}}
+    uv run --project service python -m verdict_service.graph.backup_cli "$@"
 
 # stale output fails `just check`
 # regenerate the band scale the website reads
