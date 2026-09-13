@@ -69,11 +69,13 @@ async def _recompute_job() -> None:
 def _backup() -> None:
     assert _connection is not None and BACKUP_DIR is not None
     try:
-        run_backup(_connection, BACKUP_DIR, retained=DEFAULT_RETAINED_BACKUPS)
-    except Exception:
+        path = run_backup(_connection, BACKUP_DIR, retained=DEFAULT_RETAINED_BACKUPS)
+    except Exception as error:
         metrics.record_backup_failure()
+        health_tracker.record_backup_failure(error)
         raise
     metrics.record_backup()
+    health_tracker.record_backup_success(str(path))
 
 
 async def _backup_job() -> None:

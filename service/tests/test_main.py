@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -167,6 +168,30 @@ class TestBackupJob:
             asyncio.run(main._backup_job())
             assert main.metrics.backups_total == backups_before + 1
             assert list(main.BACKUP_DIR.glob("verdict-*.db"))
+            assert main.health_tracker.last_backup.error is None
+            assert main.health_tracker.last_backup.path is not None
+        finally:
+            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+            importlib.reload(main)
+
+    def test_a_failed_backup_is_visible_on_the_health_tracker(self, monkeypatch, tmp_path):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
+        main = importlib.reload(main)
+        try:
+            monkeypatch.setattr(
+                main,
+                "run_backup",
+                lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("disk full")),
+            )
+            failures_before = main.metrics.backup_failures_total
+            with pytest.raises(RuntimeError):
+                main._backup()
+            assert main.metrics.backup_failures_total == failures_before + 1
+            assert main.health_tracker.last_backup.error == "disk full"
         finally:
             monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
             importlib.reload(main)
