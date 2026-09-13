@@ -140,3 +140,47 @@ class TestStoreSelection:
             assert main.flagged_hash_store.matches("abcd") == ["abcd1111"]
         finally:
             self._load(monkeypatch, None)
+
+    def test_a_memory_store_has_nowhere_configured_to_back_up(self, monkeypatch):
+        main = self._load(monkeypatch, None)
+        assert main.BACKUP_DIR is None
+
+    def test_a_file_store_backs_up_beside_the_database(self, monkeypatch, tmp_path):
+        database = tmp_path / "verdict.db"
+        main = self._load(monkeypatch, database)
+        try:
+            assert main.BACKUP_DIR == tmp_path / "backups"
+        finally:
+            self._load(monkeypatch, None)
+
+
+class TestBackupJob:
+    def test_running_it_writes_a_backup_and_counts_it(self, monkeypatch, tmp_path):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
+        main = importlib.reload(main)
+        try:
+            backups_before = main.metrics.backups_total
+            asyncio.run(main._backup_job())
+            assert main.metrics.backups_total == backups_before + 1
+            assert list(main.BACKUP_DIR.glob("verdict-*.db"))
+        finally:
+            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+            importlib.reload(main)
+
+    def test_a_file_backed_lifespan_starts_and_stops_without_error(self, monkeypatch, tmp_path):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.setenv("VERDICT_DATABASE_PATH", str(tmp_path / "verdict.db"))
+        main = importlib.reload(main)
+        try:
+            with TestClient(main.app):
+                pass
+        finally:
+            monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+            importlib.reload(main)

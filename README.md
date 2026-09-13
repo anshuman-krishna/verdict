@@ -85,6 +85,11 @@ checks on every run: `docker compose -f service/deploy/docker-compose.yml up -d`
 container publishes no port of its own; Caddy is the only path in, and only to the two
 endpoints the Caddyfile allows.
 
+Once a day the service writes a timestamped snapshot of its database into a `backups/`
+folder next to it in the same `verdict-data` volume, keeping the most recent 7 and pruning
+older ones automatically — flagged hashes are never removed by the graph itself
+(`recompute.py`), so this is the only recovery path if the volume is ever lost or corrupted.
+
 ## Build it yourself
 
 ```

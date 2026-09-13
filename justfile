@@ -98,6 +98,13 @@ canary targets *args: canary-extractor
     set -euo pipefail
     uv --directory research run python -m verdict_research.canary.cli "{{targets}}" {{args}}
 
+#   just restore-backup /data/verdict.db --force
+# restore the reviewer graph database from its newest backup
+restore-backup database *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv --directory service run python -m verdict_service.graph.restore_cli "{{database}}" {{args}}
+
 # stale output fails `just check`
 # regenerate the band scale the website reads
 export-vocabulary:

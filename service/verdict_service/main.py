@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -10,6 +11,7 @@ from verdict_service.api.health import create_health_router
 from verdict_service.api.metrics import create_metrics_router
 from verdict_service.api.reputation import create_reputation_router
 from verdict_service.api.store import FlaggedHashStore, InMemoryFlaggedHashStore
+from verdict_service.graph.backup import DEFAULT_RETAINED_BACKUPS, run_backup
 from verdict_service.graph.contribution_store import (
     ContributionEdgeStore,
     InMemoryContributionEdgeStore,
@@ -17,6 +19,7 @@ from verdict_service.graph.contribution_store import (
 from verdict_service.graph.recompute import RETENTION_SECONDS, recompute_flagged_hashes
 from verdict_service.graph.scheduler import run_periodically
 from verdict_service.graph.sqlite_store import (
+    Database,
     SqliteContributionEdgeStore,
     SqliteFlaggedHashStore,
     connect,
@@ -29,6 +32,10 @@ configure_logging()
 
 DATABASE_PATH = os.environ.get("VERDICT_DATABASE_PATH")
 STORE_KIND = "sqlite" if DATABASE_PATH else "memory"
+BACKUP_INTERVAL_SECONDS = 24 * 60 * 60
+BACKUP_DIR = Path(DATABASE_PATH).parent / "backups" if DATABASE_PATH else None
+
+_connection: Database | None = None
 
 if DATABASE_PATH:
     _connection = connect(DATABASE_PATH)
@@ -59,13 +66,30 @@ async def _recompute_job() -> None:
     await asyncio.to_thread(_recompute)
 
 
+def _backup() -> None:
+    assert _connection is not None and BACKUP_DIR is not None
+    try:
+        run_backup(_connection, BACKUP_DIR, retained=DEFAULT_RETAINED_BACKUPS)
+    except Exception:
+        metrics.record_backup_failure()
+        raise
+    metrics.record_backup()
+
+
+async def _backup_job() -> None:
+    await asyncio.to_thread(_backup)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    task = asyncio.create_task(run_periodically(RECOMPUTE_INTERVAL_SECONDS, _recompute_job))
+    tasks = [asyncio.create_task(run_periodically(RECOMPUTE_INTERVAL_SECONDS, _recompute_job))]
+    if _connection is not None:
+        tasks.append(asyncio.create_task(run_periodically(BACKUP_INTERVAL_SECONDS, _backup_job)))
     try:
         yield
     finally:
-        task.cancel()
+        for task in tasks:
+            task.cancel()
 
 
 app = FastAPI(title="verdict-service", lifespan=lifespan)

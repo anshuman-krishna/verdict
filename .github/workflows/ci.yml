@@ -136,6 +136,20 @@ jobs:
       - name: check the built bundle against what gets extensions removed
         run: just preflight
 
+  # service/tests/test_deploy_config.py only parses the Caddyfile text; a
+  # docker daemon is what actually resolves docker-compose.yml and builds
+  # the image the README's "Deploying the service" section documents, so
+  # this is the only place a broken Dockerfile or a compose file that only
+  # looks right would be caught before it reaches production.
+  deploy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate docker-compose.yml against the compose spec
+        run: docker compose -f service/deploy/docker-compose.yml config --quiet
+      - name: build the service image the compose file references
+        run: docker compose -f service/deploy/docker-compose.yml build
+
   no-network:
     runs-on: ubuntu-latest
     steps:

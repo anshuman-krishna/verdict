@@ -51,6 +51,19 @@ class Database:
         with self._lock, self._connection:
             self._connection.executemany(sql, rows)
 
+    def backup_to(self, destination: str | Path) -> None:
+        """Writes a consistent point-in-time copy using sqlite's own backup API.
+
+        A plain file copy of a WAL-mode database can catch a write
+        mid-page; this API only ever hands the destination committed data.
+        """
+        with self._lock:
+            target = sqlite3.connect(str(destination))
+            try:
+                self._connection.backup(target)
+            finally:
+                target.close()
+
 
 # a file written before the claim index existed may hold repeats, and the index
 # cannot be created over them

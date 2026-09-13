@@ -195,3 +195,13 @@ def test_a_corrupt_file_fails_loudly_rather_than_starting_empty(tmp_path):
     path.write_bytes(b"this is not a database")
     with pytest.raises(sqlite3.DatabaseError):
         connect(path)
+
+
+def test_backup_to_writes_a_file_that_opens_on_its_own(tmp_path):
+    database = connect(tmp_path / "verdict.db")
+    SqliteFlaggedHashStore(database).add("abcd1111")
+    destination = tmp_path / "copy.db"
+
+    database.backup_to(destination)
+
+    assert SqliteFlaggedHashStore(connect(destination)).matches("abcd") == ["abcd1111"]
