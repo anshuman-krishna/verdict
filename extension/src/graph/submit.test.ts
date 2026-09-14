@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import type { ContributionEdge } from "./edge";
 import { deleteContributions, enqueueContributionEdges, listDueContributions } from "./queue";
-import { flushDueContributions } from "./submit";
+import { chunkForService, flushDueContributions } from "./submit";
 
 const FAR_FUTURE = 10_000_000_000_000;
 
@@ -142,8 +142,19 @@ describe("a service that never answers", () => {
         now: () => FAR_FUTURE,
       });
 
-      expect(result).toEqual({ submitted: 0 });
+      expect(result).toEqual({ submitted: 0, dropped: 1 });
       await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
+    });
+
+    it.each([408, 425, 429])("keeps the queue on %i, which means try later", async (status) => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status });
+
+      const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
+
+      expect(result).toEqual({ submitted: 0 });
+      await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1);
     });
 
     it("keeps the queue when the service is merely having a bad day", async () => {
@@ -160,5 +171,85 @@ describe("a service that never answers", () => {
 
       await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1);
     });
+  });
+});
+
+function queued(count: number, overrides: Partial<ContributionEdge> = {}) {
+  return Array.from({ length: count }, (_, id) => ({ id, edge: edge(overrides) }));
+}
+
+describe("chunkForService", () => {
+  it("splits at the edge count the service accepts", () => {
+    const { chunks, unsendable } = chunkForService(queued(1201), 500, 1 << 30);
+    expect(chunks.map((chunk) => chunk.length)).toEqual([500, 500, 201]);
+    expect(unsendable).toEqual([]);
+  });
+
+  it("splits before a body would pass the byte cap, and every body fits", () => {
+    const items = queued(50);
+    const one = JSON.stringify({ edges: [items[0]!.edge] }).length;
+    const maxBytes = one * 7;
+    const { chunks } = chunkForService(items, 500, maxBytes);
+
+    expect(chunks.flat()).toHaveLength(50);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      const body = JSON.stringify({ edges: chunk.map((item) => item.edge) });
+      expect(new TextEncoder().encode(body).length).toBeLessThanOrEqual(maxBytes);
+    }
+  });
+
+  it("sets aside an edge too large to send alone instead of looping on it", () => {
+    const big = { id: 99, edge: edge({ minhashSignature: ["9".repeat(1000)] }) };
+    const { chunks, unsendable } = chunkForService([...queued(2), big], 500, 400);
+    expect(unsendable).toEqual([big]);
+    expect(chunks.flat()).toHaveLength(2);
+  });
+
+  it("keeps queue order across chunks", () => {
+    const { chunks } = chunkForService(queued(7), 3, 1 << 30);
+    expect(chunks.flat().map((item) => item.id)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+});
+
+describe("a queue larger than one request", () => {
+  it("sends it all, in requests the service accepts", async () => {
+    await clearQueue();
+    await enqueueContributionEdges(Array.from({ length: 1100 }, () => edge()), () => 1_000_000, () => 0);
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
+
+    expect(result).toEqual({ submitted: 1100 });
+    const sizes = fetchImpl.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string).edges.length);
+    expect(sizes).toEqual([500, 500, 100]);
+    await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
+  });
+
+  it("drops only the refused chunk and still sends the rest", async () => {
+    await clearQueue();
+    await enqueueContributionEdges(Array.from({ length: 1000 }, () => edge()), () => 1_000_000, () => 0);
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: false, status: 422 }).mockResolvedValue({ ok: true });
+
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
+
+    expect(result).toEqual({ submitted: 500, dropped: 500 });
+    await expect(listDueContributions(FAR_FUTURE)).resolves.toEqual([]);
+  });
+
+  it("stops at the first outage and keeps everything not yet accepted", async () => {
+    await clearQueue();
+    await enqueueContributionEdges(Array.from({ length: 1500 }, () => edge()), () => 1_000_000, () => 0);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValue({ ok: true });
+
+    const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
+
+    expect(result).toEqual({ submitted: 500 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1000);
   });
 });

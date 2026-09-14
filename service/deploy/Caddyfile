@@ -24,6 +24,14 @@
 	log {
 		level ERROR
 	}
+	# slow bodies cannot hold connections open
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			idle 2m
+		}
+	}
 }
 
 api.verdict.tools {
@@ -59,6 +67,11 @@ api.verdict.tools {
 	# this service exposes. Anything else is refused here rather than
 	# reaching the application, so a future route added by accident is not
 	# reachable from the internet until this file says so.
+	# matches tests/contract/serviceLimits.json
+	request_body {
+		max_size 2MiB
+	}
+
 	@allowed path /v1/reputation/lookup /v1/graph/contribute
 	handle @allowed {
 		reverse_proxy verdict-service:8000 {

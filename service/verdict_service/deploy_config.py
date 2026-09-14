@@ -16,6 +16,7 @@ class ProxyGuarantees:
     stripped_upstream_headers: frozenset[str]
     allowed_paths: frozenset[str]
     unguarded_upstreams: int = 0
+    max_request_body_bytes: int | None = None
 
 
 class DeployConfigError(ValueError):
@@ -24,6 +25,34 @@ class DeployConfigError(ValueError):
 
 def _strip_comments(text: str) -> str:
     return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
+
+
+_SIZE_UNITS = {
+    "": 1,
+    "b": 1,
+    "kb": 1000,
+    "mb": 1000**2,
+    "gb": 1000**3,
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+}
+
+
+def parse_size(text: str) -> int | None:
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([a-zA-Z]*)", text.strip())
+    if match is None or match.group(2).lower() not in _SIZE_UNITS:
+        return None
+    return int(float(match.group(1)) * _SIZE_UNITS[match.group(2).lower()])
+
+
+def _max_request_body_bytes(body: str) -> int | None:
+    sizes = [
+        parse_size(match.group(1))
+        for match in re.finditer(r"request_body\s*\{[^}]*?max_size\s+(\S+)", body)
+    ]
+    known = [size for size in sizes if size is not None]
+    return max(known) if known and len(known) == len(sizes) else None
 
 
 def _enclosing_block_headers(body: str, index: int) -> list[str]:
@@ -82,6 +111,7 @@ def read_proxy_guarantees(path: Path = CADDYFILE) -> ProxyGuarantees:
         stripped_upstream_headers=frozenset(stripped_upstream),
         allowed_paths=frozenset(allowed),
         unguarded_upstreams=_unguarded_upstreams(body),
+        max_request_body_bytes=_max_request_body_bytes(body),
     )
 
 
@@ -99,6 +129,8 @@ def proxy_problems(guarantees: ProxyGuarantees) -> list[str]:
     for header in ("Referer", "Cookie"):
         if header not in guarantees.stripped_request_headers:
             problems.append(f"{header} is not stripped, and PRIVACY.md section 4 says it is")
+    if guarantees.max_request_body_bytes is None:
+        problems.append("request bodies have no size limit, one upload can exhaust memory")
     for path in sorted(guarantees.allowed_paths - PUBLIC_ENDPOINTS):
         problems.append(f"{path} is reachable from the internet but is not a public endpoint")
     if guarantees.unguarded_upstreams:

@@ -1,4 +1,4 @@
-import { fetchWithin } from "../net/fetchWithin";
+import { fetchJsonWithin } from "../net/fetchWithin";
 import { BUNDLED_RULES, emptyRules } from "./bundledRules";
 import { REMOTE_RULES_PUBLIC_KEY_JWK, remoteRulesCacheKey, remoteRulesUrl } from "./remoteRules";
 import { SITES } from "./sites";
@@ -101,11 +101,11 @@ export async function refreshRules(options: RulesLoaderOptions): Promise<RulesDo
   const trusted = await trustedRules(options);
 
   try {
-    const response = await fetchWithin(fetchImpl, options.url, {}, fetchTimeoutMs);
-    if (response === null || !response.ok) {
+    const reply = await fetchJsonWithin(fetchImpl, options.url, {}, fetchTimeoutMs);
+    if (reply === null || !reply.ok) {
       return trusted;
     }
-    const envelope = (await response.json()) as SignedRulesEnvelope;
+    const envelope = reply.body as SignedRulesEnvelope;
     const verified = await verifySignature(envelope.rules, envelope.signature, options.publicKeyJwk);
     if (!verified) {
       return trusted;

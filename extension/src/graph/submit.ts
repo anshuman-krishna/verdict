@@ -1,6 +1,14 @@
 import { getGraphContributionEnabled } from "../storage/settings";
 import { fetchWithin } from "../net/fetchWithin";
+import type { ContributionEdge } from "./edge";
 import { clearContributionQueue, deleteContributions, listDueContributions } from "./queue";
+
+// tests/contract/serviceLimits.json, the service refuses anything larger
+export const MAX_EDGES_PER_BATCH = 500;
+export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
+
+// statuses that say try later, not never
+const RETRYABLE_CLIENT_STATUSES = new Set([408, 425, 429]);
 
 export interface FlushDeps {
   endpoint: string;
@@ -13,6 +21,59 @@ export interface FlushDeps {
 
 export interface FlushResult {
   submitted: number;
+  dropped?: number;
+}
+
+interface Queued {
+  id: number;
+  edge: ContributionEdge;
+}
+
+const encoder = new TextEncoder();
+
+function bodyFor(items: readonly Queued[]): string {
+  return JSON.stringify({ edges: items.map((item) => item.edge) });
+}
+
+export function chunkForService(
+  items: readonly Queued[],
+  maxEdges: number = MAX_EDGES_PER_BATCH,
+  maxBytes: number = MAX_REQUEST_BODY_BYTES,
+): { chunks: Queued[][]; unsendable: Queued[] } {
+  const chunks: Queued[][] = [];
+  const unsendable: Queued[] = [];
+  const envelopeBytes = encoder.encode('{"edges":[]}').length;
+  let current: Queued[] = [];
+  let currentBytes = envelopeBytes;
+
+  for (const item of items) {
+    const edgeBytes = encoder.encode(JSON.stringify(item.edge)).length;
+    if (envelopeBytes + edgeBytes > maxBytes) {
+      unsendable.push(item);
+      continue;
+    }
+    const separator = current.length > 0 ? 1 : 0;
+    if (current.length >= maxEdges || currentBytes + separator + edgeBytes > maxBytes) {
+      chunks.push(current);
+      current = [];
+      currentBytes = envelopeBytes;
+    }
+    currentBytes += (current.length > 0 ? 1 : 0) + edgeBytes;
+    current.push(item);
+  }
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+  return { chunks, unsendable };
+}
+
+function isPermanentRefusal(status: number | undefined): boolean {
+  return (
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    !RETRYABLE_CLIENT_STATUSES.has(status)
+  );
 }
 
 export async function flushDueContributions(deps: FlushDeps): Promise<FlushResult> {
@@ -31,31 +92,46 @@ export async function flushDueContributions(deps: FlushDeps): Promise<FlushResul
     return { submitted: 0 };
   }
 
-  try {
-    const response = await fetchWithin(
-      fetchImpl,
-      deps.endpoint,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ edges: due.map((item) => item.edge) }),
-      },
-      deps.timeoutMs,
-    );
-    if (response === null) {
-      return { submitted: 0 };
-    }
-    if (!response.ok) {
-      // a refusal is permanent, so retrying it forever would wedge the queue
-      if (response.status >= 400 && response.status < 500) {
-        await deleteContributions(due.map((item) => item.id));
-      }
-      return { submitted: 0 };
-    }
-  } catch {
-    return { submitted: 0 };
+  const { chunks, unsendable } = chunkForService(due);
+  let dropped = unsendable.length;
+  if (unsendable.length > 0) {
+    await deleteContributions(unsendable.map((item) => item.id));
   }
 
-  await deleteContributions(due.map((item) => item.id));
-  return { submitted: due.length };
+  let submitted = 0;
+  for (const chunk of chunks) {
+    const ids = chunk.map((item) => item.id);
+    let response: Response | null;
+    try {
+      response = await fetchWithin(
+        fetchImpl,
+        deps.endpoint,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: bodyFor(chunk),
+        },
+        deps.timeoutMs,
+      );
+    } catch {
+      break;
+    }
+    if (response === null) {
+      break;
+    }
+    if (response.ok) {
+      await deleteContributions(ids);
+      submitted += chunk.length;
+      continue;
+    }
+    // only this chunk is refused, the rest of the queue is not
+    if (isPermanentRefusal(response.status)) {
+      await deleteContributions(ids);
+      dropped += chunk.length;
+      continue;
+    }
+    break;
+  }
+
+  return dropped > 0 ? { submitted, dropped } : { submitted };
 }

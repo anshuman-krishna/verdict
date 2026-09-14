@@ -244,3 +244,78 @@ class TestBackupJob:
             monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
             monkeypatch.delenv("VERDICT_BACKUP_DIR", raising=False)
             importlib.reload(main)
+
+
+class TestIngestProtection:
+    def test_an_oversized_body_is_refused_by_the_real_app(self):
+        from verdict_service.api.body_limit import MAX_REQUEST_BODY_BYTES
+        from verdict_service.main import app
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/graph/contribute",
+                content=b"x" * (MAX_REQUEST_BODY_BYTES + 1),
+                headers={"content-type": "application/json"},
+            )
+        assert response.status_code == 413
+
+    def test_the_retained_edge_cap_is_configurable(self, monkeypatch):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.setenv("VERDICT_MAX_RETAINED_EDGES", "1")
+        monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+        try:
+            main = importlib.reload(main)
+            with TestClient(main.app) as client:
+                first = client.post(
+                    "/v1/graph/contribute", json={"edges": [contribution_edge("a", "p")]}
+                )
+                second = client.post(
+                    "/v1/graph/contribute", json={"edges": [contribution_edge("b", "p")]}
+                )
+            assert first.status_code == 200
+            assert second.status_code == 503
+        finally:
+            monkeypatch.delenv("VERDICT_MAX_RETAINED_EDGES", raising=False)
+            importlib.reload(main)
+
+    def test_expired_edges_are_pruned_even_when_the_recompute_crashes(self, monkeypatch):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+        main = importlib.reload(main)
+        pruned = []
+        monkeypatch.setattr(
+            main.contribution_edge_store,
+            "prune_older_than",
+            lambda cutoff: pruned.append(cutoff) or 0,
+        )
+
+        def crash(*_args, **_kwargs):
+            raise RuntimeError("community detection blew up")
+
+        monkeypatch.setattr(main, "recompute_flagged_hashes", crash)
+        with pytest.raises(RuntimeError):
+            main._recompute()
+        assert len(pruned) == 1
+        assert main.health_tracker.last.error == "community detection blew up"
+
+    def test_a_failing_prune_is_counted_and_does_not_mask_the_recompute(self, monkeypatch):
+        import importlib
+
+        import verdict_service.main as main
+
+        monkeypatch.delenv("VERDICT_DATABASE_PATH", raising=False)
+        main = importlib.reload(main)
+
+        def broken_prune(_cutoff):
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(main.contribution_edge_store, "prune_older_than", broken_prune)
+        main._recompute()
+        assert main.metrics.prune_failures_total == 1
+        assert main.health_tracker.last.error is None

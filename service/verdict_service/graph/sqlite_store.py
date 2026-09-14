@@ -103,20 +103,29 @@ class SqliteContributionEdgeStore:
         self._database = database
 
     def add(self, edge: ContributionEdge) -> None:
-        self._database.write(
+        self.add_many([edge])
+
+    def add_many(self, edges: list[ContributionEdge]) -> None:
+        self._database.write_many(
             "INSERT OR IGNORE INTO contribution_edges "
             "(reviewer_hash, product_hash, star_rating, week_bucket, verified, "
             "minhash_signature, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                edge.reviewer_hash,
-                edge.product_hash,
-                edge.star_rating,
-                edge.week_bucket,
-                None if edge.verified is None else int(edge.verified),
-                json.dumps(edge.minhash_signature),
-                edge.received_at,
-            ),
+            [
+                (
+                    edge.reviewer_hash,
+                    edge.product_hash,
+                    edge.star_rating,
+                    edge.week_bucket,
+                    None if edge.verified is None else int(edge.verified),
+                    json.dumps(edge.minhash_signature),
+                    edge.received_at,
+                )
+                for edge in edges
+            ],
         )
+
+    def count(self) -> int:
+        return self._database.read("SELECT COUNT(*) FROM contribution_edges")[0][0]
 
     def list_since(self, cutoff: float) -> list[ContributionEdge]:
         rows = self._database.read(

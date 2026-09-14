@@ -16,6 +16,10 @@ class ContributionEdge:
 class ContributionEdgeStore(Protocol):
     def add(self, edge: ContributionEdge) -> None: ...
 
+    def add_many(self, edges: list[ContributionEdge]) -> None: ...
+
+    def count(self) -> int: ...
+
     def list_since(self, cutoff: float) -> list[ContributionEdge]:
         """every edge received at or after cutoff, for the pipeline to consume."""
         ...
@@ -31,6 +35,12 @@ class InMemoryContributionEdgeStore:
 
     def add(self, edge: ContributionEdge) -> None:
         self._edges.append(edge)
+
+    def add_many(self, edges: list[ContributionEdge]) -> None:
+        self._edges.extend(edges)
+
+    def count(self) -> int:
+        return len(self._edges)
 
     def list_since(self, cutoff: float) -> list[ContributionEdge]:
         return [edge for edge in self._edges if edge.received_at >= cutoff]

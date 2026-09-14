@@ -1,4 +1,4 @@
-import { ANONYMOUS_REQUEST_INIT, fetchWithin } from "../net/fetchWithin";
+import { ANONYMOUS_REQUEST_INIT, fetchJsonWithin } from "../net/fetchWithin";
 import {
   buildLookupBatches,
   cryptoRandom,
@@ -52,7 +52,7 @@ export async function lookupFlaggedReviewers(
       }
       // independent per batch, so the requests do not arrive as a recognisable burst
       await delay(MIN_DELAY_MS + random() * (MAX_DELAY_MS - MIN_DELAY_MS));
-      const response = await fetchWithin(
+      const reply = await fetchJsonWithin(
         fetchImpl,
         options.endpoint,
         {
@@ -62,10 +62,10 @@ export async function lookupFlaggedReviewers(
         },
         options.timeoutMs,
       );
-      if (response === null || !response.ok) {
+      if (reply === null || !reply.ok) {
         continue;
       }
-      responses.push((await response.json()) as LookupResponse);
+      responses.push(reply.body as LookupResponse);
     }
     if (responses.length === 0) {
       return new Set();

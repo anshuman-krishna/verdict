@@ -34,6 +34,24 @@ def edge(reviewer: str, received_at: float) -> ContributionEdge:
 
 
 class TestBothStoresAgree:
+    def test_a_batch_added_together_comes_back_and_counts(self, stores):
+        edges, _flagged = stores
+        batch = [edge("r1", 100.0), edge("r2", 100.0), edge("r3", 100.0)]
+        edges.add_many(batch)
+        assert sorted(edges.list_since(0.0), key=lambda e: e.reviewer_hash) == batch
+        assert edges.count() == 3
+
+    def test_an_empty_batch_is_harmless(self, stores):
+        edges, _flagged = stores
+        edges.add_many([])
+        assert edges.count() == 0
+
+    def test_count_follows_pruning(self, stores):
+        edges, _flagged = stores
+        edges.add_many([edge("old", 100.0), edge("new", 300.0)])
+        edges.prune_older_than(200.0)
+        assert edges.count() == 1
+
     def test_an_empty_edge_store_lists_nothing(self, stores):
         edges, _flagged = stores
         assert edges.list_since(0.0) == []

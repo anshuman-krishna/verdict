@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import time
 from collections.abc import Callable
@@ -7,7 +8,12 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from verdict_service.api.contribution import create_contribution_router
+from verdict_service.api.body_limit import MAX_REQUEST_BODY_BYTES, BodySizeLimit
+from verdict_service.api.contribution import (
+    DEFAULT_MAX_RETAINED_EDGES,
+    CapacityGuard,
+    create_contribution_router,
+)
 from verdict_service.api.health import create_health_router
 from verdict_service.api.metrics import create_metrics_router
 from verdict_service.api.reputation import create_reputation_router
@@ -39,11 +45,15 @@ from verdict_service.metrics import MetricsRegistry
 
 configure_logging()
 
+logger = logging.getLogger("verdict_service.main")
+
+
 DATABASE_PATH = os.environ.get("VERDICT_DATABASE_PATH")
 STORE_KIND = "sqlite" if DATABASE_PATH else "memory"
 BACKUP_CHECK_INTERVAL_SECONDS = 60 * 60
 BACKUP_MAX_AGE_SECONDS = 2 * BACKUP_INTERVAL_SECONDS
 BACKUP_DIR = default_backup_dir(Path(DATABASE_PATH)) if DATABASE_PATH else None
+MAX_RETAINED_EDGES = int(os.environ.get("VERDICT_MAX_RETAINED_EDGES", DEFAULT_MAX_RETAINED_EDGES))
 
 _connection: Database | None = None
 
@@ -61,13 +71,23 @@ health_tracker = HealthTracker()
 metrics = MetricsRegistry()
 
 
+def _prune(now: Callable[[], float] = time.time) -> None:
+    try:
+        contribution_edge_store.prune_older_than(now() - RETENTION_SECONDS)
+    except Exception:
+        metrics.record_prune_failure()
+        logger.exception("pruning expired contribution edges failed")
+
+
 def _recompute() -> None:
     try:
         flagged_count = recompute_flagged_hashes(contribution_edge_store, flagged_hash_store)
-        contribution_edge_store.prune_older_than(time.time() - RETENTION_SECONDS)
     except Exception as error:  # a recompute crash must still surface on /v1/health
         health_tracker.record_failure(error)
         raise
+    finally:
+        # retention must not depend on a recompute succeeding
+        _prune()
     health_tracker.record_success(flagged_count)
     metrics.record_recompute(flagged_count)
 
@@ -124,11 +144,15 @@ async def lifespan(_app: FastAPI):
             lock.release()
 
 
-app = FastAPI(title="verdict-service", lifespan=lifespan)
+api = FastAPI(title="verdict-service", lifespan=lifespan)
 
-app.include_router(create_reputation_router(flagged_hash_store, metrics))
-app.include_router(create_contribution_router(contribution_edge_store, metrics=metrics))
-app.include_router(
+capacity_guard = CapacityGuard(contribution_edge_store, MAX_RETAINED_EDGES)
+
+api.include_router(create_reputation_router(flagged_hash_store, metrics))
+api.include_router(
+    create_contribution_router(contribution_edge_store, metrics=metrics, capacity=capacity_guard)
+)
+api.include_router(
     create_health_router(
         health_tracker,
         STORE_KIND,
@@ -136,4 +160,6 @@ app.include_router(
         max_backup_age_seconds=BACKUP_MAX_AGE_SECONDS,
     )
 )
-app.include_router(create_metrics_router(metrics, gauges=_gauges))
+api.include_router(create_metrics_router(metrics, gauges=_gauges))
+
+app = BodySizeLimit(api, MAX_REQUEST_BODY_BYTES)

@@ -146,6 +146,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: validate docker-compose.yml against the compose spec
         run: docker compose config --quiet
+      - name: caddy itself accepts the published Caddyfile
+        run: docker run --rm -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: the service publishes no host port, caddy is the only way in
         run: |
           ports=$(docker compose config --format json | jq '.services["verdict-service"].ports // [] | length')

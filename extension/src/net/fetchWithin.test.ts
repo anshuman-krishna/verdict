@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ANONYMOUS_REQUEST_INIT, DEFAULT_TIMEOUT_MS, fetchWithin } from "./fetchWithin";
+import { ANONYMOUS_REQUEST_INIT, DEFAULT_TIMEOUT_MS, fetchJsonWithin, fetchWithin } from "./fetchWithin";
 
 const OK = { ok: true } as Response;
 
@@ -84,5 +84,76 @@ describe("fetchWithin", () => {
         mode: "cors",
       });
     });
+  });
+});
+
+describe("fetchJsonWithin", () => {
+  it("returns the parsed body when it arrives in time", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ a: 1 }) });
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).resolves.toEqual({
+      ok: true,
+      status: 200,
+      body: { a: 1 },
+    });
+  });
+
+  it("gives up on a body that never finishes, not only on headers", async () => {
+    let signal: AbortSignal | undefined;
+    const fetchImpl = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return Promise.resolve({ ok: true, status: 200, json: () => new Promise(() => {}) });
+    });
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 5)).resolves.toBeNull();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("does not read the body of a refusal", async () => {
+    const json = vi.fn();
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503, json });
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).resolves.toEqual({
+      ok: false,
+      status: 503,
+      body: null,
+    });
+    expect(json).not.toHaveBeenCalled();
+  });
+
+  it("lets a malformed body reject, so callers keep their own fallback", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("bad");
+      },
+    });
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).rejects.toThrow("bad");
+  });
+
+  it("applies the same anonymous request shape", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    await fetchJsonWithin(fetchImpl, "https://x", { credentials: "include" }, 1000);
+    expect((fetchImpl.mock.calls[0]?.[1] as RequestInit).credentials).toBe("omit");
+  });
+});
+
+describe("a request abandoned at the deadline", () => {
+  it("does not surface its late rejection as unhandled", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      let reject: (error: Error) => void = () => {};
+      const fetchImpl = vi.fn().mockImplementation(
+        () =>
+          new Promise((_resolve, fail) => {
+            reject = fail;
+          }),
+      );
+      await expect(fetchWithin(fetchImpl, "https://x", {}, 0)).resolves.toBeNull();
+      reject(new Error("aborted"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
   });
 });

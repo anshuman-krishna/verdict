@@ -85,6 +85,15 @@ checks on every run: `docker compose -f service/deploy/docker-compose.yml up -d`
 container publishes no port of its own; Caddy is the only path in, and only to the two
 endpoints the Caddyfile allows.
 
+Ingestion is bounded at both layers. Caddy refuses request bodies over 2 MiB and drops
+connections that trickle headers or bodies, and the service enforces the same body limit itself
+in case it is ever run without the proxy. The graph keeps at most `VERDICT_MAX_RETAINED_EDGES`
+edges (2,000,000 by default). Past that, `/v1/graph/contribute` answers 503 with a
+`Retry-After` header, which the extension treats as try later, and
+`verdict_contributions_refused_total` counts the refusals. Expired edges are pruned after every
+recompute, including one that failed. The limits both sides rely on are pinned in
+`tests/contract/serviceLimits.json`, and each test suite checks its own constants against it.
+
 The service checks hourly and takes a backup once a day into its own `verdict-backups`
 volume, separate from `verdict-data`, so losing the database volume does not also lose its
 backups. Each backup is written to a temporary file, integrity checked, and only then renamed

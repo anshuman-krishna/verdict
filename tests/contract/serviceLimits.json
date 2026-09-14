@@ -1,0 +1,7 @@
+{
+  "contributeMaxEdgesPerBatch": 500,
+  "maxRequestBodyBytes": 2097152,
+  "lookupBucketCount": 32,
+  "lookupPrefixLength": 4,
+  "maxMinhashLength": 128
+}

@@ -5,6 +5,7 @@ from verdict_service.deploy_config import (
     CLIENT_ADDRESS_HEADERS,
     DeployConfigError,
     ProxyGuarantees,
+    parse_size,
     proxy_problems,
     read_proxy_guarantees,
 )
@@ -121,3 +122,32 @@ def test_an_upstream_at_the_site_level_is_a_problem(tmp_path):
 
 def test_the_published_configuration_has_no_unguarded_upstream():
     assert read_proxy_guarantees().unguarded_upstreams == 0
+
+
+def test_the_published_configuration_limits_request_bodies():
+    assert read_proxy_guarantees().max_request_body_bytes == 2 * 1024 * 1024
+
+
+def test_removing_the_body_limit_is_a_problem(tmp_path):
+    body = CADDYFILE.read_text(encoding="utf-8").replace("max_size 2MiB", "")
+    body = body.replace("request_body {\n\t\t\n\t}", "")
+    guarantees = read_proxy_guarantees(_write(tmp_path, body))
+    assert guarantees.max_request_body_bytes is None
+    assert any("no size limit" in problem for problem in proxy_problems(guarantees))
+
+
+def test_a_commented_out_body_limit_does_not_count(tmp_path):
+    path = _write(tmp_path, "reverse_proxy app:8000\n# request_body { max_size 1MB }\n")
+    assert read_proxy_guarantees(path).max_request_body_bytes is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("2MiB", 2097152), ("2MB", 2000000), ("512KiB", 524288), ("100", 100), ("1.5MB", 1500000)],
+)
+def test_sizes_parse_the_way_caddy_reads_them(text, expected):
+    assert parse_size(text) == expected
+
+
+def test_an_unknown_size_unit_is_not_guessed():
+    assert parse_size("2 lots") is None

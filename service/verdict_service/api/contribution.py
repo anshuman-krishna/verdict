@@ -1,7 +1,9 @@
+import math
+import threading
 import time
 from collections.abc import Callable
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
@@ -18,6 +20,10 @@ MAX_MINHASH_DIGITS = 20
 # weeks since the epoch, so 0 is 1970 and 5000 is well past any plausible review
 MIN_WEEK_BUCKET = 0
 MAX_WEEK_BUCKET = 5000
+# bounds disk and recompute memory against floods
+DEFAULT_MAX_RETAINED_EDGES = 2_000_000
+CAPACITY_REFRESH_SECONDS = 60.0
+RETRY_AFTER_SECONDS = 3600
 
 
 class ContributionEdgeIn(BaseModel):
@@ -72,18 +78,55 @@ class ContributionResponse(BaseModel):
     accepted: int
 
 
+class CapacityGuard:
+    def __init__(
+        self,
+        store: ContributionEdgeStore,
+        max_edges: int,
+        now: Callable[[], float] = time.monotonic,
+        refresh_seconds: float = CAPACITY_REFRESH_SECONDS,
+    ) -> None:
+        self._store = store
+        self._max_edges = max_edges
+        self._now = now
+        self._refresh_seconds = refresh_seconds
+        self._known = 0
+        self._checked_at = -math.inf
+        self._lock = threading.Lock()
+
+    def has_room(self) -> bool:
+        with self._lock:
+            if self._now() - self._checked_at >= self._refresh_seconds:
+                self._known = self._store.count()
+                self._checked_at = self._now()
+            return self._known < self._max_edges
+
+    def record(self, accepted: int) -> None:
+        with self._lock:
+            self._known += accepted
+
+
 def create_contribution_router(
     store: ContributionEdgeStore,
     now: Callable[[], float] = time.time,
     metrics: MetricsRegistry | None = None,
+    capacity: CapacityGuard | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
     @router.post("/v1/graph/contribute", response_model=ContributionResponse)
     def contribute(body: ContributionBatch) -> ContributionResponse:
+        if capacity is not None and not capacity.has_room():
+            if metrics is not None:
+                metrics.record_contribution_refused()
+            raise HTTPException(
+                status_code=503,
+                detail="at capacity, try again later",
+                headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
+            )
         received_at = now()
-        for edge_in in body.edges:
-            store.add(
+        store.add_many(
+            [
                 ContributionEdge(
                     reviewer_hash=edge_in.reviewer_hash,
                     product_hash=edge_in.product_hash,
@@ -93,7 +136,11 @@ def create_contribution_router(
                     minhash_signature=edge_in.minhash_signature,
                     received_at=received_at,
                 )
-            )
+                for edge_in in body.edges
+            ]
+        )
+        if capacity is not None:
+            capacity.record(len(body.edges))
         if metrics is not None:
             metrics.record_contribution(len(body.edges))
         return ContributionResponse(accepted=len(body.edges))
