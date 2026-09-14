@@ -1,69 +1,171 @@
-# Verdict
+# verdict
 
-Verdict is a browser extension that estimates how much of a product's review history looks
-authentic, and shows an adjusted rating with the reasoning attached. Analysis runs inside
-the browser, on pages the user is already viewing.
+verdict is a browser extension that estimates how much of a product's review history looks
+authentic, then shows you an adjusted rating with the reasoning right next to it.
 
-## Status
+all of the analysis happens inside your browser, on pages you are already looking at. there
+is no account, and nothing about what you shop for leaves your machine unless you switch on
+the optional reviewer network yourself.
 
-Early, but no longer empty. The rules interpreter, the local cache and history storage,
-the review page fetcher, the five local signals, the panel and popup, and the optional
-reviewer graph service all exist and are tested, including a gate that fails the build if
-the default analysis path makes a network request.
+```
+  claimed  ★★★★★  4.6          adjusted  ★★★★☆  3.9
+  ────────────────────────────────────────────────────
+  ████████████████████████████░░░░░░    1,208 of 8,431
+  kept                        excluded  reviews look inorganic
 
-Two things are deliberately absent, and everything downstream waits on them. The extraction
-rules for Amazon are still empty, so nothing extracts from a real page yet. There is no
-labelled corpus, so no model has been trained and every report resolves to "no score can be
-computed yet" rather than to a number. Both are hand work, and neither is the kind of gap
-code can close.
+  evidence
+    arrival timing          strong    bursts well above the usual rate
+    duplicate text          moderate  templated phrasing across reviews
+    verification            weak      unverified reviews cluster in the bursts
+```
 
-## Repository layout
+(an illustration of the panel, not real output.)
+
+---
+
+## where things stand
+
+early, but no longer empty.
+
+these parts exist and are tested:
+
+- the rules interpreter that reads a product page
+- the local cache and history storage
+- the review page fetcher
+- the five local signals
+- the panel and popup
+- the optional reviewer graph service
+- a gate that fails the build if the default analysis path makes any network request
+
+two pieces are missing on purpose, and everything downstream waits on them:
+
+| missing | what it means today |
+|---|---|
+| amazon extraction rules | nothing extracts from a real page yet |
+| a labelled corpus | no model has been trained, so every report says "no score can be computed yet" instead of giving a number |
+
+both are careful hand work. writing more code will not fill either gap.
+
+---
+
+## how it fits together
+
+```
+  ┌──────────────────────────── your browser ────────────────────────────┐
+  │                                                                      │
+  │   product page                              verdict.tools            │
+  │   storefront script reads reviews           history and check pages  │
+  │            │                                         │               │
+  │            │                              relay in the content script│
+  │            ▼                                         ▼               │
+  │   ┌──────────────────────────────────────────────────────────────┐   │
+  │   │ background worker                                            │   │
+  │   │ five local signals ──► model.json ──► report ──► local store │   │
+  │   └───────────────────────────────┬──────────────────────────────┘   │
+  └───────────────────────────────────┼──────────────────────────────────┘
+                                      │  only after you opt in
+                                      ▼
+                          api.verdict.tools (reviewer graph)
+```
+
+### the repo
 
 ```
 extension/   typescript, wxt, manifest v3, chrome and firefox from one codebase
-research/    python, uv managed, feature extraction and model training
+research/    python, managed by uv, feature extraction and model training
 service/     python, fastapi, the optional reviewer graph backend
 site/        astro, static output, no client framework
 schema/      constants both languages read, so neither can drift from the other
+tests/       contract and parity fixtures both sides check themselves against
 ```
 
-Which storefronts are supported is data, not code. `schema/sites.json` carries each site's
-hosts, product URL shape, and review page template, and the extension derives its URL parsing,
-its manifest matches, and the website bridge's allowlist from that one file. Adding a
-storefront is an entry there plus a rules file in `extension/src/extract/rules/`.
+### storefronts are data, not code
 
-A page that hides one signal still gets a report. The trainer records a quantile sketch of
-every feature it fits on, so a product with no verification badges or no review text is scored
-with that feature drawn from the sketch instead of being refused outright. The point estimate
-takes the median; each bootstrap resample draws its own value, so the interval widens by
-exactly what is unknown, and the panel names the signal it could not read. A model whose
-sketch does not cover its own coefficients fails `just preflight`.
+`schema/sites.json` holds each storefront's hosts, product url shape and review page template.
+the extension derives three things from that one file:
 
-The panel never makes you wait on the network. Scoring runs in two passes over one set of
-cached embeddings: the local signals produce a report immediately, and the reviewer network
-lookup, which deliberately jitters up to four seconds for k anonymity, refines that report in
-place when it lands. While it is outstanding the panel says so, so a figure never changes
-without explanation. If nothing has been drawn within 400 ms the extension says what it is
-doing rather than showing a bare spinner, and a panel closed while provisional stays closed.
-Both service calls are bounded, so a server that accepts a connection and never answers
-cannot wedge the report or stall the contribution queue.
+```
+  schema/sites.json
+     ├──► url parsing          (is this a product page?)
+     ├──► manifest matches     (where the content script runs)
+     └──► bridge allowlist     (which links the website may ask it to check)
+```
 
-The website reads history and runs checks through the extension, never through a server. It
-reaches the extension through a relay in the content script the extension already runs on the
-site, so the history and check pages work in Firefox, which has no `externally_connectable`, as
-well as in Chromium. Whichever path a message takes, the background worker answers only the
-production site: localhost is matched in development builds and stripped from the store
-manifest, and every message is checked against the tab's origin, not only the manifest. A
-check opens nothing but a product page: the pasted link is reduced to its path on the
-storefront's registry host, so a query string, a subdomain, or a sign out link never reaches the
-hidden tab. `tests/siteBridge.spec.ts` drives the site's client against the extension's relay,
-so neither side can change the protocol alone.
+adding a storefront means adding an entry there plus a rules file in
+`extension/src/extract/rules/`.
 
-`research/` and `extension/` implement the same scoring maths twice, once in Python and
-once in TypeScript, checked against each other by a parity test over shared vectors. A
-change to one side that is not mirrored in the other fails `just check`.
+### a missing signal still gets a report
 
-## Commands
+some pages hide a signal. there might be no verification badges, or no review text at all.
+verdict does not refuse those pages. while training, it records a quantile sketch of every
+feature it fits on. when a feature is missing, it fills the gap from that sketch:
+
+- the headline figure uses the median
+- each bootstrap resample draws its own value, so the confidence interval widens by exactly
+  what is unknown
+- the panel names the signal it could not read
+
+a model whose sketch does not cover its own coefficients fails `just preflight`.
+
+### the panel never waits on the network
+
+```
+  time ──────────────────────────────────────────────────────────►
+
+  0 ms        local signals done ──► report drawn
+  400 ms      if nothing is drawn yet, say what is happening (no bare spinner)
+  0 to 4 s    reviewer network lookup, jittered on purpose for k anonymity
+  later       lookup lands ──► same report refined in place, labelled provisional until then
+```
+
+scoring runs in two passes over one set of cached embeddings. while the network pass is still
+out, the panel says so, so a number never changes without a reason. if you close a provisional
+panel, it stays closed. both service calls have time limits, so a server that accepts the
+connection and then goes silent cannot freeze the report or stall the contribution queue.
+
+### the website talks to the extension, never to a server
+
+the history and check pages on verdict.tools do their work through the extension you already
+have installed.
+
+```
+  verdict.tools page
+        │  window.postMessage (same origin only)
+        ▼
+  relay in the extension's content script
+        │  runtime message, carrying the tab's real origin
+        ▼
+  background worker
+        ├── is the origin exactly https://verdict.tools?   no ──► refused
+        └── yes ──► answer
+```
+
+- the relay makes it work in firefox, which has no `externally_connectable`, as well as in
+  chromium.
+- whichever path a message takes, the background worker only answers the production site.
+  dev builds also match localhost, and store builds have it stripped from the manifest.
+- every message is checked against the sending tab's origin, not just the manifest.
+- a check only ever opens a product page. the pasted link is cut down to its path on the
+  storefront's main host, so a query string, a subdomain or a sign out link never reaches the
+  hidden tab.
+- `extension/tests/siteBridge.spec.ts` runs the site's client against the extension's relay, so
+  neither side can change the protocol on its own.
+
+### the maths is written twice, on purpose
+
+`research/` (python) and `extension/` (typescript) each implement the same scoring maths.
+a parity test runs both against shared vectors in `tests/parity/`.
+
+```
+  tests/parity/vectors.jsonl ──┬──► python scorer     ─┐
+                               └──► typescript scorer ─┴──► same numbers, or just check fails
+```
+
+---
+
+## commands
+
+you need node 22.18 or newer, uv, and just. docker only if you run the service.
 
 ```
 just setup       install everything
@@ -76,7 +178,7 @@ just parity      compare the python and typescript scorers against shared vector
 just check       everything above, the gate before any commit
 ```
 
-Beyond the gate:
+beyond the gate:
 
 ```
 just fixtures    judge the saved page corpus against the extraction criteria
@@ -88,35 +190,84 @@ just preflight   check the built bundle against what gets extensions removed
 just release     build the zips and write the release manifest
 ```
 
-## Deploying the service
+### trying the extension
 
-`service/deploy/docker-compose.yml` brings up the reviewer graph service behind the Caddy
-config `service/deploy/Caddyfile` already describes and `service/tests/test_deploy_config.py`
-checks on every run: `docker compose -f service/deploy/docker-compose.yml up -d`. The service
-container publishes no port of its own; Caddy is the only path in, and only to the two
-endpoints the Caddyfile allows.
+```
+just ext build
+```
 
-Ingestion is bounded at both layers. Caddy refuses request bodies over 2 MiB and drops
-connections that trickle headers or bodies, and the service enforces the same body limit itself
-in case it is ever run without the proxy. The graph keeps at most `VERDICT_MAX_RETAINED_EDGES`
-edges (2,000,000 by default). Past that, `/v1/graph/contribute` answers 503 with a
-`Retry-After` header, which the extension treats as try later, and
-`verdict_contributions_refused_total` counts the refusals. Expired edges are pruned after every
-recompute, including one that failed. The limits both sides rely on are pinned in
-`tests/contract/serviceLimits.json`, and each test suite checks its own constants against it.
+- chrome: open `chrome://extensions`, turn on developer mode, click "load unpacked" and pick
+  `extension/.output/chrome-mv3`
+- firefox: open `about:debugging#/runtime/this-firefox`, click "load temporary add-on" and pick
+  `extension/.output/firefox-mv3/manifest.json`
 
-The service checks hourly and takes a backup once a day into its own `verdict-backups`
-volume, separate from `verdict-data`, so losing the database volume does not also lose its
-backups. Each backup is written to a temporary file, integrity checked, and only then renamed
-into place, so a crash mid backup never leaves a file that looks like a good one. The newest 7
-are kept. A restarting container does not take a fresh backup on every boot, so a crash loop
-cannot rotate the good ones out. Flagged hashes are never removed by the graph itself
-(`recompute.py`), so for a lost or corrupted database these backups are the recovery path.
-Copy them off the host as well if the host itself is at risk.
+or run `just ext dev`, which opens a browser with it already loaded and reloads on save.
+
+---
+
+## deploying the service
+
+the service is optional. the extension works fully without it.
+
+```
+  internet ──► :80 / :443 caddy ──► verdict-service:8000
+                  │                   │  (no port published of its own)
+                  │                   ├── verdict-data     /data     sqlite
+                  │                   └── verdict-backups  /backups  newest 7
+                  │
+                  └── lets through only:
+                        /v1/reputation/lookup
+                        /v1/graph/contribute
+```
+
+bring it up with:
+
+```
+docker compose -f service/deploy/docker-compose.yml up -d
+```
+
+`service/deploy/docker-compose.yml` runs the reviewer graph service behind the caddy config in
+`service/deploy/Caddyfile`, and `service/tests/test_deploy_config.py` checks that config on
+every run. the service container publishes no port of its own. caddy is the only way in, and
+only to the two endpoints the caddyfile allows.
+
+### limits on what comes in
+
+limits apply at both layers:
+
+| layer | limit |
+|---|---|
+| caddy | refuses bodies over 2 mib, drops connections that trickle headers or bodies |
+| service | enforces the same 2 mib body limit itself, in case it ever runs without the proxy |
+| graph | keeps at most `VERDICT_MAX_RETAINED_EDGES` edges, 2,000,000 by default |
+
+past the edge cap, `/v1/graph/contribute` answers 503 with a `Retry-After` header. the
+extension treats that as "try later", and `verdict_contributions_refused_total` counts the
+refusals. expired edges are pruned after every recompute, including one that failed. the limits
+both sides rely on are pinned in `tests/contract/serviceLimits.json`, and each test suite checks
+its own constants against that file.
+
+### backups
+
+```
+  every hour: is a backup due?
+        │ yes, once a day
+        ▼
+  write to a temp file ──► integrity check ──► rename into place ──► keep newest 7
+```
+
+- backups go to their own `verdict-backups` volume, separate from `verdict-data`, so losing the
+  database volume does not take the backups with it.
+- a crash in the middle of a backup never leaves a file that looks like a good one.
+- a restarting container does not take a fresh backup on every boot, so a crash loop cannot
+  rotate the good ones out.
+- the graph never removes flagged hashes by itself (`recompute.py`), so if the database is lost
+  or corrupted, these backups are how you recover. copy them off the host too if the host itself
+  is at risk.
 
 `/v1/health` reports `degraded` when the last backup failed or the newest one is more than two
 days old, and `/v1/metrics` exposes `verdict_backup_newest_timestamp_seconds` for alerting.
-Neither endpoint is reachable through Caddy.
+neither endpoint is reachable through caddy.
 
 ```
 cd service/deploy
@@ -125,9 +276,11 @@ docker compose exec verdict-service python -m verdict_service.graph.backup_cli c
 docker compose exec verdict-service python -m verdict_service.graph.backup_cli verify /data/verdict.db
 ```
 
-To restore, stop the service first. The restore refuses to run while the service holds the
-database, verifies the backup and the copied file, and keeps the replaced database and its
-WAL beside it as `*.pre-restore-<time>` rather than deleting them.
+### restoring
+
+stop the service first. the restore refuses to run while the service holds the database. it
+verifies both the backup and the copied file, and it keeps the replaced database and its wal
+file next to it as `*.pre-restore-<time>` instead of deleting them.
 
 ```
 docker compose stop verdict-service
@@ -136,15 +289,24 @@ docker compose run --rm --no-deps verdict-service \
 docker compose start verdict-service
 ```
 
-Locally, `just backups list|verify|create|restore <database>` runs the same tool.
+on your own machine, `just backups list|verify|create|restore <database>` runs the same tool.
 
-The container runs as an unprivileged user (uid 10001) on a read only root filesystem. A
-volume created by an earlier image that ran as root needs its ownership changed once:
-`docker compose run --rm --user root --no-deps verdict-service chown -R 10001:10001 /data /backups`.
+### permissions
 
-## Build it yourself
+the container runs as an unprivileged user (uid 10001) on a read only root filesystem. a volume
+created by an older image that ran as root needs its ownership fixed once:
+
+```
+docker compose run --rm --user root --no-deps verdict-service chown -R 10001:10001 /data /backups
+```
+
+---
+
+## build it yourself
 
 ```
 just setup
 just check
 ```
+
+if both finish green, you have the same build ci produces.
