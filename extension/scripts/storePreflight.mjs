@@ -14,7 +14,7 @@ export const UNGRANTED_HOSTS = {
     "the site itself: the once a day rules fetch (a static signed file, PRIVACY.md " +
     "section 3) and the page the browser opens on uninstall (PRIVACY.md section 6). " +
     "Both are plain navigations or same file fetches, neither needs a host permission",
-  localhost: "the development site, matched by externally_connectable and the presence script",
+  localhost: "the development site, matched by externally_connectable and the presence script in development builds only",
 };
 
 const REMOTE_CODE_PATTERNS = [

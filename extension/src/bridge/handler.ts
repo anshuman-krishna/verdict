@@ -1,5 +1,5 @@
 import type { RulesSet } from "../extract/rulesLoader";
-import { allowedDomains } from "../extract/sites";
+import { allowedDomains, parseProductUrl, SITES, type SiteDefinition } from "../extract/sites";
 import { parseStoredReport, summarizeReport } from "../score/report";
 import { reportAsText, reportDocumentJson, reportFilename } from "../score/reportDocument";
 import {
@@ -30,11 +30,17 @@ function isAllowedHostname(hostname: string, allowed: readonly string[]): boolea
 
 type AnalyzeUrl = (url: string) => Promise<Exclude<AnalyzeResponse, { status: "unsupported-domain" }>>;
 
-async function handleAnalyze(
+export type CanonicalProductUrl =
+  | { status: "ok"; url: string }
+  | { status: "unsupported-domain" }
+  | { status: "not-a-product-page" };
+
+// tabs open bare registry product pages
+export function canonicalProductUrl(
   url: string,
-  allowedHostnames: readonly string[],
-  analyzeUrl: AnalyzeUrl,
-): Promise<AnalyzeResponse> {
+  rules: RulesSet,
+  sites: readonly SiteDefinition[] = SITES,
+): CanonicalProductUrl {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -42,13 +48,37 @@ async function handleAnalyze(
     return { status: "unsupported-domain" };
   }
   // a storefront reached over http is not the storefront
-  if (parsed.protocol !== "https:") {
+  if (parsed.protocol !== "https:" || parsed.port !== "" || parsed.username !== "" || parsed.password !== "") {
     return { status: "unsupported-domain" };
   }
-  if (!isAllowedHostname(parsed.hostname, allowedHostnames)) {
-    return { status: "unsupported-domain" };
+  for (const document of Object.values(rules)) {
+    const site = sites.find((candidate) => candidate.id === document.site);
+    for (const locale of document.locales) {
+      const entry = site?.locales[locale];
+      if (site === undefined || entry === undefined || !isAllowedHostname(parsed.hostname, [entry.domain])) {
+        continue;
+      }
+      const candidate = `https://${entry.host}${parsed.pathname}`;
+      const page = parseProductUrl(candidate, sites);
+      if (page === null || page.site !== site.id || page.locale !== locale) {
+        return { status: "not-a-product-page" };
+      }
+      return { status: "ok", url: candidate };
+    }
   }
-  return analyzeUrl(url);
+  return { status: "unsupported-domain" };
+}
+
+async function handleAnalyze(
+  url: string,
+  rules: RulesSet,
+  analyzeUrl: AnalyzeUrl,
+): Promise<AnalyzeResponse> {
+  const canonical = canonicalProductUrl(url, rules);
+  if (canonical.status !== "ok") {
+    return canonical;
+  }
+  return analyzeUrl(canonical.url);
 }
 
 export interface BridgeHandlerOptions {
@@ -56,6 +86,7 @@ export interface BridgeHandlerOptions {
   analyzeUrl: AnalyzeUrl;
   rateLimiter?: BridgeRateLimiter;
   origin?: string;
+  trustOrigin?: (origin: string | undefined) => boolean;
 }
 
 export async function handleBridgeMessage(
@@ -64,6 +95,10 @@ export async function handleBridgeMessage(
 ): Promise<BridgeResponse | { error: string }> {
   if (!isBridgeRequest(message)) {
     return { error: "unrecognised message" };
+  }
+  // firefox ignores the manifest allowlist
+  if (options.trustOrigin !== undefined && !options.trustOrigin(options.origin)) {
+    return { error: "untrusted origin" };
   }
   if (options.rateLimiter !== undefined) {
     if (options.origin === undefined) {
@@ -132,11 +167,7 @@ async function handleRequest(
         };
     }
     case "verdict:analyze": {
-      return handleAnalyze(
-        request.url,
-        deriveAllowedHostnames(options.bundledRules),
-        options.analyzeUrl,
-      );
+      return handleAnalyze(request.url, options.bundledRules, options.analyzeUrl);
     }
   }
 }

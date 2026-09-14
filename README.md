@@ -48,6 +48,17 @@ doing rather than showing a bare spinner, and a panel closed while provisional s
 Both service calls are bounded, so a server that accepts a connection and never answers
 cannot wedge the report or stall the contribution queue.
 
+The website reads history and runs checks through the extension, never through a server. It
+reaches the extension through a relay in the content script the extension already runs on the
+site, so the history and check pages work in Firefox, which has no `externally_connectable`, as
+well as in Chromium. Whichever path a message takes, the background worker answers only the
+production site: localhost is matched in development builds and stripped from the store
+manifest, and every message is checked against the tab's origin, not only the manifest. A
+check opens nothing but a product page: the pasted link is reduced to its path on the
+storefront's registry host, so a query string, a subdomain, or a sign out link never reaches the
+hidden tab. `tests/siteBridge.spec.ts` drives the site's client against the extension's relay,
+so neither side can change the protocol alone.
+
 `research/` and `extension/` implement the same scoring maths twice, once in Python and
 once in TypeScript, checked against each other by a parity test over shared vectors. A
 change to one side that is not mirrored in the other fails `just check`.

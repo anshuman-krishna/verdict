@@ -41,26 +41,9 @@ import Layout from "../../layouts/Layout.astro";
       rosettePath,
       type RosetteParams,
     } from "../../lib/rosette";
+    import { BridgeError, sendToExtension } from "../../lib/extensionBridge";
 
     const root = document.documentElement;
-
-    function sendToExtension(type: string, extra: Record<string, unknown>): Promise<any> {
-      return new Promise((resolve, reject) => {
-        const extensionId = root.dataset.verdictExtensionId;
-        const runtime = (window as any).chrome?.runtime;
-        if (!extensionId || !runtime?.sendMessage) {
-          reject(new Error("no cross extension messaging available in this browser"));
-          return;
-        }
-        runtime.sendMessage(extensionId, { type, ...extra }, (response: unknown) => {
-          if (runtime.lastError) {
-            reject(new Error(runtime.lastError.message));
-            return;
-          }
-          resolve(response);
-        });
-      });
-    }
 
     interface EvidenceRow {
       signal: string;
@@ -117,7 +100,7 @@ import Layout from "../../layouts/Layout.astro";
     }
 
     function renderReport(container: HTMLElement, report: Report): void {
-      const bandLabel = BAND_LABELS[report.band] ?? report.band;
+      const bandLabel = escapeHtml(BAND_LABELS[report.band] ?? report.band);
       const kept = report.totalReviewCount - report.excludedReviewCount;
       const params = rosetteParamsFromReport(report);
       const path = rosettePath(params, 60);
@@ -170,7 +153,7 @@ import Layout from "../../layouts/Layout.astro";
           case "unsupported-domain":
             return "That is not one of the storefronts Verdict currently supports.";
           case "not-a-product-page":
-            return "Verdict opened that link but could not find a product on it.";
+            return "Verdict could not find a product at that link. Paste the link to the product page itself.";
           case "unreadable":
             return "Verdict opened that listing but could not read it. See the status page for whether extraction is healthy.";
           case "timed-out":
@@ -200,10 +183,19 @@ import Layout from "../../layouts/Layout.astro";
         return;
       }
       form.hidden = false;
+      const submit = form.querySelector<HTMLButtonElement>("button[type=submit]");
+      if (submit === null) {
+        return;
+      }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const url = (document.getElementById("url") as HTMLInputElement).value;
+        // each analysis opens a tab
+        if (submit.disabled) {
+          return;
+        }
+        submit.disabled = true;
         result.innerHTML = "";
         statusLine.textContent = "Checking…";
         try {
@@ -214,8 +206,13 @@ import Layout from "../../layouts/Layout.astro";
           } else {
             renderStatus(statusLine, response);
           }
-        } catch {
-          statusLine.textContent = "Could not reach the extension. Try reloading the page.";
+        } catch (error) {
+          statusLine.textContent =
+            error instanceof BridgeError && error.message === "rate limited"
+              ? "That is a lot of checks in one minute. Wait a moment and try again."
+              : "Could not reach the extension. Try reloading the page.";
+        } finally {
+          submit.disabled = false;
         }
       });
     }

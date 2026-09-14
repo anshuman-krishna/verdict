@@ -26,6 +26,8 @@ import Layout from "../../layouts/Layout.astro";
   <script>
 
     import { BAND_COLORS, BAND_LABELS, ROSETTE, UNKNOWN_BAND_COLOR } from "../../lib/rosette";
+    import { sendToExtension as sendThroughBridge } from "../../lib/extensionBridge";
+    import { armedConfirmation } from "../../lib/confirmAction";
     const DOUBTFUL_OR_WORSE = new Set(["doubtful", "heavily-manipulated"]);
 
     interface HistorySummaryEntry {
@@ -76,21 +78,7 @@ import Layout from "../../layouts/Layout.astro";
     let allEntries: HistorySummaryEntry[] = [];
 
     function sendToExtension(type: string, extra: Record<string, unknown> = {}): Promise<any> {
-      return new Promise((resolve, reject) => {
-        const extensionId = root.dataset.verdictExtensionId;
-        const runtime = (window as any).chrome?.runtime;
-        if (!extensionId || !runtime?.sendMessage) {
-          reject(new Error("no cross extension messaging available in this browser"));
-          return;
-        }
-        runtime.sendMessage(extensionId, { type, ...extra }, (response: unknown) => {
-          if (runtime.lastError) {
-            reject(new Error(runtime.lastError.message));
-            return;
-          }
-          resolve(response);
-        });
-      });
+      return sendThroughBridge(type, extra);
     }
 
     function formatDate(timestamp: number): string {
@@ -143,7 +131,8 @@ import Layout from "../../layouts/Layout.astro";
       link.href = url;
       link.download = response.filename ?? `verdict-history.${format}`;
       link.click();
-      URL.revokeObjectURL(url);
+      // firefox cancels a download revoked synchronously
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     }
 
     function renderFigures(container: HTMLElement, entries: HistorySummaryEntry[]): void {
@@ -391,15 +380,49 @@ import Layout from "../../layouts/Layout.astro";
           <button type="button" id="export-csv" class="button-secondary">Export as CSV</button>
           <button type="button" id="clear-history" class="button-secondary">Delete everything</button>
         </p>
+        <p id="history-action-status" role="status"></p>
       `;
       renderFigures(app.querySelector("#history-figures") as HTMLElement, entries);
       renderControlsAndTable(app);
-      document.getElementById("export-json")?.addEventListener("click", () => download("json"));
-      document.getElementById("export-csv")?.addEventListener("click", () => download("csv"));
-      document.getElementById("clear-history")?.addEventListener("click", async () => {
-        await sendToExtension("verdict:history:clear");
-        renderEntries(app, []);
-      });
+      const actionStatus = app.querySelector<HTMLElement>("#history-action-status");
+      const announce = (message: string) => {
+        if (actionStatus !== null) {
+          actionStatus.textContent = message;
+        }
+      };
+      const exportAs = (format: "json" | "csv") => {
+        announce("");
+        download(format).catch(() => announce("The extension did not answer, so nothing was exported."));
+      };
+      document.getElementById("export-json")?.addEventListener("click", () => exportAs("json"));
+      document.getElementById("export-csv")?.addEventListener("click", () => exportAs("csv"));
+      const clearButton = document.getElementById("clear-history") as HTMLButtonElement | null;
+      if (clearButton !== null) {
+        // a stray click erases nothing
+        const confirmation = armedConfirmation({
+          label: "Delete everything",
+          armedLabel: "Click again to delete every check",
+          windowMs: 5000,
+          setLabel: (label) => {
+            clearButton.textContent = label;
+          },
+          setTimeout: (handler, ms) => window.setTimeout(handler, ms),
+          clearTimeout: (handle) => window.clearTimeout(handle as number),
+        });
+        clearButton.addEventListener("click", async () => {
+          if (!confirmation.press()) {
+            return;
+          }
+          clearButton.disabled = true;
+          try {
+            await sendToExtension("verdict:history:clear");
+            renderEntries(app, []);
+          } catch {
+            clearButton.disabled = false;
+            announce("The extension did not answer, so nothing was deleted.");
+          }
+        });
+      }
     }
 
     async function init(): Promise<void> {

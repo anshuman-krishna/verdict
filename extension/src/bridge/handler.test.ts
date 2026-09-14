@@ -191,7 +191,7 @@ describe("handleBridgeMessage", () => {
       options({ analyzeUrl }),
     );
     expect(bare).toEqual({ status: "no-model" });
-    expect(analyzeUrl).toHaveBeenCalledWith("https://amazon.com/dp/B000000000");
+    expect(analyzeUrl).toHaveBeenCalledWith("https://www.amazon.com/dp/B000000000");
 
     const withSubdomain = await handleBridgeMessage(
       { type: "verdict:analyze", url: "https://www.amazon.co.uk/dp/B000000000" },
@@ -216,6 +216,98 @@ describe("handleBridgeMessage", () => {
       options(),
     );
     expect(response).toEqual({ status: "unsupported-domain" });
+  });
+
+  it("never opens a storefront page that is not a product, such as sign out", async () => {
+    const analyzeUrl = vi.fn();
+    for (const url of [
+      "https://www.amazon.com/gp/flex/sign-out.html",
+      "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+      "https://www.amazon.com/",
+      "https://www.amazon.com/dp/short",
+    ]) {
+      expect(await handleBridgeMessage({ type: "verdict:analyze", url }, options({ analyzeUrl }))).toEqual({
+        status: "not-a-product-page",
+      });
+    }
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+
+  it("drops the query and fragment, so a pasted link cannot carry someone else's tag", async () => {
+    const analyzeUrl = vi.fn().mockResolvedValue({ status: "no-model" });
+    await handleBridgeMessage(
+      { type: "verdict:analyze", url: "https://www.amazon.com/Some-Title/dp/B000000000/ref=x?tag=aff-20&th=1#reviews" },
+      options({ analyzeUrl }),
+    );
+    expect(analyzeUrl).toHaveBeenCalledWith("https://www.amazon.com/Some-Title/dp/B000000000/ref=x");
+  });
+
+  it("opens the registry host, never the subdomain the link named", async () => {
+    const analyzeUrl = vi.fn().mockResolvedValue({ status: "no-model" });
+    await handleBridgeMessage(
+      { type: "verdict:analyze", url: "https://sellercentral.amazon.com/dp/B000000000" },
+      options({ analyzeUrl }),
+    );
+    expect(analyzeUrl).toHaveBeenCalledWith("https://www.amazon.com/dp/B000000000");
+  });
+
+  it("refuses a non default port or embedded credentials", async () => {
+    const analyzeUrl = vi.fn();
+    for (const url of [
+      "https://www.amazon.com:8443/dp/B000000000",
+      "https://someone:secret@www.amazon.com/dp/B000000000",
+    ]) {
+      expect(await handleBridgeMessage({ type: "verdict:analyze", url }, options({ analyzeUrl }))).toEqual({
+        status: "unsupported-domain",
+      });
+    }
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+
+  it("refuses a locale the rules do not cover even though the registry knows it", async () => {
+    const analyzeUrl = vi.fn();
+    expect(
+      await handleBridgeMessage(
+        { type: "verdict:analyze", url: "https://www.amazon.de/dp/B000000000" },
+        options({ analyzeUrl }),
+      ),
+    ).toEqual({ status: "unsupported-domain" });
+    expect(analyzeUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("origin trust", () => {
+  it("answers nothing to an untrusted origin, before touching history", async () => {
+    await deleteAllHistory();
+    await addHistoryEntry({ title: "kept", thumbnailUrl: null, report: {} });
+    const trustOrigin = vi.fn().mockReturnValue(false);
+
+    for (const type of ["verdict:history:list", "verdict:history:clear"] as const) {
+      expect(
+        await handleBridgeMessage({ type }, options({ origin: "moz-extension://other", trustOrigin })),
+      ).toEqual({ error: "untrusted origin" });
+    }
+
+    expect(trustOrigin).toHaveBeenCalledWith("moz-extension://other");
+    expect(await listHistory()).toHaveLength(1);
+    await deleteAllHistory();
+  });
+
+  it("refuses a sender with no origin when trust is required", async () => {
+    const trustOrigin = (origin: string | undefined) => origin === "https://verdict.tools";
+    expect(await handleBridgeMessage({ type: "verdict:history:list" }, options({ trustOrigin }))).toEqual({
+      error: "untrusted origin",
+    });
+  });
+
+  it("serves a trusted origin as before", async () => {
+    const trustOrigin = (origin: string | undefined) => origin === "https://verdict.tools";
+    expect(
+      await handleBridgeMessage(
+        { type: "verdict:history:list" },
+        options({ origin: "https://verdict.tools", trustOrigin }),
+      ),
+    ).toEqual({ entries: [] });
   });
 });
 

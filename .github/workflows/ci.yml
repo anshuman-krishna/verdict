@@ -30,6 +30,10 @@ jobs:
       - name: install extension dependencies
         working-directory: extension
         run: npm install
+      # siteBridge.spec.ts imports the site client
+      - name: install site dependencies
+        working-directory: site
+        run: npm install
       - name: run extension unit tests
         run: just ext test
       - name: run python test suites

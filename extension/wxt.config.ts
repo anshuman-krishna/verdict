@@ -1,4 +1,5 @@
 import { defineConfig } from "wxt";
+import { SITE_MATCHES, withoutDevelopmentOrigins } from "./src/bridge/origins";
 
 export default defineConfig({
   srcDir: "src",
@@ -33,15 +34,21 @@ export default defineConfig({
     // covers both opt ins. never granted at install: each is requested inside the click that enables
     // it, and released once neither needs it
     optional_host_permissions: ["https://api.verdict.tools/*"],
-    // SPEC.md section 11: scoped to the production domain and localhost
-    // only, so no other site can ever reach the bridge in background.ts.
+    // spec section 11, localhost only in development
     externally_connectable: {
-      matches: ["https://verdict.tools/*", "http://localhost/*"],
+      matches: [...SITE_MATCHES],
     },
     browser_specific_settings: {
       gecko: {
         id: "verdict@verdict.tools",
       },
+    },
+  },
+  hooks: {
+    "build:manifestGenerated": (wxt, manifest) => {
+      if (wxt.config.mode === "production") {
+        withoutDevelopmentOrigins(manifest);
+      }
     },
   },
 });

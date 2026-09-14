@@ -2,7 +2,9 @@ import { browser } from "wxt/browser";
 import type { ReportOutcome } from "../score/buildReport";
 import { analyzeViaHiddenTab } from "../bridge/analyzeViaTab";
 import { handleBridgeMessage } from "../bridge/handler";
+import { isTrustedSiteOrigin, senderOrigin } from "../bridge/origins";
 import { BridgeRateLimiter } from "../bridge/rateLimit";
+import { isRelayedBridgeMessage } from "../bridge/relay";
 import { BUNDLED_RULES } from "../extract/bundledRules";
 import {
   loadRulesForEverySite,
@@ -30,6 +32,12 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return undefined;
   }
+  if (isRelayedBridgeMessage(message)) {
+    // origin of the site tab itself
+    const origin = sender.tab === undefined ? undefined : senderOrigin(sender);
+    answerBridge(message.message, origin).then(sendResponse);
+    return true;
+  }
   // the storefront page shares its storage with our content script, so the writing happens here
   serveStorageRequest(message, sender, { rules: (siteId) => trustedRulesForSite(siteId) }).then(
     sendResponse,
@@ -56,18 +64,20 @@ function analyzeUrl(url: string) {
   });
 }
 
-function senderOrigin(sender: { origin?: string; url?: string }): string | undefined {
-  if (sender.origin !== undefined && sender.origin !== "") {
-    return sender.origin;
-  }
-  if (sender.url === undefined) {
-    return undefined;
-  }
-  try {
-    return new URL(sender.url).origin;
-  } catch {
-    return undefined;
-  }
+const trustOrigin = (origin: string | undefined) =>
+  isTrustedSiteOrigin(origin, import.meta.env.MODE !== "production");
+
+function answerBridge(message: unknown, origin: string | undefined) {
+  // what this build can read right now, not only what it shipped with
+  return trustedRulesForEverySite().catch(() => BUNDLED_RULES).then((rules) =>
+    handleBridgeMessage(message, {
+      bundledRules: rules,
+      analyzeUrl,
+      rateLimiter,
+      origin,
+      trustOrigin,
+    })
+  );
 }
 
 const CONTRIBUTION_ALARM_NAME = "verdict:flush-graph-contributions";
@@ -94,15 +104,7 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-    // what this build can read right now, not only what it shipped with
-    trustedRulesForEverySite().catch(() => BUNDLED_RULES).then((rules) =>
-      handleBridgeMessage(message, {
-        bundledRules: rules,
-        analyzeUrl,
-        rateLimiter,
-        origin: senderOrigin(sender),
-      })
-    ).then(sendResponse);
+    answerBridge(message, senderOrigin(sender)).then(sendResponse);
     return true;
   });
 
