@@ -3,7 +3,7 @@
 // or a new page of copy could break either without anything noticing.
 
 // written as an escape, because a gate that bans a character cannot contain it
-export const EM_DASH = "—";
+export const EM_DASH = "\u2014";
 
 // the vocabulary is a legal position as much as a tone of voice, so it is banned
 // in anything that ships rather than only in what a user reads today
@@ -22,8 +22,13 @@ const NEVER_SCANNED = [
   /^\.DS_Store$|(\/)\.DS_Store$/,
 ];
 
-// a test naming the vocabulary is asserting its absence, which is the point
-const NOT_OUR_PROSE = [/\.(test|spec)\.[cm]?[jt]sx?$/, /(^|\/)tests?\//];
+// a test naming the vocabulary is asserting its absence, which is the point, and
+// this file has to name it to ban it
+const NOT_OUR_PROSE = [
+  /\.(test|spec)\.[cm]?[jt]sx?$/,
+  /(^|\/)tests?\//,
+  /(^|\/)proseGate\.mjs$/,
+];
 
 export function isScanned(path) {
   return !NEVER_SCANNED.some((pattern) => pattern.test(path));

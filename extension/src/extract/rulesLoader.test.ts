@@ -11,6 +11,7 @@ import {
   type SignedRulesEnvelope,
 } from "./rulesLoader";
 import type { RulesDocument } from "./rules";
+import { STANDARD_FIELDS, withStandardFallback } from "./standardRules";
 
 const FIELDS = { title: { strategy: "selector", value: "h1" } } as const;
 
@@ -631,13 +632,15 @@ describe("rules across every site", () => {
 
   it("does not let one site failing take the others with it", async () => {
     const rules = await trustedRulesForEverySite(["one", "NOT A SITE ID"], { bundled: BUNDLED });
-    expect(rules.one).toBe(ONE);
-    expect(rules["NOT A SITE ID"]).toEqual({
-      version: 0,
-      site: "NOT A SITE ID",
-      locales: [],
-      fields: {},
-    });
+    expect(rules.one?.version).toBe(3);
+    expect(rules["NOT A SITE ID"]?.version).toBe(0);
+    expect(rules["NOT A SITE ID"]?.site).toBe("NOT A SITE ID");
+  });
+
+  it("hands the extractor the standard underneath whatever the site declares", () => {
+    expect(withStandardFallback(ONE).fields.title).toBe(STANDARD_FIELDS.title);
+    // the document that gets cached and version compared stays the one that was signed
+    expect(ONE.fields).toEqual({});
   });
 
   it("reads nothing from the network on the trusted path", async () => {

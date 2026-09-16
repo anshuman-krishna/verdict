@@ -61,7 +61,7 @@ function fieldProblem(value: unknown, depth: number): string | null {
     return "not an object";
   }
   const rule = value as Record<string, unknown>;
-  const own = strategyProblem(rule);
+  const own = numberFormatProblem(rule.format) ?? strategyProblem(rule);
   if (own !== null) {
     return own;
   }
@@ -84,11 +84,48 @@ function strategyProblem(rule: Record<string, unknown>): string | null {
       return nonEmptyString(rule.value, "value") ?? optionalString(rule.attribute, "attribute");
     case "presence":
       return nonEmptyString(rule.value, "value");
+    case "json-records":
+      return (
+        nonEmptyString(rule.path, "path") ??
+        optionalString(rule.scriptSelector, "scriptSelector") ??
+        unreadablePath(rule.path as string) ??
+        jsonRecordsFieldsProblem(rule.fields)
+      );
     case "composite":
       return compositeProblem(rule);
     default:
       return `unknown strategy ${JSON.stringify(rule.strategy)}`;
   }
+}
+
+function numberFormatProblem(format: unknown): string | null {
+  if (format === undefined || format === "locale" || format === "machine") {
+    return null;
+  }
+  return `format is neither locale nor machine: ${JSON.stringify(format)}`;
+}
+
+function jsonRecordsFieldsProblem(fields: unknown): string | null {
+  if (typeof fields !== "object" || fields === null || Array.isArray(fields)) {
+    return "fields is not an object";
+  }
+  const entries = Object.entries(fields as Record<string, unknown>);
+  if (entries.length === 0) {
+    return "fields is empty, so every match would yield an empty record";
+  }
+  for (const [name, value] of entries) {
+    const paths = Array.isArray(value) ? value : [value];
+    if (paths.length === 0) {
+      return `field ${name} names no path`;
+    }
+    for (const path of paths) {
+      const problem = nonEmptyString(path, "path") ?? unreadablePath(path as string);
+      if (problem !== null) {
+        return `field ${name} ${problem}`;
+      }
+    }
+  }
+  return null;
 }
 
 function compositeProblem(rule: Record<string, unknown>): string | null {

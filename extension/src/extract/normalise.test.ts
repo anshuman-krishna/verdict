@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SITES } from "./sites";
 import { LOCALE_FORMATS, localeFormat, normaliseDate, normaliseNumber } from "./normalise";
 
 describe("normaliseNumber", () => {
@@ -133,11 +134,77 @@ describe("what normalising a date fixes", () => {
 });
 
 describe("locale coverage", () => {
-  it("covers every locale the bundled rules declare", () => {
-    expect(Object.keys(LOCALE_FORMATS).sort()).toEqual(["co.uk", "com", "de", "fr"]);
+  const registered = SITES.flatMap((site) => Object.keys(site.locales));
+
+  it("carries a format for every locale the registry declares", () => {
+    for (const locale of registered) {
+      expect(localeFormat(locale), `no number and date format for ${locale}`).not.toBeNull();
+    }
+  });
+
+  it("carries no format for a locale nothing serves, which would be a dead table", () => {
+    for (const locale of Object.keys(LOCALE_FORMATS)) {
+      expect(registered, `${locale} has a format but no storefront`).toContain(locale);
+    }
   });
 
   it("returns null rather than a format for anything else", () => {
-    expect(localeFormat("es")).toBeNull();
+    expect(localeFormat("com.tr")).toBeNull();
+  });
+});
+
+// PLAN.md roadmap 0.4, locale expansion. one line per marketplace, with the number
+// and the date written the way that storefront writes them.
+describe("the marketplaces beyond the first four", () => {
+  const cases = [
+    { locale: "es", count: "8.043 valoraciones", rating: "4,6 de 5", date: "Revisado en España el 5 de enero de 2026" },
+    { locale: "it", count: "8.043 recensioni", rating: "4,6 su 5", date: "Recensito in Italia il 5 gennaio 2026" },
+    { locale: "nl", count: "8.043 beoordelingen", rating: "4,6 van 5", date: "Beoordeeld in Nederland op 5 januari 2026" },
+    { locale: "se", count: "8 043 betyg", rating: "4,6 av 5", date: "Recenserad i Sverige den 5 januari 2026" },
+    { locale: "pl", count: "8 043 opinii", rating: "4,6 na 5", date: "Zweryfikowana opinia z Polski z 5 stycznia 2026" },
+    { locale: "com.br", count: "8.043 avaliações", rating: "4,6 de 5", date: "Avaliado no Brasil em 5 de janeiro de 2026" },
+    { locale: "com.mx", count: "8,043 calificaciones", rating: "4.6 de 5", date: "Revisado en México el 5 de enero de 2026" },
+    { locale: "ca", count: "8,043 global ratings", rating: "4.6 out of 5", date: "Reviewed in Canada on January 5, 2026" },
+    { locale: "com.au", count: "8,043 global ratings", rating: "4.6 out of 5", date: "Reviewed in Australia on 5 January 2026" },
+    { locale: "in", count: "8,043 global ratings", rating: "4.6 out of 5", date: "Reviewed in India on 5 January 2026" },
+    { locale: "co.jp", count: "8,043件のグローバル評価", rating: "4.6", date: "2026年1月5日に日本でレビュー済み" },
+  ];
+
+  for (const { locale, count, rating, date } of cases) {
+    it(`reads amazon.${locale} the way that storefront writes things`, () => {
+      expect(normaliseNumber(count, locale)).toBe(8043);
+      expect(normaliseNumber(rating, locale)).toBe(4.6);
+      expect(normaliseDate(date, locale)).toBe("2026-01-05");
+    });
+  }
+
+  // a rule names the node holding the value. where the sentence opens with another
+  // number, as japanese does in "5つ星のうち4.6", the rule has to target it exactly.
+  it("reads the first number in the text it is given, wherever the sentence starts", () => {
+    expect(normaliseNumber("5つ星のうち4.6", "co.jp")).toBe(5);
+    expect(normaliseNumber("4.6", "co.jp")).toBe(4.6);
+  });
+
+  it("reads a french date on the canadian storefront, which serves both languages", () => {
+    expect(normaliseDate("Commenté au Canada le 5 janvier 2026", "ca")).toBe("2026-01-05");
+  });
+
+  it("reads the indian grouping, where the last three digits group and the rest go in twos", () => {
+    expect(normaliseNumber("1,23,456 ratings", "in")).toBe(123456);
+    expect(normaliseNumber("12,34,567 ratings", "in")).toBe(1234567);
+  });
+
+  it("does not let the indian grouping change how the other marketplaces read", () => {
+    expect(normaliseNumber("1,23,456", "com")).toBe(1);
+  });
+
+  it("reads a year first date written with western separators too", () => {
+    expect(normaliseDate("2026/01/05", "co.jp")).toBe("2026-01-05");
+    expect(normaliseDate("2026.1.5", "co.jp")).toBe("2026-01-05");
+  });
+
+  it("keeps a day first date day first, and a month first date month first", () => {
+    expect(normaliseDate("05/01/2026", "com.au")).toBe("2026-01-05");
+    expect(normaliseDate("01/05/2026", "ca")).toBe("2026-01-05");
   });
 });

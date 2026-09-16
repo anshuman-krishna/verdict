@@ -3,6 +3,8 @@ import type {
   CompositeStrategy,
   EmbeddedJsonStrategy,
   FieldRule,
+  JsonRecordsStrategy,
+  NumberFormat,
   PresenceStrategy,
   SelectorStrategy,
 } from "./rules";
@@ -14,6 +16,7 @@ export interface StrategyTrace {
   depth: number;
   target: string;
   matched: number;
+  format: NumberFormat;
 }
 
 export interface TracedField {
@@ -36,6 +39,7 @@ export function resolveFieldTraced(root: ParentNode, rule: FieldRule): TracedFie
       depth,
       target: strategyTarget(current),
       matched: values.length,
+      format: current.format ?? "locale",
     });
     if (values.length > 0) {
       return { values, trace };
@@ -49,6 +53,7 @@ export function resolveFieldTraced(root: ParentNode, rule: FieldRule): TracedFie
 function strategyTarget(rule: FieldRule): string {
   switch (rule.strategy) {
     case "embedded-json":
+    case "json-records":
       return rule.path;
     case "composite":
       return rule.container;
@@ -61,6 +66,8 @@ function runStrategy(root: ParentNode, rule: FieldRule): unknown[] {
   switch (rule.strategy) {
     case "embedded-json":
       return runEmbeddedJson(root, rule);
+    case "json-records":
+      return runJsonRecords(root, rule);
     case "composite":
       return runComposite(root, rule);
     case "presence":
@@ -104,31 +111,69 @@ function runPresence(root: ParentNode, rule: PresenceStrategy): unknown[] {
   }
 }
 
-function runEmbeddedJson(root: ParentNode, rule: EmbeddedJsonStrategy): unknown[] {
-  const selector = rule.scriptSelector ?? DEFAULT_EMBEDDED_JSON_SELECTOR;
+function parsedScripts(root: ParentNode, scriptSelector?: string): unknown[] {
+  const selector = scriptSelector ?? DEFAULT_EMBEDDED_JSON_SELECTOR;
   let scripts: NodeListOf<Element>;
   try {
     scripts = root.querySelectorAll(selector);
   } catch {
     return [];
   }
+  const documents: unknown[] = [];
   for (const script of Array.from(scripts)) {
     const text = script.textContent;
     if (!text) {
       continue;
     }
-    let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      documents.push(JSON.parse(text));
     } catch {
+      // a malformed block is one block, not the end of the page
       continue;
     }
-    const matched = queryJsonPath(parsed, rule.path);
-    if (matched.length > 0) {
-      return matched;
+  }
+  return documents;
+}
+
+// a page splits its markup across blocks, so every block is read, not the first that answers
+function runEmbeddedJson(root: ParentNode, rule: EmbeddedJsonStrategy): unknown[] {
+  return parsedScripts(root, rule.scriptSelector).flatMap((document_) =>
+    queryJsonPath(document_, rule.path),
+  );
+}
+
+function firstJsonValue(node: unknown, paths: string | readonly string[]): unknown {
+  for (const path of typeof paths === "string" ? [paths] : paths) {
+    const value = queryJsonPath(node, path).find(
+      (candidate) => candidate !== null && candidate !== undefined,
+    );
+    if (value !== undefined) {
+      return value;
     }
   }
-  return [];
+  return undefined;
+}
+
+function runJsonRecords(root: ParentNode, rule: JsonRecordsStrategy): unknown[] {
+  const records: Record<string, unknown>[] = [];
+  for (const document_ of parsedScripts(root, rule.scriptSelector)) {
+    for (const node of queryJsonPath(document_, rule.path)) {
+      const record: Record<string, unknown> = {};
+      let populated = false;
+      for (const [name, paths] of Object.entries(rule.fields)) {
+        const value = firstJsonValue(node, paths);
+        if (value === undefined) {
+          continue;
+        }
+        record[name] = value;
+        populated = true;
+      }
+      if (populated) {
+        records.push(record);
+      }
+    }
+  }
+  return records;
 }
 
 function runSelector(root: ParentNode, rule: SelectorStrategy): unknown[] {

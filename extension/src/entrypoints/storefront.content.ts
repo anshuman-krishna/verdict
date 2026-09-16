@@ -5,7 +5,7 @@ import { callIfSlower, FIRST_PAINT_BUDGET_MS } from "../contentScript/deadline";
 import { browserUrlWatcher } from "../contentScript/navigation";
 import { createSession } from "../contentScript/session";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
-import { bundledRulesFor, emptyRules } from "../extract/bundledRules";
+import { startingRules } from "../extract/bundledRules";
 import { contentScriptMatches, siteForHost } from "../extract/sites";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
@@ -34,7 +34,7 @@ export default defineContentScript({
       return;
     }
     // everything stored lives in the extension, never in the storefront's own origin
-    const rules = await readRules(site.id, bundledRulesFor(site.id) ?? emptyRules(site.id));
+    const rules = await readRules(site.id, startingRules(site.id));
 
     const deps: OrchestratorDeps = {
       rules,

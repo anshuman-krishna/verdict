@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { parseProductUrl } from "../src/extract/sites";
+import { parseProductUrl, SITES } from "../src/extract/sites";
 import { extractProductSnapshot, extractReviews } from "../src/extract/reviewExtraction";
 import type { RulesDocument } from "../src/extract/rules";
 import { buildReport } from "../src/score/buildReport";
@@ -57,7 +57,101 @@ const SHAPES: LocaleShape[] = [
     reviewCount: "8.043 Sternebewertungen",
     reviewDate: (day) => `Rezension aus Deutschland vom ${day}. Januar 2026`,
   },
+  {
+    locale: "es",
+    host: "www.amazon.es",
+    rating: "4,6 de 5 estrellas",
+    reviewCount: "8.043 valoraciones",
+    reviewDate: (day) => `Revisado en España el ${day} de enero de 2026`,
+  },
+  {
+    locale: "it",
+    host: "www.amazon.it",
+    rating: "4,6 su 5",
+    reviewCount: "8.043 recensioni",
+    reviewDate: (day) => `Recensito in Italia il ${day} gennaio 2026`,
+  },
+  {
+    locale: "nl",
+    host: "www.amazon.nl",
+    rating: "4,6 van de 5 sterren",
+    reviewCount: "8.043 beoordelingen",
+    reviewDate: (day) => `Beoordeeld in Nederland op ${day} januari 2026`,
+  },
+  {
+    locale: "se",
+    host: "www.amazon.se",
+    rating: "4,6 av 5 stjärnor",
+    reviewCount: "8 043 betyg",
+    reviewDate: (day) => `Recenserad i Sverige den ${day} januari 2026`,
+  },
+  {
+    locale: "pl",
+    host: "www.amazon.pl",
+    rating: "4,6 na 5 gwiazdek",
+    reviewCount: "8 043 opinii",
+    reviewDate: (day) => `Zweryfikowana opinia z Polski z ${day} stycznia 2026`,
+  },
+  {
+    locale: "com.br",
+    host: "www.amazon.com.br",
+    rating: "4,6 de 5 estrelas",
+    reviewCount: "8.043 avaliações",
+    reviewDate: (day) => `Avaliado no Brasil em ${day} de janeiro de 2026`,
+  },
+  {
+    locale: "com.mx",
+    host: "www.amazon.com.mx",
+    rating: "4.6 de 5 estrellas",
+    reviewCount: "8,043 calificaciones",
+    reviewDate: (day) => `Revisado en México el ${day} de enero de 2026`,
+  },
+  {
+    locale: "ca",
+    host: "www.amazon.ca",
+    rating: "4.6 out of 5 stars",
+    reviewCount: "8,043 global ratings",
+    reviewDate: (day) => `Reviewed in Canada on January ${day}, 2026`,
+  },
+  {
+    locale: "com.au",
+    host: "www.amazon.com.au",
+    rating: "4.6 out of 5 stars",
+    reviewCount: "8,043 global ratings",
+    reviewDate: (day) => `Reviewed in Australia on ${day} January 2026`,
+  },
+  {
+    locale: "in",
+    host: "www.amazon.in",
+    rating: "4.6 out of 5 stars",
+    reviewCount: "8,043 global ratings",
+    reviewDate: (day) => `Reviewed in India on ${day} January 2026`,
+  },
+  {
+    locale: "co.jp",
+    host: "www.amazon.co.jp",
+    // the japanese sentence opens with the scale, "5つ星のうち4.6", so the rule has to
+    // name the node holding the value rather than the sentence around it
+    rating: "4.6",
+    reviewCount: "8,043件のグローバル評価",
+    reviewDate: (day) => `2026年1月${day}日に日本でレビュー済み`,
+  },
 ];
+
+// a locale added to the registry without a shape here would ship unread
+describe("the locales this file covers", () => {
+  it("covers every locale the registry serves", () => {
+    const registered = SITES.flatMap((site) => Object.keys(site.locales)).sort();
+    expect(SHAPES.map((shape) => shape.locale).sort()).toEqual(registered);
+  });
+
+  it("names the host the registry names, so the url shapes are the real ones", () => {
+    for (const shape of SHAPES) {
+      const site = SITES.find((entry) => entry.locales[shape.locale] !== undefined);
+      expect(site?.locales[shape.locale]?.host).toBe(shape.host);
+    }
+  });
+});
 
 function pageFor(shape: LocaleShape): ParentNode {
   const reviews = Array.from({ length: 30 }, (_unused, index) => ({

@@ -1,6 +1,6 @@
-import { resolveField } from "./interpreter";
+import { resolveFieldTraced, type StrategyTrace } from "./interpreter";
 import { normaliseDate, normaliseNumber } from "./normalise";
-import type { RulesDocument } from "./rules";
+import type { NumberFormat, RulesDocument } from "./rules";
 import type { ParsedProductPage } from "./sites";
 import { safeThumbnailUrl } from "./sites";
 import type { ProductSnapshot, Review } from "./types";
@@ -27,13 +27,23 @@ function coerceNumber(value: unknown, locale: string): number | null {
   return typeof value === "string" ? normaliseNumber(value, locale) : null;
 }
 
+// the one locale whose number format is the machine format
+const MACHINE_NUMBER_LOCALE = "com";
+
+function numberLocale(trace: readonly StrategyTrace[], locale: string): string {
+  const format: NumberFormat = trace[trace.length - 1]?.format ?? "locale";
+  return format === "machine" ? MACHINE_NUMBER_LOCALE : locale;
+}
+
 export function extractReviews(root: ParentNode, rules: RulesDocument, locale: string): Review[] {
   const rule = rules.fields.reviews;
   if (rule === undefined) {
     return [];
   }
-  return resolveField(root, rule)
-    .map((value) => coerceReview(value, locale))
+  const { values, trace } = resolveFieldTraced(root, rule);
+  const readAs = numberLocale(trace, locale);
+  return values
+    .map((value) => coerceReview(value, readAs))
     .filter((review): review is Review => review !== null);
 }
 
@@ -42,9 +52,9 @@ function firstString(root: ParentNode, rules: RulesDocument, field: string): str
   if (rule === undefined) {
     return null;
   }
-  const matches = resolveField(root, rule);
-  const first = matches[0];
-  return typeof first === "string" ? first : null;
+  // a match list can open with a shape this field cannot use, which does not end it
+  const matches = resolveFieldTraced(root, rule).values;
+  return matches.find((value): value is string => typeof value === "string") ?? null;
 }
 
 function firstNumber(
@@ -53,8 +63,22 @@ function firstNumber(
   field: string,
   locale: string,
 ): number | null {
-  const raw = firstString(root, rules, field);
-  return raw === null ? null : normaliseNumber(raw, locale);
+  const rule = rules.fields[field];
+  if (rule === undefined) {
+    return null;
+  }
+  const { values, trace } = resolveFieldTraced(root, rule);
+  const readAs = numberLocale(trace, locale);
+  for (const value of values) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+    const parsed = typeof value === "string" ? normaliseNumber(value, readAs) : null;
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 export function extractProductSnapshot(

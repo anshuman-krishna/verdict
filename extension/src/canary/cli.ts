@@ -1,7 +1,8 @@
 import { Window } from "happy-dom";
-import { bundledRulesFor, emptyRules } from "../extract/bundledRules";
+import { startingRules } from "../extract/bundledRules";
 import { parseProductUrl, siteForHost } from "../extract/sites";
 import { extractFull, extractOnce } from "./extractOnce";
+import { explainExtraction, formatExplanation } from "./explain";
 
 // the canary drives whichever storefront the url names, not one named here
 function rulesForUrl(url: string) {
@@ -13,7 +14,7 @@ function rulesForUrl(url: string) {
       siteId = null;
     }
   }
-  return siteId === null ? emptyRules("unknown") : bundledRulesFor(siteId) ?? emptyRules(siteId);
+  return startingRules(siteId ?? "unknown");
 }
 
 
@@ -28,9 +29,10 @@ async function readStdin(): Promise<string> {
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
   const withReviews = args.includes("--reviews");
+  const explaining = args.includes("--explain");
   const url = args.find((arg) => !arg.startsWith("--"));
   if (url === undefined) {
-    process.stderr.write("usage: extract [--reviews] <url> < page.html\n");
+    process.stderr.write("usage: extract [--reviews] [--explain] <url> < page.html\n");
     return 2;
   }
   const html = await readStdin();
@@ -38,11 +40,12 @@ async function main(): Promise<number> {
   window.document.documentElement.innerHTML = html;
   const root = window.document as unknown as ParentNode;
   const rules = rulesForUrl(url);
-  const result = withReviews
-    ? extractFull(root, url, rules)
-    : extractOnce(root, url, rules);
+  // the canary reads the json, a person writing rules reads the chain that ran
+  const output = explaining
+    ? formatExplanation(explainExtraction(root, url, rules))
+    : JSON.stringify(withReviews ? extractFull(root, url, rules) : extractOnce(root, url, rules));
   await window.happyDOM.close();
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  process.stdout.write(`${output}\n`);
   return 0;
 }
 

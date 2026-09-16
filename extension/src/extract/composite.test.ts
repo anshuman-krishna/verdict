@@ -123,7 +123,7 @@ describe("the presence strategy", () => {
 describe("tracing the new strategies", () => {
   it("names the container selector and how many records it produced", () => {
     expect(resolveFieldTraced(parse(REVIEW_BLOCKS), COMPOSITE).trace).toEqual([
-      { strategy: "composite", depth: 0, target: "[data-hook='review']", matched: 2 },
+      { strategy: "composite", depth: 0, target: "[data-hook='review']", matched: 2, format: "locale" },
     ]);
   });
 
@@ -134,8 +134,8 @@ describe("tracing the new strategies", () => {
       fallback: COMPOSITE,
     };
     expect(resolveFieldTraced(parse(REVIEW_BLOCKS), rule).trace).toEqual([
-      { strategy: "embedded-json", depth: 0, target: "$.reviews[*]", matched: 0 },
-      { strategy: "composite", depth: 1, target: "[data-hook='review']", matched: 2 },
+      { strategy: "embedded-json", depth: 0, target: "$.reviews[*]", matched: 0, format: "locale" },
+      { strategy: "composite", depth: 1, target: "[data-hook='review']", matched: 2, format: "locale" },
     ]);
   });
 });

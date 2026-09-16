@@ -114,6 +114,13 @@ export-vocabulary:
     set -euo pipefail
     cd extension && node scripts/export-vocabulary.mjs
 
+#   just extract https://www.amazon.com/dp/B0ABCDEFGH < page.html
+# show what each field matched on a saved page, and which strategy produced it
+extract url *args: canary-extractor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    node extension/.output/canary/extract.mjs --explain "{{url}}" {{args}}
+
 # runs on the built output
 # check the built bundle against what gets extensions removed
 preflight: (ext "build")

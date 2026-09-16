@@ -108,7 +108,9 @@ describe("formatReport", () => {
             expected: 4.6,
             actual: null,
             ok: false,
-            strategies: [{ strategy: "selector", depth: 0, target: ".rating", matched: 0 }],
+            strategies: [
+              { strategy: "selector", depth: 0, target: ".rating", matched: 0, format: "locale" },
+            ],
           },
         ],
       }),

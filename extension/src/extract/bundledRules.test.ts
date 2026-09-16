@@ -18,8 +18,16 @@ describe("the committed rules document", () => {
     expect(typeof document_.fields).toBe("object");
   });
 
-  it("declares the four locales SPEC.md section 14 asks for", () => {
-    expect([...BUNDLED_AMAZON_RULES.locales].sort()).toEqual(["co.uk", "com", "de", "fr"]);
+  it("declares at least the four locales SPEC.md section 14 asks for", () => {
+    for (const locale of ["co.uk", "com", "de", "fr"]) {
+      expect(BUNDLED_AMAZON_RULES.locales).toContain(locale);
+    }
+  });
+
+  // the website bridge decides which pasted urls it will read from this list
+  it("declares every locale the registry serves, so none is unreachable from the site", () => {
+    const registered = Object.keys(SITES.find((site) => site.id === "amazon")?.locales ?? {});
+    expect([...BUNDLED_AMAZON_RULES.locales].sort()).toEqual(registered.sort());
   });
 
   it("carries no field the loader would discard", () => {

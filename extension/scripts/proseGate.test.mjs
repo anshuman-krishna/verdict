@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ACCUSATORY_WORDS,
@@ -85,5 +87,22 @@ describe("what the gate looks at", () => {
   it("reports both kinds together", () => {
     const problems = proseProblems(file(`"fake" and an ${EM_DASH}`));
     expect(problems).toHaveLength(2);
+  });
+});
+
+describe("the gate over its own source", () => {
+  // it went untracked while it was written, so git ls-files never handed it to itself
+  it("reads clean over the files that make it up", () => {
+    const here = import.meta.dirname;
+    const files = ["proseGate.mjs", "prose-gate.mjs", "proseGate.test.mjs"].map((name) => ({
+      path: `extension/scripts/${name}`,
+      text: readFileSync(join(here, name), "utf8"),
+    }));
+    expect(proseProblems(files)).toEqual([]);
+  });
+
+  it("still holds the em dash ban over itself, which is the part it can keep", () => {
+    expect(isScanned("extension/scripts/proseGate.mjs")).toBe(true);
+    expect(isOurProse("extension/scripts/proseGate.mjs")).toBe(false);
   });
 });

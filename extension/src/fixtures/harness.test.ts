@@ -54,7 +54,7 @@ describe("runFixture", () => {
     const check = result.checks.find((entry) => entry.field === "claimedRating");
     expect(check?.actual).toBe(4.6);
     expect(check?.strategies).toEqual([
-      { strategy: "selector", depth: 0, target: ".rating", matched: 1 },
+      { strategy: "selector", depth: 0, target: ".rating", matched: 1, format: "locale" },
     ]);
   });
 
@@ -64,7 +64,7 @@ describe("runFixture", () => {
     const check = result.checks.find((entry) => entry.field === "claimedRating");
     expect(check?.actual).toBeNull();
     expect(check?.strategies).toEqual([
-      { strategy: "selector", depth: 0, target: ".rating", matched: 0 },
+      { strategy: "selector", depth: 0, target: ".rating", matched: 0, format: "locale" },
     ]);
   });
 

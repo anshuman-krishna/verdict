@@ -1,5 +1,5 @@
 {
-  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules and its line in extension/src/extract/bundledRules.ts, and bundledRules.test.ts checks all three against each other so a missing one fails the build rather than shipping a storefront nothing can read. the id becomes a path segment in the signed rules url, so it stays lowercase letters, digits and hyphens. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered.",
+  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules and its line in extension/src/extract/bundledRules.ts, and bundledRules.test.ts checks all three against each other so a missing one fails the build rather than shipping a storefront nothing can read. the id becomes a path segment in the signed rules url, so it stays lowercase letters, digits and hyphens. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered. a locale is an entry here plus a number and date format in extension/src/extract/normalise.ts, and sites.test.ts checks every locale has one so a storefront is never read with nobody's number format.",
   "sites": [
     {
       "id": "amazon",
@@ -19,6 +19,50 @@
         "co.uk": {
           "host": "www.amazon.co.uk",
           "domain": "amazon.co.uk"
+        },
+        "es": {
+          "host": "www.amazon.es",
+          "domain": "amazon.es"
+        },
+        "it": {
+          "host": "www.amazon.it",
+          "domain": "amazon.it"
+        },
+        "nl": {
+          "host": "www.amazon.nl",
+          "domain": "amazon.nl"
+        },
+        "se": {
+          "host": "www.amazon.se",
+          "domain": "amazon.se"
+        },
+        "pl": {
+          "host": "www.amazon.pl",
+          "domain": "amazon.pl"
+        },
+        "com.br": {
+          "host": "www.amazon.com.br",
+          "domain": "amazon.com.br"
+        },
+        "com.mx": {
+          "host": "www.amazon.com.mx",
+          "domain": "amazon.com.mx"
+        },
+        "ca": {
+          "host": "www.amazon.ca",
+          "domain": "amazon.ca"
+        },
+        "com.au": {
+          "host": "www.amazon.com.au",
+          "domain": "amazon.com.au"
+        },
+        "in": {
+          "host": "www.amazon.in",
+          "domain": "amazon.in"
+        },
+        "co.jp": {
+          "host": "www.amazon.co.jp",
+          "domain": "amazon.co.jp"
         }
       },
       "productPath": "/(?:dp|gp/product)/([A-Za-z0-9]{10})(?:[/?]|$)",

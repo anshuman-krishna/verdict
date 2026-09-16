@@ -6,6 +6,7 @@ import { getPref, setPref } from "../storage/prefs";
 import { canonicalJson } from "./canonicalJson";
 import type { RulesDocument } from "./rules";
 import { sanitiseRulesDocument } from "./validateRules";
+import { withStandardFallback } from "./standardRules";
 
 export { canonicalJson };
 
@@ -170,11 +171,13 @@ export function optionsForSite(siteId: string, options: SiteRulesOptions = {}): 
   };
 }
 
-export function trustedRulesForSite(
+// every document reaching the extractor carries the standard underneath it,
+// while what is cached and version compared stays the document that was signed
+export async function trustedRulesForSite(
   siteId: string,
   options: SiteRulesOptions = {},
 ): Promise<RulesDocument> {
-  return trustedRules(optionsForSite(siteId, options));
+  return withStandardFallback(await trustedRules(optionsForSite(siteId, options)));
 }
 
 async function forEverySite(
@@ -185,9 +188,9 @@ async function forEverySite(
     // one site failing must not take the others with it
     siteIds.map(async (siteId) => {
       try {
-        return [siteId, await load(siteId)] as const;
+        return [siteId, withStandardFallback(await load(siteId))] as const;
       } catch {
-        return [siteId, emptyRules(siteId)] as const;
+        return [siteId, withStandardFallback(emptyRules(siteId))] as const;
       }
     }),
   );

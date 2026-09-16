@@ -1,5 +1,6 @@
 import amazon from "./rules/amazon.json";
 import type { RulesDocument } from "./rules";
+import { withStandardFallback } from "./standardRules";
 
 // one entry per site in schema/sites.json. bundledRules.test.ts checks both
 // directions, so a registry entry with no rules file fails the build rather
@@ -15,4 +16,9 @@ export function bundledRulesFor(siteId: string): RulesDocument | null {
 // a site with no rules yet reads nothing rather than reading wrongly
 export function emptyRules(siteId: string): RulesDocument {
   return { version: 0, site: siteId, locales: [], fields: {} };
+}
+
+// what a supported storefront is read with before anything remote has been fetched
+export function startingRules(siteId: string): RulesDocument {
+  return withStandardFallback(bundledRulesFor(siteId) ?? emptyRules(siteId));
 }

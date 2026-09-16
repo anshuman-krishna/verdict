@@ -15,7 +15,7 @@ describe("resolveFieldTraced", () => {
     const rule: FieldRule = { strategy: "selector", value: ".rating" };
     expect(resolveFieldTraced(root, rule)).toEqual({
       values: ["4.6"],
-      trace: [{ strategy: "selector", depth: 0, target: ".rating", matched: 1 }],
+      trace: [{ strategy: "selector", depth: 0, target: ".rating", matched: 1, format: "locale" }],
     });
   });
 
@@ -33,9 +33,9 @@ describe("resolveFieldTraced", () => {
     const traced = resolveFieldTraced(root, rule);
     expect(traced.values).toEqual(["4.6"]);
     expect(traced.trace).toEqual([
-      { strategy: "embedded-json", depth: 0, target: "$.rating", matched: 0 },
-      { strategy: "selector", depth: 1, target: ".rating", matched: 0 },
-      { strategy: "selector", depth: 2, target: ".legacy-rating", matched: 1 },
+      { strategy: "embedded-json", depth: 0, target: "$.rating", matched: 0, format: "locale" },
+      { strategy: "selector", depth: 1, target: ".rating", matched: 0, format: "locale" },
+      { strategy: "selector", depth: 2, target: ".legacy-rating", matched: 1, format: "locale" },
     ]);
   });
 
@@ -59,8 +59,8 @@ describe("resolveFieldTraced", () => {
       fallback: { strategy: "selector", value: ".rating" },
     };
     expect(resolveFieldTraced(root, rule).trace).toEqual([
-      { strategy: "selector", depth: 0, target: ":::", matched: 0 },
-      { strategy: "selector", depth: 1, target: ".rating", matched: 1 },
+      { strategy: "selector", depth: 0, target: ":::", matched: 0, format: "locale" },
+      { strategy: "selector", depth: 1, target: ".rating", matched: 1, format: "locale" },
     ]);
   });
 

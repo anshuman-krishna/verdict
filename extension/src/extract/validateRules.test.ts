@@ -139,7 +139,7 @@ describe("sanitiseRulesDocument", () => {
         locales: ["com"],
         fields: {
           title: { strategy: "selector", value: ".title" },
-          reviews: { strategy: "embedded-json", path: "$..reviews" },
+          reviews: { strategy: "embedded-json", path: "$.reviews[?(@.rating" },
         },
       });
 
@@ -180,5 +180,72 @@ describe("sanitiseRulesDocument", () => {
       expect(sanitised?.rules.fields.reviews).toBeUndefined();
       expect(sanitised?.problems.join(" ")).toContain("fallback");
     });
+  });
+});
+
+describe("a json-records rule", () => {
+  function withReviews(reviews: unknown) {
+    return sanitiseRulesDocument({
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: { title: { strategy: "selector", value: ".title" }, reviews },
+    });
+  }
+
+  it("is accepted when every path inside it is readable", () => {
+    const sanitised = withReviews({
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Review')]",
+      fields: { rating: "$.reviewRating.ratingValue", text: ["$.reviewBody", "$.description"] },
+    });
+    expect(sanitised?.problems).toEqual([]);
+    expect(sanitised?.rules.fields.reviews).toBeDefined();
+  });
+
+  it("is rejected when a field path would match nothing silently", () => {
+    const sanitised = withReviews({
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Review')]",
+      fields: { rating: "$.reviewRating[" },
+    });
+    expect(sanitised?.rules.fields.reviews).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("readable json path");
+  });
+
+  it("is rejected when it names no field, since every match would be empty", () => {
+    const sanitised = withReviews({
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Review')]",
+      fields: {},
+    });
+    expect(sanitised?.rules.fields.reviews).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("fields is empty");
+  });
+});
+
+describe("the number format a rule declares", () => {
+  function withFormat(format: unknown) {
+    return sanitiseRulesDocument({
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        claimedRating: { strategy: "selector", value: ".rating", format },
+      },
+    });
+  }
+
+  it("accepts the two readings there are", () => {
+    for (const format of ["locale", "machine"]) {
+      expect(withFormat(format)?.problems).toEqual([]);
+    }
+  });
+
+  it("drops a rule naming a reading the extractor does not have", () => {
+    const sanitised = withFormat("french");
+    expect(sanitised?.rules.fields.claimedRating).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("neither locale nor machine");
   });
 });

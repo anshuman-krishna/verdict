@@ -100,3 +100,55 @@ describe("resolveField, selector strategy", () => {
     expect(resolveField(root, rule)).toEqual([]);
   });
 });
+
+describe("the json-records strategy", () => {
+  const page = `
+    <script type="application/ld+json">
+      { "@type": "Review", "reviewBody": "one", "reviewRating": { "ratingValue": 5 } }
+    </script>
+    <script type="application/ld+json">
+      [{ "@type": "Review", "description": "two" }, { "@type": "Product", "name": "a kettle" }]
+    </script>
+  `;
+
+  it("builds a record from paths inside each matched node", () => {
+    const rule: FieldRule = {
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Review')]",
+      fields: { rating: "$.reviewRating.ratingValue", text: ["$.reviewBody", "$.description"] },
+    };
+    expect(resolveField(parse(page), rule)).toEqual([{ rating: 5, text: "one" }, { text: "two" }]);
+  });
+
+  it("drops a match that answers none of the fields", () => {
+    const rule: FieldRule = {
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Product')]",
+      fields: { rating: "$.reviewRating.ratingValue" },
+    };
+    expect(resolveField(parse(page), rule)).toEqual([]);
+  });
+
+  it("falls through to the next strategy when it matches nothing", () => {
+    const rule: FieldRule = {
+      strategy: "json-records",
+      path: "$..[?(@.@type=='Recipe')]",
+      fields: { text: "$.name" },
+      fallback: { strategy: "selector", value: ".text" },
+    };
+    expect(resolveField(parse(`<div class="text">from the dom</div>`), rule)).toEqual([
+      "from the dom",
+    ]);
+  });
+});
+
+describe("a page that splits its json across blocks", () => {
+  it("reads every block rather than the first one that answers", () => {
+    const root = parse(`
+      <script type="application/ld+json">{ "@type": "Review", "reviewBody": "one" }</script>
+      <script type="application/ld+json">{ "@type": "Review", "reviewBody": "two" }</script>
+    `);
+    const rule: FieldRule = { strategy: "embedded-json", path: "$..reviewBody" };
+    expect(resolveField(root, rule)).toEqual(["one", "two"]);
+  });
+});

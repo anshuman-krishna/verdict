@@ -90,3 +90,50 @@ describe("extractProductSnapshot", () => {
     ).toBeNull();
   });
 });
+
+describe("how a rule says its numbers are written", () => {
+  function snapshotOf(format: "locale" | "machine" | undefined, locale: string) {
+    const root = parse(
+      `<script type="application/ld+json">${JSON.stringify({ title: "a product", count: "1.234" })}</script>`,
+    );
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: [locale],
+      fields: {
+        title: { strategy: "embedded-json", path: "$.title" },
+        reviewCount: { strategy: "embedded-json", format, path: "$.count" },
+      },
+    };
+    return extractProductSnapshot(root, rules, { ...PAGE, locale }, "https://www.amazon.de/dp/B0BXYZ1234");
+  }
+
+  it("reads the storefront's own blob as the page writes numbers", () => {
+    expect(snapshotOf(undefined, "de")?.reviewCount).toBe(1234);
+    expect(snapshotOf("locale", "de")?.reviewCount).toBe(1234);
+  });
+
+  it("reads a machine stated number the same way in every locale", () => {
+    expect(snapshotOf("machine", "de")?.reviewCount).toBe(1.234);
+    expect(snapshotOf("machine", "com")?.reviewCount).toBe(1.234);
+  });
+
+  it("takes a number already stated as one, whatever the rule says", () => {
+    const root = parse(
+      `<script type="application/ld+json">{ "title": "a product", "count": 1234 }</script>`,
+    );
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: ["de"],
+      fields: {
+        title: { strategy: "embedded-json", path: "$.title" },
+        reviewCount: { strategy: "embedded-json", path: "$.count" },
+      },
+    };
+    expect(
+      extractProductSnapshot(root, rules, { ...PAGE, locale: "de" }, "https://www.amazon.de/dp/B0BXYZ1234")
+        ?.reviewCount,
+    ).toBe(1234);
+  });
+});

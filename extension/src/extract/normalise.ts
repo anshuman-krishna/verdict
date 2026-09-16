@@ -2,7 +2,9 @@ export interface LocaleFormat {
   groupSeparators: readonly string[];
   decimalSeparator: string;
   months: ReadonlyMap<string, number>;
-  numericOrder: "dmy" | "mdy";
+  numericOrder: "dmy" | "mdy" | "ymd";
+  // india groups the last three digits and then in twos, so 1,23,456 is one number
+  grouping?: "indian";
 }
 
 function monthTable(names: readonly (readonly string[])[]): ReadonlyMap<string, number> {
@@ -13,6 +15,19 @@ function monthTable(names: readonly (readonly string[])[]): ReadonlyMap<string, 
     }
   });
   return table;
+}
+
+// a storefront serving two languages writes its dates in either of them
+function mergedMonths(
+  ...tables: readonly ReadonlyMap<string, number>[]
+): ReadonlyMap<string, number> {
+  const merged = new Map<string, number>();
+  for (const table of tables) {
+    for (const [name, month] of table) {
+      merged.set(name, month);
+    }
+  }
+  return merged;
 }
 
 const ENGLISH_MONTHS = monthTable([
@@ -60,6 +75,100 @@ const GERMAN_MONTHS = monthTable([
   ["dezember", "dez"],
 ]);
 
+const SPANISH_MONTHS = monthTable([
+  ["enero", "ene"],
+  ["febrero", "feb"],
+  ["marzo", "mar"],
+  ["abril", "abr"],
+  ["mayo", "may"],
+  ["junio", "jun"],
+  ["julio", "jul"],
+  ["agosto", "ago"],
+  ["septiembre", "setiembre", "sep", "sept", "set"],
+  ["octubre", "oct"],
+  ["noviembre", "nov"],
+  ["diciembre", "dic"],
+]);
+
+const ITALIAN_MONTHS = monthTable([
+  ["gennaio", "gen"],
+  ["febbraio", "feb"],
+  ["marzo", "mar"],
+  ["aprile", "apr"],
+  ["maggio", "mag"],
+  ["giugno", "giu"],
+  ["luglio", "lug"],
+  ["agosto", "ago"],
+  ["settembre", "set"],
+  ["ottobre", "ott"],
+  ["novembre", "nov"],
+  ["dicembre", "dic"],
+]);
+
+const DUTCH_MONTHS = monthTable([
+  ["januari", "jan"],
+  ["februari", "feb"],
+  ["maart", "mrt"],
+  ["april", "apr"],
+  ["mei"],
+  ["juni", "jun"],
+  ["juli", "jul"],
+  ["augustus", "aug"],
+  ["september", "sep", "sept"],
+  ["oktober", "okt"],
+  ["november", "nov"],
+  ["december", "dec"],
+]);
+
+const PORTUGUESE_MONTHS = monthTable([
+  ["janeiro", "jan"],
+  ["fevereiro", "fev"],
+  ["março", "marco", "mar"],
+  ["abril", "abr"],
+  ["maio", "mai"],
+  ["junho", "jun"],
+  ["julho", "jul"],
+  ["agosto", "ago"],
+  ["setembro", "set"],
+  ["outubro", "out"],
+  ["novembro", "nov"],
+  ["dezembro", "dez"],
+]);
+
+const SWEDISH_MONTHS = monthTable([
+  ["januari", "jan"],
+  ["februari", "feb"],
+  ["mars", "mar"],
+  ["april", "apr"],
+  ["maj"],
+  ["juni", "jun"],
+  ["juli", "jul"],
+  ["augusti", "aug"],
+  ["september", "sep"],
+  ["oktober", "okt"],
+  ["november", "nov"],
+  ["december", "dec"],
+]);
+
+// polish dates name the month in the genitive, "5 stycznia", not the nominative
+const POLISH_MONTHS = monthTable([
+  ["stycznia", "styczeń", "styczen", "sty"],
+  ["lutego", "luty", "lut"],
+  ["marca", "marzec", "mar"],
+  ["kwietnia", "kwiecień", "kwiecien", "kwi"],
+  ["maja", "maj"],
+  ["czerwca", "czerwiec", "cze"],
+  ["lipca", "lipiec", "lip"],
+  ["sierpnia", "sierpień", "sierpien", "sie"],
+  ["września", "wrzesnia", "wrzesień", "wrzesien", "wrz"],
+  ["października", "pazdziernika", "październik", "pazdziernik", "paź", "paz"],
+  ["listopada", "listopad", "lis"],
+  ["grudnia", "grudzień", "grudzien", "gru"],
+]);
+
+// amazon.co.jp writes no month names, only 2024年3月2日
+const NO_MONTH_NAMES = monthTable([]);
+
 const SPACES = [" ", " ", " "] as const;
 
 export const LOCALE_FORMATS: Readonly<Record<string, LocaleFormat>> = {
@@ -87,6 +196,74 @@ export const LOCALE_FORMATS: Readonly<Record<string, LocaleFormat>> = {
     months: GERMAN_MONTHS,
     numericOrder: "dmy",
   },
+  es: {
+    groupSeparators: [".", ...SPACES],
+    decimalSeparator: ",",
+    months: SPANISH_MONTHS,
+    numericOrder: "dmy",
+  },
+  it: {
+    groupSeparators: [".", ...SPACES],
+    decimalSeparator: ",",
+    months: ITALIAN_MONTHS,
+    numericOrder: "dmy",
+  },
+  nl: {
+    groupSeparators: [".", ...SPACES],
+    decimalSeparator: ",",
+    months: DUTCH_MONTHS,
+    numericOrder: "dmy",
+  },
+  se: {
+    groupSeparators: [...SPACES],
+    decimalSeparator: ",",
+    months: SWEDISH_MONTHS,
+    numericOrder: "dmy",
+  },
+  pl: {
+    groupSeparators: [...SPACES],
+    decimalSeparator: ",",
+    months: POLISH_MONTHS,
+    numericOrder: "dmy",
+  },
+  "com.br": {
+    groupSeparators: [".", ...SPACES],
+    decimalSeparator: ",",
+    months: PORTUGUESE_MONTHS,
+    numericOrder: "dmy",
+  },
+  "com.mx": {
+    groupSeparators: [",", ...SPACES],
+    decimalSeparator: ".",
+    months: SPANISH_MONTHS,
+    numericOrder: "dmy",
+  },
+  ca: {
+    groupSeparators: [",", ...SPACES],
+    decimalSeparator: ".",
+    // the storefront is served in english and in french from the same domain
+    months: mergedMonths(ENGLISH_MONTHS, FRENCH_MONTHS),
+    numericOrder: "mdy",
+  },
+  "com.au": {
+    groupSeparators: [",", ...SPACES],
+    decimalSeparator: ".",
+    months: ENGLISH_MONTHS,
+    numericOrder: "dmy",
+  },
+  in: {
+    groupSeparators: [",", ...SPACES],
+    decimalSeparator: ".",
+    months: ENGLISH_MONTHS,
+    numericOrder: "dmy",
+    grouping: "indian",
+  },
+  "co.jp": {
+    groupSeparators: [",", ...SPACES],
+    decimalSeparator: ".",
+    months: NO_MONTH_NAMES,
+    numericOrder: "ymd",
+  },
 };
 
 export function localeFormat(locale: string): LocaleFormat | null {
@@ -102,9 +279,11 @@ function escapeClass(characters: readonly string[]): string {
 function numberPattern(format: LocaleFormat): RegExp {
   const group = escapeClass(format.groupSeparators);
   const decimal = escapeClass([format.decimalSeparator]);
-  return new RegExp(
-    `-?(?:\\d{1,3}(?:[${group}]\\d{3})+|\\d+)(?:[${decimal}]\\d+)?`,
-  );
+  const grouped =
+    format.grouping === "indian"
+      ? `\\d{1,2}(?:[${group}]\\d{2})+[${group}]\\d{3}|\\d{1,3}(?:[${group}]\\d{3})+`
+      : `\\d{1,3}(?:[${group}]\\d{3})+`;
+  return new RegExp(`-?(?:${grouped}|\\d+)(?:[${decimal}]\\d+)?`);
 }
 
 export function normaliseNumber(raw: string, locale: string): number | null {
@@ -205,7 +384,21 @@ function nearestNumber(
 
 const DIGIT_DATE = /(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/;
 
+// 2024年3月2日, and the same order written with the separators the west uses
+const YEAR_FIRST_DATE = /(\d{4})[.年/-]\s*(\d{1,2})[.月/-]\s*(\d{1,2})/;
+
+function fromYearFirst(raw: string): string | null {
+  const match = YEAR_FIRST_DATE.exec(raw);
+  if (match === null) {
+    return null;
+  }
+  return buildDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
 function fromDigits(raw: string, format: LocaleFormat): string | null {
+  if (format.numericOrder === "ymd") {
+    return fromYearFirst(raw);
+  }
   const match = DIGIT_DATE.exec(raw);
   if (match === null) {
     return null;
@@ -213,7 +406,7 @@ function fromDigits(raw: string, format: LocaleFormat): string | null {
   const first = Number(match[1]);
   const second = Number(match[2]);
   const year = expandYear(Number(match[3]), (match[3] as string).length);
-  const [day, month] = format.numericOrder === "dmy" ? [first, second] : [second, first];
+  const [day, month] = format.numericOrder === "mdy" ? [second, first] : [first, second];
   return buildDate(year, month, day);
 }
 
