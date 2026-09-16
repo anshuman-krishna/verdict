@@ -133,7 +133,8 @@ describe("reportAsText", () => {
   });
 
   it("carries no em dash, per CLAUDE.md", () => {
-    expect(text).not.toContain("—");
+    // as an escape, since the ban covers this file too
+    expect(text).not.toContain("\u2014");
   });
 
   it("names the signals that could not be read", () => {

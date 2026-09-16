@@ -131,6 +131,13 @@ sign-rules *args:
     set -euo pipefail
     cd extension && node scripts/sign-rules.mjs {{args}}
 
+# CLAUDE.md non negotiables 4 and 6, across everything git tracks
+# check the shipped prose for em dashes and accusatory wording
+prose:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    node extension/scripts/prose-gate.mjs
+
 parity:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -144,4 +151,4 @@ release: (ext "zip")
     set -euo pipefail
     cd extension && node scripts/release-manifest.mjs
 
-check: (ext "build") (ext "test") (py "lint") (py "test") parity
+check: (ext "build") (ext "test") (py "lint") (py "test") parity prose

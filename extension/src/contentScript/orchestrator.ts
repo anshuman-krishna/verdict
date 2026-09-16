@@ -1,7 +1,9 @@
 import {
+  DEFAULT_MAX_PAGES,
   fetchReviewPages,
   NO_REVIEWS_CACHE,
   type FetchProgress,
+  type FetchStop,
   type ReviewsCachePort,
 } from "../extract/fetchReviewPages";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
@@ -65,6 +67,13 @@ export interface GraphContributionDeps {
   enqueue: (edges: readonly ContributionEdge[]) => Promise<void>;
 }
 
+// what a deeper read actually managed, so the ui never offers a pass that cannot add anything
+export interface FetchSummary {
+  pagesFetched: number;
+  maxPages: number;
+  stoppedBecause: FetchStop;
+}
+
 export interface AnalysisResult {
   page: ParsedProductPage;
   // null when the url named a product and the page itself could not be read
@@ -72,6 +81,8 @@ export interface AnalysisResult {
   reviews: Review[];
   outcome: ReportOutcome;
   previousChecks?: PreviousCheck[];
+  // absent until a read went past the page the user is on
+  fetch?: FetchSummary;
 }
 
 const REVIEWER_NETWORK = signalsFor(["reviewerGraph"]);
@@ -305,5 +316,16 @@ export async function checkMoreDeeply(
     fetched.signatures,
     fetched.embeddings,
   );
-  return { page, product, reviews, outcome, previousChecks: await earlierChecks(productKey, deps) };
+  return {
+    page,
+    product,
+    reviews,
+    outcome,
+    previousChecks: await earlierChecks(productKey, deps),
+    fetch: {
+      pagesFetched: fetched.pagesFetched,
+      maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,
+      stoppedBecause: fetched.stoppedBecause,
+    },
+  };
 }

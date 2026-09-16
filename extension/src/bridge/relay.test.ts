@@ -5,6 +5,7 @@ import {
   isRelayRequestEnvelope,
   MAX_IN_FLIGHT,
   RELAY_CHANNEL,
+  RELAY_TIMEOUT_MS,
   RELAYED_MESSAGE_TYPE,
   type RelayTarget,
 } from "./relay";
@@ -150,5 +151,47 @@ describe("installRelay", () => {
     expect(listeners.size).toBe(1);
     remove();
     expect(listeners.size).toBe(0);
+  });
+});
+
+describe("a background that never answers", () => {
+  it("gives the slot back rather than wedging the page at the in flight cap", async () => {
+    const { target, posted, dispatch } = fakeWindow();
+    installRelay(target, () => new Promise(() => {}), { timeoutMs: 0 });
+
+    for (let i = 0; i < MAX_IN_FLIGHT; i++) {
+      dispatch(request(`wedge-${i}`));
+    }
+    await settle();
+    expect(posted).toHaveLength(MAX_IN_FLIGHT);
+    for (const { message } of posted) {
+      expect(message).toMatchObject({ response: { error: "extension unavailable" } });
+    }
+
+    dispatch(request("after"));
+    await settle();
+    expect(posted.at(-1)?.message).toMatchObject({
+      id: "after",
+      response: { error: "extension unavailable" },
+    });
+  });
+
+  it("answers a late reply only once", async () => {
+    const { target, posted, dispatch } = fakeWindow();
+    let answer: (value: unknown) => void = () => {};
+    installRelay(target, () => new Promise((resolve) => {
+      answer = resolve;
+    }), { timeoutMs: 0 });
+
+    dispatch(request("slow"));
+    await settle();
+    answer({ entries: [] });
+    await settle();
+
+    expect(posted).toHaveLength(1);
+  });
+
+  it("waits longer than a hidden tab analysis before giving up", () => {
+    expect(RELAY_TIMEOUT_MS).toBeGreaterThan(15_000);
   });
 });

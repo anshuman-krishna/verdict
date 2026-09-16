@@ -11,6 +11,7 @@ export interface SiteDefinition {
   productPath: string;
   productId: string;
   reviewPath: string;
+  maxReviewPages?: number;
   imageHosts?: string[];
 }
 
@@ -67,6 +68,16 @@ export function siteForHost(
   return sites.find((site) =>
     Object.values(site.locales).some((entry) => entry.host === hostname)
   ) ?? null;
+}
+
+// a storefront that has not declared its ceiling gets the shallow default
+export const DEFAULT_REVIEW_PAGE_CAP = 5;
+
+export function reviewPageCap(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): number {
+  return siteById(siteId, sites)?.maxReviewPages ?? DEFAULT_REVIEW_PAGE_CAP;
 }
 
 export function reviewPageUrl(

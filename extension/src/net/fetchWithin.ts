@@ -61,12 +61,54 @@ export interface JsonReply {
   body: unknown;
 }
 
+// a deadline bounds how long a body may take, not how large it may be, and the
+// worker has far less memory than a page does
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
+
+async function readWithin(
+  stream: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let read = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        return text + decoder.decode();
+      }
+      read += chunk.value.byteLength;
+      if (read > maxBytes) {
+        throw new Error(`response body over ${maxBytes} bytes`);
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined);
+  }
+}
+
+async function jsonWithin(response: Response, maxBytes: number): Promise<unknown> {
+  const declared = Number(response.headers?.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new Error(`response body over ${maxBytes} bytes`);
+  }
+  // only a stub has no stream, and a stub is not what the ceiling is for
+  if (!response.body) {
+    return await response.json();
+  }
+  return JSON.parse(await readWithin(response.body, maxBytes));
+}
+
 // one deadline over headers and body, a trickled body cannot hang the caller
 export async function fetchJsonWithin(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  maxBytes: number = MAX_RESPONSE_BYTES,
 ): Promise<JsonReply | null> {
   const controller = new AbortController();
   const { expired, cancel } = deadline(timeoutMs);
@@ -75,7 +117,7 @@ export async function fetchJsonWithin(
       if (!response.ok) {
         return { ok: false, status: response.status, body: null };
       }
-      return { ok: true, status: response.status, body: await response.json() };
+      return { ok: true, status: response.status, body: await jsonWithin(response, maxBytes) };
     },
   );
   exchange.catch(() => undefined);

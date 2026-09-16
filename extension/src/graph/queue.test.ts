@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ContributionEdge } from "./edge";
 import {
   QUEUE_CAP,
@@ -150,5 +150,20 @@ describe("clearContributionQueue", () => {
     await clearContributionQueue();
 
     expect(await countQueuedContributions()).toBe(0);
+  });
+});
+
+describe("where the hold interval's randomness comes from", () => {
+  it("draws it from crypto rather than Math.random", async () => {
+    const mathRandom = vi.spyOn(Math, "random");
+    const getRandomValues = vi.spyOn(crypto, "getRandomValues");
+    try {
+      await enqueueContributionEdges([edge({ reviewerHash: "c".repeat(64) })]);
+      expect(getRandomValues).toHaveBeenCalled();
+      expect(mathRandom).not.toHaveBeenCalled();
+    } finally {
+      mathRandom.mockRestore();
+      getRandomValues.mockRestore();
+    }
   });
 });

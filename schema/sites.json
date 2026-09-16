@@ -24,6 +24,7 @@
       "productPath": "/(?:dp|gp/product)/([A-Za-z0-9]{10})(?:[/?]|$)",
       "productId": "^[A-Z0-9]{10}$",
       "reviewPath": "/product-reviews/{productId}/?pageNumber={pageNumber}",
+      "maxReviewPages": 10,
       "imageHosts": []
     }
   ]

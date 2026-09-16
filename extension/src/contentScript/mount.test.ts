@@ -3,12 +3,15 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_MAX_PAGES } from "../extract/fetchReviewPages";
 import type { RulesDocument } from "../extract/rules";
+import { reviewPageCap } from "../extract/sites";
 import { localModelSet, type CombinerModel } from "../score/combine";
 import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
 import "../ui/notice";
 import {
   createProgressiveMount,
+  everyPageReadMessage,
   mountResult,
+  nextReadDepth,
   notEnoughReviewsMessage,
   removeMountedElements,
 } from "./mount";
@@ -459,6 +462,75 @@ describe("what the not enough reviews notice says", () => {
 
   it("groups a large count the way the rest of the panel does", () => {
     expect(notEnoughReviewsMessage(8431)).toContain("8,431 reviews");
+  });
+});
+
+describe("what a second check more deeply is allowed to do, SPEC.md section 9", () => {
+  const thin = (fetch?: AnalysisResult["fetch"]): AnalysisResult => ({
+    page: PAGE,
+    product: PRODUCT,
+    reviews: [],
+    outcome: { status: "not-enough-data" },
+    ...(fetch === undefined ? {} : { fetch }),
+  });
+
+  it("reads five pages before anything has been fetched", () => {
+    expect(nextReadDepth(thin(), { cache: directReviewsCache })).toBe(DEFAULT_MAX_PAGES);
+  });
+
+  it("goes to the storefront's own ceiling once five pages were not enough", () => {
+    const depth = nextReadDepth(
+      thin({ pagesFetched: 5, maxPages: 5, stoppedBecause: "complete" }),
+      { cache: directReviewsCache },
+    );
+    expect(depth).toBe(reviewPageCap(PAGE.site));
+    expect(depth).toBeGreaterThan(DEFAULT_MAX_PAGES);
+  });
+
+  it("offers nothing deeper once the listing ran out of pages", () => {
+    for (const stoppedBecause of ["exhausted", "repeated"] as const) {
+      expect(
+        nextReadDepth(thin({ pagesFetched: 3, maxPages: 5, stoppedBecause }), {
+          cache: directReviewsCache,
+        }),
+      ).toBeNull();
+    }
+  });
+
+  it("offers nothing deeper once the ceiling itself was reached", () => {
+    const cap = reviewPageCap(PAGE.site);
+    expect(
+      nextReadDepth(thin({ pagesFetched: cap, maxPages: cap, stoppedBecause: "complete" }), {
+        cache: directReviewsCache,
+      }),
+    ).toBeNull();
+  });
+
+  it("asks again at the same depth when the storefront stopped answering", () => {
+    expect(
+      nextReadDepth(thin({ pagesFetched: 2, maxPages: 5, stoppedBecause: "failed" }), {
+        cache: directReviewsCache,
+      }),
+    ).toBe(5);
+  });
+
+  it("renders a notice with no action rather than a button that reads nothing", async () => {
+    mountResult(document, thin({ pagesFetched: 3, maxPages: 5, stoppedBecause: "exhausted" }), deps());
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    expect(root.querySelector(".action")).toBeNull();
+    expect(root.querySelector(".message")?.textContent).toContain("every page this listing has");
+  });
+
+  it("says how far it read rather than claiming the listing is out of pages", () => {
+    const cap = reviewPageCap(PAGE.site);
+    const message = everyPageReadMessage(
+      thin({ pagesFetched: cap, maxPages: cap, stoppedBecause: "complete" }),
+    );
+    expect(message).toContain(`${cap} pages`);
+    expect(message).toContain("as deep as Verdict reads");
   });
 });
 

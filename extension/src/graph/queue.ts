@@ -1,3 +1,4 @@
+import { cryptoRandom } from "../reputation/lookup";
 import { openDatabase, put, requestToPromise, STORE_NAMES } from "../storage/database";
 import type { ContributionEdge } from "./edge";
 
@@ -16,7 +17,8 @@ interface QueuedContribution {
 export async function enqueueContributionEdges(
   edges: readonly ContributionEdge[],
   now: () => number = Date.now,
-  random: () => number = Math.random,
+  // the hold is a timing defence, and a modelled prng is one an observer can undo
+  random: () => number = cryptoRandom,
   cap: number = QUEUE_CAP,
 ): Promise<void> {
   if (edges.length === 0) {

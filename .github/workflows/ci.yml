@@ -18,6 +18,17 @@ jobs:
       - name: check python formatting and lint rules
         run: just py lint
 
+  prose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v3
+      - name: check the shipped prose against CLAUDE.md
+        run: just prose
+
   test:
     runs-on: ubuntu-latest
     steps:

@@ -4,6 +4,7 @@ import {
   allowedDomains,
   contentScriptMatches,
   parseProductUrl,
+  reviewPageCap,
   reviewPageUrl,
   siteForHost,
   type SiteDefinition,
@@ -120,6 +121,20 @@ describe("a storefront the registry gained without a code change", () => {
 
   it("does not answer for a host no site declares", () => {
     expect(parseProductUrl("https://shop.example.fr/item/123456", SECOND)).toBeNull();
+  });
+});
+
+describe("reviewPageCap", () => {
+  it("reads the storefront's own paging ceiling from the registry", () => {
+    expect(reviewPageCap("amazon")).toBe(10);
+  });
+
+  it("stays shallow for a storefront that never declared one", () => {
+    expect(reviewPageCap("shopfront", SECOND)).toBe(5);
+  });
+
+  it("is shallow for a site the registry does not carry at all", () => {
+    expect(reviewPageCap("nowhere")).toBe(5);
   });
 });
 

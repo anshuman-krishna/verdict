@@ -345,6 +345,30 @@ describe("checkMoreDeeply", () => {
     expect(result.reviews).toHaveLength(30);
     expect(result.outcome.status).toBe("ok");
   });
+
+  it("reports how far it read, so the caller knows whether a deeper pass exists", async () => {
+    const page = { site: "amazon" as const, locale: "com", productId: "B0DEPTH0001" };
+    const product = {
+      title: "A very good widget",
+      category: null,
+      claimedRating: 4.6,
+      reviewCount: null,
+      site: "amazon" as const,
+      locale: "com",
+      url: "https://www.amazon.com/dp/B0DEPTH0001",
+      thumbnailUrl: null,
+    };
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve("") });
+
+    const result = await checkMoreDeeply(page, product, [], deps(), {
+      maxPages: 4,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      delay: () => Promise.resolve(),
+      cache: directReviewsCache,
+    });
+
+    expect(result.fetch).toEqual({ pagesFetched: 1, maxPages: 4, stoppedBecause: "exhausted" });
+  });
 });
 
 describe("analyzePage, staged results (SPEC.md section 13, 400ms first paint)", () => {

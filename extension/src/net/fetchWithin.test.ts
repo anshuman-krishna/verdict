@@ -1,7 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
-import { ANONYMOUS_REQUEST_INIT, DEFAULT_TIMEOUT_MS, fetchJsonWithin, fetchWithin } from "./fetchWithin";
+import {
+  ANONYMOUS_REQUEST_INIT,
+  DEFAULT_TIMEOUT_MS,
+  fetchJsonWithin,
+  fetchWithin,
+  MAX_RESPONSE_BYTES,
+} from "./fetchWithin";
 
 const OK = { ok: true } as Response;
+
+function streamed(text: string) {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text));
+        controller.close();
+      },
+    }),
+  };
+}
 
 describe("fetchWithin", () => {
   it("returns the response when the service answers in time", async () => {
@@ -127,6 +147,49 @@ describe("fetchJsonWithin", () => {
       },
     });
     await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).rejects.toThrow("bad");
+  });
+
+  it("reads a streamed body and parses it", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(streamed('{"a":1}'));
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).resolves.toEqual({
+      ok: true,
+      status: 200,
+      body: { a: 1 },
+    });
+  });
+
+  it("refuses a body past the ceiling rather than buffering it", async () => {
+    let written = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        written += 1024;
+        controller.enqueue(new TextEncoder().encode("x".repeat(1024)));
+      },
+    });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: endless,
+    });
+
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000, 4096)).rejects.toThrow(
+      "over 4096 bytes",
+    );
+    expect(written).toBeLessThan(16 * 1024);
+  });
+
+  it("refuses a body that declares itself too large before reading any of it", async () => {
+    const stream = streamed("{}");
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ...stream,
+      headers: new Headers({ "content-length": String(MAX_RESPONSE_BYTES + 1) }),
+    });
+    await expect(fetchJsonWithin(fetchImpl, "https://x", {}, 1000)).rejects.toThrow("over");
+  });
+
+  it("ships a ceiling small enough to matter to a service worker", () => {
+    expect(MAX_RESPONSE_BYTES).toBeLessThanOrEqual(4 * 1024 * 1024);
   });
 
   it("applies the same anonymous request shape", async () => {
