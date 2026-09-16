@@ -88,3 +88,31 @@ describe("explaining what read a page", () => {
     expect(formatExplanation(explanation)).toContain("no supported site");
   });
 });
+
+describe("what a page would be scored against", () => {
+  it("names the prior the category reaches, or says the default answered", () => {
+    const root = parse(
+      `<script type="application/ld+json">${JSON.stringify({
+        "@type": "Product",
+        name: "a kettle",
+        category: ["Home & Kitchen", "Kettles"],
+      })}</script>`,
+    );
+    const explanation = explainExtraction(root, URL_, startingRules("amazon"));
+    expect(explanation.priorsKey).toBeNull();
+    expect(formatExplanation(explanation)).toContain("priors: default");
+  });
+
+  it("names the separator a step joined its matches with", () => {
+    const root = parse(
+      `<script type="application/ld+json">${JSON.stringify({
+        "@type": "Product",
+        name: "a kettle",
+        category: ["Home & Kitchen", "Kettles"],
+      })}</script>`,
+    );
+    expect(formatExplanation(explainExtraction(root, URL_, startingRules("amazon")))).toContain(
+      'joined with " > "',
+    );
+  });
+});

@@ -33,3 +33,9 @@
 {"signal": "quantileValue", "input": {"quantiles": [0.0, 0.5, 1.0, 2.0, 4.0], "fraction": 0.75}, "expected": {"value": 2.0}}
 {"signal": "quantileValue", "input": {"quantiles": [0.0, 0.5, 1.0, 2.0, 4.0], "fraction": 1.0}, "expected": {"value": 4.0}}
 {"signal": "quantileValue", "input": {"quantiles": [0.0, 0.5, 1.0, 2.0, 4.0], "fraction": 0.375}, "expected": {"value": 0.75}}
+{"signal": "categoryKeys", "input": {"category": "Home & Kitchen > Coffee, Tea & Espresso"}, "expected": {"keys": ["coffee-tea-espresso", "home-kitchen"]}}
+{"signal": "categoryKeys", "input": {"category": "ホーム＆キッチン › ケトル"}, "expected": {"keys": ["ケトル", "ホーム-キッチン"]}}
+{"signal": "categoryKeys", "input": {"category": "Küche, Haushalt & Wohnen / Wasserkocher"}, "expected": {"keys": ["wasserkocher", "küche-haushalt-wohnen"]}}
+{"signal": "categoryKeys", "input": {"category": null}, "expected": {"keys": []}}
+{"signal": "categoryPriors", "input": {"category": "Home & Kitchen > Kettles"}, "expected": {"key": null, "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2], "injectionKernel": [0.0, 0.0, 0.0, 0.35, 0.65]}}
+{"signal": "categoryPriors", "input": {"category": null}, "expected": {"key": null, "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2], "injectionKernel": [0.0, 0.0, 0.0, 0.35, 0.65]}}

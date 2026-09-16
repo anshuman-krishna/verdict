@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from verdict_research.features.priors import priors_category_keys, priors_document_digest
 from verdict_research.model.combine import CalibrationPoint, CombinerModel, ModelSet
 
 ARTIFACT_VERSION = 1
@@ -28,6 +29,12 @@ def _model_body(model: CombinerModel) -> dict[str, Any]:
     }
 
 
+# a model is only meaningful against the priors its features were built with, so it
+# carries them and research/tests/test_priors_gate.py refuses a build where they parted
+def priors_record() -> dict[str, Any]:
+    return {"digest": priors_document_digest(), "categories": priors_category_keys()}
+
+
 def build_model_artifact(
     model: CombinerModel,
     *,
@@ -40,6 +47,7 @@ def build_model_artifact(
         "trainedAt": trained_at,
         **_model_body(model),
         "acceptance": acceptance,
+        "priors": priors_record(),
     }
 
 
@@ -61,12 +69,40 @@ def place_in_slot(
     if existing.get("present") is not True:
         raise ArtifactError("no local model to attach a reviewer graph model to, train that first")
     artifact = dict(existing)
+    # the local model keeps the priors it was trained under, this slot records its own
     artifact[REVIEWER_GRAPH_SLOT] = {
         **_model_body(model),
         "trainedAt": trained_at,
         "acceptance": acceptance,
+        "priors": priors_record(),
     }
     return artifact
+
+
+RETRAIN = (
+    "rebuild the corpus and retrain, because a model fitted to features built from other "
+    "priors is being fed different numbers than the ones it was evaluated on"
+)
+
+
+# what schema/priors.json says now, against what the artifact was trained under
+def priors_mismatch(artifact: dict[str, Any]) -> str | None:
+    if artifact.get("present") is not True:
+        return None
+    current = priors_record()
+    slots = [(LOCAL_SLOT, artifact), (REVIEWER_GRAPH_SLOT, artifact.get(REVIEWER_GRAPH_SLOT))]
+    for slot, body in slots:
+        if not isinstance(body, dict):
+            continue
+        recorded = body.get("priors")
+        if recorded is None:
+            return f"the {slot} model records no priors, so nothing says what trained it"
+        if recorded.get("digest") != current["digest"]:
+            return (
+                f"the {slot} model was trained under priors {recorded.get('digest')}, "
+                f"this checkout holds {current['digest']}. {RETRAIN}"
+            )
+    return None
 
 
 def _parse_model(data: dict[str, Any]) -> CombinerModel:

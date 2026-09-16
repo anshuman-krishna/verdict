@@ -36,6 +36,7 @@ export interface ProvenanceInputs {
   rulesSite: string;
   modelTrainedAt: number | null;
   modelDigest: string | null;
+  priorsKey: string | null;
 }
 
 // what the model actually weighs, so a dispute can be answered signal by signal

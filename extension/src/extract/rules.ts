@@ -4,6 +4,8 @@ export type NumberFormat = "locale" | "machine";
 
 interface RuleBase {
   format?: NumberFormat;
+  // a breadcrumb is one field spread over many nodes, so a rule can say how it reads back
+  join?: string;
   fallback?: FieldRule;
 }
 

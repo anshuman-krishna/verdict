@@ -5,7 +5,8 @@ import { applyModel, quantileValue, type CombinerModel } from "../src/score/comb
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
 import { listingIdentityDrift } from "../src/score/listingDrift";
-import { PLACEHOLDER_INJECTION_KERNEL, PLACEHOLDER_ORGANIC_PRIOR } from "../src/score/priors";
+import { DEFAULT_INJECTION_KERNEL, DEFAULT_ORGANIC_PRIOR, priorsFor } from "../src/score/priors";
+import { categoryKeys } from "../src/score/categoryKey";
 import { ratingDeconvolution } from "../src/score/ratingDeconvolution";
 import { reviewerGraphShare } from "../src/score/reviewerGraph";
 import { detectTemporalBursts } from "../src/score/temporalBurst";
@@ -106,12 +107,25 @@ function run(vector: Vector): unknown {
       const signatureB = minhashSignature(shingle(textB, 5), numPermutations);
       return { estimatedJaccard: estimateJaccard(signatureA, signatureB) };
     }
+    case "categoryKeys": {
+      const { category } = vector.input as { category: string | null };
+      return { keys: categoryKeys(category) };
+    }
+    case "categoryPriors": {
+      const { category } = vector.input as { category: string | null };
+      const resolved = priorsFor(category);
+      return {
+        key: resolved.key,
+        organicPrior: resolved.inputs.organicPrior,
+        injectionKernel: resolved.inputs.injectionKernel,
+      };
+    }
     case "sharedPriors": {
       const { observed } = vector.input as { observed: number[] };
       return ratingDeconvolution(
         observed,
-        PLACEHOLDER_ORGANIC_PRIOR,
-        PLACEHOLDER_INJECTION_KERNEL,
+        DEFAULT_ORGANIC_PRIOR,
+        DEFAULT_INJECTION_KERNEL,
       );
     }
     case "textEmbeddingTermCounts": {

@@ -18,7 +18,7 @@ import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { FeatureVector } from "../score/featureVector";
 import { signalsFor, type ModelSet } from "../score/combine";
-import type { FeatureVectorInputs } from "../score/featureVector";
+import type { PriorsForCategory } from "../score/priors";
 
 export interface ReputationLookupDeps {
   isEnabled: () => Promise<boolean>;
@@ -34,7 +34,7 @@ export interface ReputationLookupDeps {
 export interface OrchestratorDeps {
   rules: RulesDocument;
   model: ModelSet | null;
-  priors: FeatureVectorInputs;
+  priors: PriorsForCategory;
   isHistoryEnabled: () => Promise<boolean>;
   saveHistory: (
     entry: {
@@ -176,6 +176,8 @@ async function scoreAndMaybeSave(
   // reused by both passes
   const signatures = signatureCache ?? new WeakMap<Review, bigint[]>();
   const embeddings = embeddingCache ?? new WeakMap<Review, number[]>();
+  // SPEC.md 5.1: a paperback and a kitchen appliance have different natural shapes
+  const priors = deps.priors(product.category);
   const score = (flaggedReviewerIds?: ReadonlySet<string>): ReportOutcome =>
     buildReport({
       reviews,
@@ -183,7 +185,7 @@ async function scoreAndMaybeSave(
       claimedRating: product.claimedRating as number,
       productText: productText(product),
       model: deps.model,
-      priors: deps.priors,
+      priors: priors.inputs,
       now: deps.now,
       random: deps.random,
       bootstrapResamples: deps.bootstrapResamples,
@@ -194,6 +196,7 @@ async function scoreAndMaybeSave(
         ...deps.provenance,
         rulesVersion: deps.rules.version,
         rulesSite: deps.rules.site,
+        priorsKey: priors.key,
       },
     });
 

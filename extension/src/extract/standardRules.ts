@@ -6,6 +6,12 @@ import type { FieldRule, RulesDocument } from "./rules";
 
 const PRODUCT = "$..[?(@.@type=='Product')]";
 const AGGREGATE = "$..[?(@.@type=='AggregateRating')]";
+const BREADCRUMB = "$..[?(@.@type=='BreadcrumbList')]";
+
+// the trail a storefront puts a listing under, read back widest first, which is the
+// order a prior is looked up in. SPEC.md 5.1 wants the category, and a breadcrumb is
+// where a page actually says it.
+export const CATEGORY_SEPARATOR = " > ";
 
 export const STANDARD_FIELDS: Readonly<Record<string, FieldRule>> = {
   title: {
@@ -13,7 +19,32 @@ export const STANDARD_FIELDS: Readonly<Record<string, FieldRule>> = {
     path: `${PRODUCT}.name`,
     fallback: { strategy: "selector", value: 'meta[property="og:title"]', attribute: "content" },
   },
-  category: { strategy: "embedded-json", path: `${PRODUCT}.category` },
+  category: {
+    strategy: "embedded-json",
+    // category is one string or a list of them, and a list is already the trail
+    path: `${PRODUCT}.category[*]`,
+    join: CATEGORY_SEPARATOR,
+    fallback: {
+      strategy: "embedded-json",
+      path: `${PRODUCT}.category`,
+      join: CATEGORY_SEPARATOR,
+      fallback: {
+        strategy: "embedded-json",
+        path: `${BREADCRUMB}.itemListElement[*].item.name`,
+        join: CATEGORY_SEPARATOR,
+        fallback: {
+          strategy: "embedded-json",
+          path: `${BREADCRUMB}.itemListElement[*].name`,
+          join: CATEGORY_SEPARATOR,
+          fallback: {
+            strategy: "selector",
+            value: '[itemtype$="schema.org/BreadcrumbList"] [itemprop="name"]',
+            join: CATEGORY_SEPARATOR,
+          },
+        },
+      },
+    },
+  },
   claimedRating: {
     strategy: "embedded-json",
     format: "machine",

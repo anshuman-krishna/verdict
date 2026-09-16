@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { startingRules } from "./bundledRules";
 import { extractProductSnapshot, extractReviews } from "./reviewExtraction";
 import type { RulesDocument } from "./rules";
-import { STANDARD_FIELDS, withStandardFallback } from "./standardRules";
+import { CATEGORY_SEPARATOR, STANDARD_FIELDS, withStandardFallback } from "./standardRules";
+import { resolvePriors, type PriorsDocument } from "../score/priors";
 
 function parse(html: string): ParentNode {
   const container = document.createElement("div");
@@ -184,5 +185,76 @@ describe("what the standard is allowed to override", () => {
       "thumbnailUrl",
       "title",
     ]);
+  });
+});
+
+describe("the category trail a page states", () => {
+  function categoryOf(document_: unknown): string | null {
+    return extractProductSnapshot(parse(block(document_)), RULES, PAGE, URL_)?.category ?? null;
+  }
+
+  it("joins a category the standard allows to be a list", () => {
+    expect(categoryOf({ "@type": "Product", name: "a kettle", category: ["Kitchen", "Kettles"] }))
+      .toBe(`Kitchen${CATEGORY_SEPARATOR}Kettles`);
+  });
+
+  it("reads the breadcrumb when the product states no category", () => {
+    expect(
+      categoryOf({
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, item: { name: "Home & Kitchen" } },
+              { "@type": "ListItem", position: 2, item: { name: "Kettles" } },
+            ],
+          },
+          { "@type": "Product", name: "a kettle" },
+        ],
+      }),
+    ).toBe("Home & Kitchen > Kettles");
+  });
+
+  it("reads the breadcrumb written with the name on the list item itself", () => {
+    expect(
+      categoryOf({
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Electronics" },
+              { "@type": "ListItem", position: 2, name: "Headphones" },
+            ],
+          },
+          { "@type": "Product", name: "some headphones" },
+        ],
+      }),
+    ).toBe("Electronics > Headphones");
+  });
+
+  it("reads a breadcrumb marked up in the page itself", () => {
+    const root = parse(
+      `<div itemtype="https://schema.org/BreadcrumbList">
+         <span itemprop="name">Books</span><span itemprop="name">Fiction</span>
+       </div>${block({ "@type": "Product", name: "a paperback" })}`,
+    );
+    expect(extractProductSnapshot(root, RULES, PAGE, URL_)?.category).toBe("Books > Fiction");
+  });
+
+  // the point of reading the trail at all, SPEC.md 5.1
+  it("reaches the prior for the narrowest part of the trail that has one", () => {
+    const priors: PriorsDocument = {
+      default: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.35, 0.65] },
+      aliases: {},
+      categories: { kettles: { organicPrior: [0.05, 0.05, 0.1, 0.3, 0.5] } },
+    };
+    const category = categoryOf({
+      "@type": "Product",
+      name: "a kettle",
+      category: ["Home & Kitchen", "Kettles"],
+    });
+    expect(resolvePriors(category, priors).key).toBe("kettles");
   });
 });

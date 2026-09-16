@@ -67,6 +67,15 @@ def test_flags_a_corpus_featurised_under_other_priors():
     assert audit_artifact(artifact(), rows).priors_match is False
 
 
+def test_names_the_retrain_when_the_priors_moved_under_the_shipped_model():
+    stale = artifact()
+    stale["priors"] = {"digest": "00000000", "categories": []}
+
+    problems = audit_artifact(stale, examples()).problems
+
+    assert any("retrain" in problem for problem in problems)
+
+
 def test_refuses_an_artifact_that_states_no_model():
     with pytest.raises(ArtifactError):
         audit_artifact({"artifactVersion": 1, "present": False, "reason": "none"}, examples())

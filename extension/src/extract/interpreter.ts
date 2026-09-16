@@ -17,6 +17,7 @@ export interface StrategyTrace {
   target: string;
   matched: number;
   format: NumberFormat;
+  join?: string;
 }
 
 export interface TracedField {
@@ -40,6 +41,7 @@ export function resolveFieldTraced(root: ParentNode, rule: FieldRule): TracedFie
       target: strategyTarget(current),
       matched: values.length,
       format: current.format ?? "locale",
+      ...(current.join === undefined ? {} : { join: current.join }),
     });
     if (values.length > 0) {
       return { values, trace };

@@ -1,6 +1,7 @@
 import { resolveFieldTraced, type StrategyTrace } from "../extract/interpreter";
 import type { RulesDocument } from "../extract/rules";
 import type { Review } from "../extract/types";
+import { resolvePriors } from "../score/priors";
 import { extractFull, type FullExtraction } from "./extractOnce";
 
 // PLAN.md week one, tasks 5 and 7: rules are written against saved pages, and a rule
@@ -21,6 +22,8 @@ export interface Explanation {
   reviewCount: number;
   fields: FieldExplanation[];
   firstReview: Review | null;
+  // which prior the category read off this page would be scored against
+  priorsKey: string | null;
 }
 
 function valueOf(field: string, extraction: FullExtraction): unknown {
@@ -50,6 +53,7 @@ export function explainExtraction(
     reviewCount: extraction.reviews.length,
     fields,
     firstReview: extraction.reviews[0] ?? null,
+    priorsKey: resolvePriors(extraction.product?.category ?? null).key,
   };
 }
 
@@ -66,7 +70,8 @@ function matchCount(matched: number): string {
 
 function stepLine(step: StrategyTrace): string {
   const format = step.format === "machine" ? ", machine numbers" : "";
-  return `    ${step.strategy}  ${step.target}  ${matchCount(step.matched)}${format}`;
+  const join = step.join === undefined ? "" : `, joined with ${JSON.stringify(step.join)}`;
+  return `    ${step.strategy}  ${step.target}  ${matchCount(step.matched)}${format}${join}`;
 }
 
 function reviewLine(review: Review): string {
@@ -95,7 +100,11 @@ export function formatExplanation(explanation: Explanation): string {
       lines.push(stepLine(step));
     }
   }
-  lines.push("", `${explanation.reviewCount} reviews read`);
+  lines.push(
+    "",
+    `priors: ${explanation.priorsKey ?? "default, no category estimate matched"}`,
+    `${explanation.reviewCount} reviews read`,
+  );
   if (explanation.firstReview !== null) {
     lines.push(reviewLine(explanation.firstReview));
   }

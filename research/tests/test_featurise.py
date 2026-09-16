@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from verdict_research.corpus.dataset import LabeledExample
 from verdict_research.corpus.featurise import (
     LabeledFixture,
     LabelFileError,
@@ -14,11 +15,12 @@ from verdict_research.corpus.featurise import (
     read_fixture_url,
     read_label_file,
 )
-from verdict_research.features.priors import placeholder_priors
+from verdict_research.features.feature_vector import FeatureVectorInputs
+from verdict_research.features.priors import ResolvedPriors, priors_digest, priors_for
 from verdict_research.schema import ProductSnapshot, Review
 from verdict_research.shipped_extractor import ExtractorError, FullExtraction
 
-PRIORS = placeholder_priors()
+PRIORS = priors_for
 
 
 def snapshot(title: str = "a knife set", category: str | None = "kitchen") -> ProductSnapshot:
@@ -234,3 +236,33 @@ class TestFeaturise:
 
         featurise([LabeledFixture("one", 1)], tmp_path, extract, PRIORS)
         assert seen == ["https://www.amazon.de/dp/B0ABCDEF12"]
+
+
+def test_records_which_prior_built_the_row():
+    example = featurise_extraction(
+        extraction(reviews(60), snapshot()), LabeledFixture("one", 1), PRIORS
+    )
+
+    assert isinstance(example, LabeledExample)
+    assert example.metadata["priors"] == priors_digest(priors_for("kitchen").inputs)
+    assert example.metadata["priorsKey"] == (priors_for("kitchen").key or "")
+
+
+def test_builds_a_row_against_the_prior_for_its_own_category():
+    kitchen = FeatureVectorInputs(
+        organic_prior=[0.05, 0.05, 0.1, 0.3, 0.5],
+        injection_kernel=[0, 0, 0, 0.35, 0.65],
+    )
+
+    def priors(category: str | None, product_text: str) -> ResolvedPriors:
+        assert category == "kitchen"
+        kitchen.product_text = product_text
+        return ResolvedPriors(inputs=kitchen, key="kitchen")
+
+    example = featurise_extraction(
+        extraction(reviews(60), snapshot()), LabeledFixture("one", 0), priors
+    )
+
+    assert isinstance(example, LabeledExample)
+    assert example.metadata["priorsKey"] == "kitchen"
+    assert example.metadata["priors"] == priors_digest(kitchen)

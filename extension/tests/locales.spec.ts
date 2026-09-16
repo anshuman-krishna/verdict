@@ -5,7 +5,7 @@ import { extractProductSnapshot, extractReviews } from "../src/extract/reviewExt
 import type { RulesDocument } from "../src/extract/rules";
 import { buildReport } from "../src/score/buildReport";
 import { meetsMinimumDataThresholds } from "../src/score/featureVector";
-import { PLACEHOLDER_PRIORS } from "../src/score/priors";
+import { DEFAULT_PRIORS } from "../src/score/priors";
 
 
 const RULES: RulesDocument = {
@@ -206,7 +206,7 @@ describe.each(SHAPES)("extraction on amazon.$locale", (shape) => {
       seed: url,
       claimedRating: 4.6,
       model: null,
-      priors: PLACEHOLDER_PRIORS,
+      priors: DEFAULT_PRIORS,
     });
     expect(outcome.status).toBe("no-model");
   });

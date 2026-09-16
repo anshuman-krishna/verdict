@@ -114,6 +114,13 @@ export-vocabulary:
     set -euo pipefail
     cd extension && node scripts/export-vocabulary.mjs
 
+#   just priors research/labels.jsonl --write
+# estimate the organic rating shape per category from the listings labelled clean
+priors labels *args: canary-extractor
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv --directory research run python -m verdict_research.model.priors_cli "{{labels}}" {{args}}
+
 #   just extract https://www.amazon.com/dp/B0ABCDEFGH < page.html
 # show what each field matched on a saved page, and which strategy produced it
 extract url *args: canary-extractor

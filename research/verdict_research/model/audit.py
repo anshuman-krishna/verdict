@@ -2,8 +2,14 @@ from dataclasses import dataclass
 
 from verdict_research.corpus.dataset import LabeledExample
 from verdict_research.eval.report import EvalReport, evaluate_model
-from verdict_research.features.priors import placeholder_priors, priors_digest
-from verdict_research.model.artifact import LOCAL_SLOT, SLOTS, ArtifactError, parse_model_artifact
+from verdict_research.features.priors import known_priors_digests
+from verdict_research.model.artifact import (
+    LOCAL_SLOT,
+    SLOTS,
+    ArtifactError,
+    parse_model_artifact,
+    priors_mismatch,
+)
 from verdict_research.model.combine import MEDIAN_FRACTION, CombinerModel, ModelSet
 from verdict_research.model.pipeline import OperatingPoint, best_operating_point, report_problems
 
@@ -18,6 +24,11 @@ class Audit:
     problems: list[str]
     corpus_priors: list[str]
     priors_match: bool
+
+
+def _priors_problems(artifact: dict) -> list[str]:
+    mismatch = priors_mismatch(artifact)
+    return [] if mismatch is None else [mismatch]
 
 
 def _slot_model(models: ModelSet, slot: str) -> CombinerModel:
@@ -48,7 +59,8 @@ def audit_artifact(artifact: dict, examples: list[LabeledExample], slot: str = L
         model=model,
         report=report,
         operating_point=point,
-        problems=report_problems(report, point),
+        problems=report_problems(report, point) + _priors_problems(artifact),
         corpus_priors=digests,
-        priors_match=not digests or digests == [priors_digest(placeholder_priors())],
+        # a row built against a prior this document no longer holds is a stale corpus
+        priors_match=set(digests).issubset(known_priors_digests()),
     )

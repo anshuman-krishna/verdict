@@ -7,7 +7,10 @@ import { localModelSet, type CombinerModel } from "../score/combine";
 import { analyzePage, checkMoreDeeply, mergeReviews } from "./orchestrator";
 import { directReviewsCache } from "../storage/reviewsCache";
 
-const PRIORS = { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] };
+const PRIORS = () => ({
+  inputs: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] },
+  key: null,
+});
 
 const MODEL: CombinerModel = {
   intercept: -1,

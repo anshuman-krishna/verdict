@@ -47,7 +47,10 @@ function deps(): OrchestratorDeps {
   return {
     rules: RULES,
     model: localModelSet(MODEL),
-    priors: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] },
+    priors: () => ({
+      inputs: { organicPrior: [0.2, 0.2, 0.2, 0.2, 0.2], injectionKernel: [0, 0, 0, 0.5, 0.5] },
+      key: null,
+    }),
     isHistoryEnabled: vi.fn().mockResolvedValue(false),
     saveHistory: vi.fn().mockResolvedValue(undefined),
     bootstrapResamples: 5,

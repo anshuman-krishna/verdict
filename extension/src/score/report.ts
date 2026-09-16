@@ -40,6 +40,8 @@ export interface ReportProvenance {
   rulesSite: string;
   modelTrainedAt: number | null;
   modelDigest: string | null;
+  // which category prior scored it, null when the default one did
+  priorsKey: string | null;
   signals: string[];
 }
 
@@ -123,6 +125,7 @@ export function parseProvenance(value: unknown): ReportProvenance | null {
     rulesSite: record.rulesSite,
     modelTrainedAt: numberAt(record, "modelTrainedAt"),
     modelDigest: typeof record.modelDigest === "string" ? record.modelDigest : null,
+    priorsKey: typeof record.priorsKey === "string" ? record.priorsKey : null,
     signals: stringList(record.signals),
   };
 }

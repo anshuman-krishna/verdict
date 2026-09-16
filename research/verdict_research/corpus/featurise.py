@@ -5,13 +5,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verdict_research.corpus.dataset import LabeledExample
-from verdict_research.features.feature_vector import FeatureVectorInputs, build_feature_vector
-from verdict_research.features.priors import priors_digest
+from verdict_research.features.feature_vector import build_feature_vector
+from verdict_research.features.priors import ResolvedPriors, priors_digest
 from verdict_research.model.combine import flatten_feature_vector
 from verdict_research.schema import ProductSnapshot
 from verdict_research.shipped_extractor import ExtractorError, FullExtraction
 
 Extract = Callable[[str, str], FullExtraction]
+# SPEC.md 5.1 wants a prior per category, so the row records which one it was built with
+Priors = Callable[[str | None, str], ResolvedPriors]
 
 VALID_LABELS = (0, 1)
 
@@ -100,17 +102,12 @@ def product_text(product: ProductSnapshot) -> str:
 def featurise_extraction(
     extraction: FullExtraction,
     labeled: LabeledFixture,
-    priors: FeatureVectorInputs,
+    priors: Priors,
 ) -> LabeledExample | Skipped:
     if extraction.product is None:
         return Skipped(labeled.fixture, "extraction found no product")
-    inputs = FeatureVectorInputs(
-        organic_prior=list(priors.organic_prior),
-        injection_kernel=list(priors.injection_kernel),
-        window_days=priors.window_days,
-        percentile=priors.percentile,
-        product_text=product_text(extraction.product),
-    )
+    resolved = priors(extraction.product.category, product_text(extraction.product))
+    inputs = resolved.inputs
     vector = build_feature_vector(extraction.reviews, inputs)
     if not vector.meets_minimum_data:
         return Skipped(labeled.fixture, "below the minimum data thresholds")
@@ -121,6 +118,7 @@ def featurise_extraction(
         "extractedReviewCount": str(extraction.review_count),
         "rulesVersion": str(extraction.rules_version),
         "priors": priors_digest(inputs),
+        "priorsKey": resolved.key or "",
     }
     if labeled.source is not None:
         metadata["source"] = labeled.source
@@ -136,7 +134,7 @@ def featurise(
     labels: list[LabeledFixture],
     fixtures: Path,
     extract: Extract,
-    priors: FeatureVectorInputs,
+    priors: Priors,
 ) -> FeaturisationRun:
     run = FeaturisationRun()
     for labeled in labels:

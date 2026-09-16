@@ -19,6 +19,7 @@ const PROVENANCE: ReportProvenance = {
   rulesSite: "amazon",
   modelTrainedAt: TRAINED,
   modelDigest: "7KQ2M4XZ",
+  priorsKey: null,
   signals: ["rating shape", "arrival timing"],
 };
 

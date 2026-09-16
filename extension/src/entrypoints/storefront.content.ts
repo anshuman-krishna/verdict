@@ -10,7 +10,7 @@ import { contentScriptMatches, siteForHost } from "../extract/sites";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL, BUNDLED_MODEL_IDENTITY } from "../score/model";
-import { PLACEHOLDER_PRIORS } from "../score/priors";
+import { priorsFor } from "../score/priors";
 import {
   queueContributionEdges,
   readChecksOfProduct,
@@ -39,7 +39,7 @@ export default defineContentScript({
     const deps: OrchestratorDeps = {
       rules,
       model: BUNDLED_MODEL,
-      priors: PLACEHOLDER_PRIORS,
+      priors: priorsFor,
       provenance: {
         extensionVersion: browser.runtime.getManifest().version,
         modelTrainedAt: BUNDLED_MODEL_IDENTITY.trainedAt,

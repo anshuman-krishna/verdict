@@ -12,8 +12,10 @@ from verdict_research.features.listing_drift import (
     listing_identity_drift,
 )
 from verdict_research.features.priors import (
-    PLACEHOLDER_INJECTION_KERNEL,
-    PLACEHOLDER_ORGANIC_PRIOR,
+    DEFAULT_INJECTION_KERNEL,
+    DEFAULT_ORGANIC_PRIOR,
+    category_keys,
+    priors_for,
 )
 from verdict_research.features.rating_deconvolution import (
     RatingDeconvolutionResult,
@@ -141,9 +143,20 @@ def run(vector: dict):
         signature_b = minhash_signature(shingle(data["textB"], 5), data["numPermutations"])
         return {"estimatedJaccard": estimate_jaccard(signature_a, signature_b)}
 
+    if signal == "categoryKeys":
+        return {"keys": category_keys(data["category"])}
+
+    if signal == "categoryPriors":
+        resolved = priors_for(data["category"])
+        return {
+            "key": resolved.key,
+            "organicPrior": resolved.inputs.organic_prior,
+            "injectionKernel": resolved.inputs.injection_kernel,
+        }
+
     if signal == "sharedPriors":
         result = rating_deconvolution(
-            data["observed"], PLACEHOLDER_ORGANIC_PRIOR, PLACEHOLDER_INJECTION_KERNEL
+            data["observed"], DEFAULT_ORGANIC_PRIOR, DEFAULT_INJECTION_KERNEL
         )
         return {"injectedShare": result.injected_share, "residualError": result.residual_error}
 

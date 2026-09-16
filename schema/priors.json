@@ -1,5 +1,9 @@
 {
-  "note": "provisional. SPEC.md 5.1 estimates organicPrior per product category from the negative corpus, which PLAN.md week 4 has not built yet. read by extension/src/score/priors.ts and research/verdict_research/features/priors.py so a corpus is never featurised with different numbers than the extension scores with.",
-  "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2],
-  "injectionKernel": [0, 0, 0, 0.35, 0.65]
+  "note": "provisional. SPEC.md 5.1 estimates organicPrior per product category from the negative corpus, which PLAN.md week 4 has not built yet, so categories is empty and every listing is scored against default. read by extension/src/score/priors.ts and research/verdict_research/features/priors.py so a corpus is never featurised with different numbers than the extension scores with. a key is one breadcrumb segment slugified, and lookup walks the trail from the most specific segment outwards, so a category with no prior of its own falls back to its parent and then to default. aliases maps a slug a storefront uses onto a key that has a prior, which is how one locale's wording reaches another's estimate. write categories with `just priors`, never by hand, and retrain after, because model.json records the digest of this document.",
+  "default": {
+    "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2],
+    "injectionKernel": [0, 0, 0, 0.35, 0.65]
+  },
+  "aliases": {},
+  "categories": {}
 }

@@ -12,21 +12,23 @@ from verdict_research.corpus.featurise import (
     featurise,
     read_label_file,
 )
-from verdict_research.features.feature_vector import FeatureVectorInputs
-from verdict_research.features.priors import placeholder_priors, priors_digest
+from verdict_research.features.priors import priors_document_digest, priors_for
 from verdict_research.shipped_extractor import NodeReviewExtractor
 
 DEFAULT_FIXTURES = Path(__file__).resolve().parents[3] / "extension" / "fixtures"
 
 
-def _summarise(run: FeaturisationRun, priors: FeatureVectorInputs) -> None:
+def _summarise(run: FeaturisationRun) -> None:
     labels = Counter(example.label for example in run.examples)
     locales = Counter(example.metadata.get("locale", "") for example in run.examples)
+    keys = Counter(example.metadata.get("priorsKey", "") for example in run.examples)
     print(f"rows: {len(run.examples)} written, {len(run.skipped)} skipped")
     print(f"labels: {labels[1]} manipulated, {labels[0]} clean")
     spread = ", ".join(f"{name or 'unplaced'} {count}" for name, count in sorted(locales.items()))
     print(f"locales: {spread}")
-    print(f"priors: {priors_digest(priors)}")
+    print(f"priors: document {priors_document_digest()}")
+    placed = ", ".join(f"{name or 'default'} {count}" for name, count in sorted(keys.items()))
+    print(f"priors used: {placed}")
     for skipped in run.skipped:
         print(f"skipped {skipped.fixture}: {skipped.reason}")
 
@@ -45,7 +47,6 @@ def main(argv: list[str] | None = None, extract: Extract | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    priors = placeholder_priors()
     try:
         labels = read_label_file(Path(args.labels))
     except (LabelFileError, OSError) as error:
@@ -60,21 +61,21 @@ def main(argv: list[str] | None = None, extract: Extract | None = None) -> int:
             labels,
             Path(args.fixtures),
             extract or NodeReviewExtractor(),
-            priors,
+            priors_for,
         )
     except (LabelFileError, OSError) as error:
         print(str(error), file=sys.stderr)
         return 1
 
     save_jsonl(run.examples, args.output)
-    _summarise(run, priors)
+    _summarise(run)
     if args.print_mapping:
         for label in labels:
             print(f"{label.fixture} -> {example_id_for(label.fixture)}")
     print(
-        "these features were computed against the provisional priors in schema/priors.json; "
-        "SPEC.md 5.1 wants per category priors from the negative corpus, and this corpus has to be "
-        "rebuilt when they exist"
+        "these features were computed against schema/priors.json as it stands now. "
+        "rebuild this corpus whenever that document changes, because a row scored under one "
+        "prior and a model trained under another are not measuring the same thing"
     )
     return 0
 

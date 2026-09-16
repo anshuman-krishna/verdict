@@ -176,12 +176,20 @@ describe("provenance on a stored report", () => {
     rulesSite: "amazon",
     modelTrainedAt: 1_700_000_000_000,
     modelDigest: "7KQ2M4XZ",
+    priorsKey: "home-kitchen",
     signals: ["rating shape"],
   };
 
   it("round trips through storage", () => {
     const stored = { ...STORED, provenance: PROVENANCE };
     expect(parseStoredReport(stored)?.provenance).toEqual(PROVENANCE);
+  });
+
+  it("reads a report written before priors had categories as scored against the default", () => {
+    const { priorsKey, ...older } = PROVENANCE;
+    expect(priorsKey).toBe("home-kitchen");
+    const stored = { ...STORED, provenance: older };
+    expect(parseStoredReport(stored)?.provenance?.priorsKey).toBeNull();
   });
 
   it("is simply absent on a report written before it existed", () => {

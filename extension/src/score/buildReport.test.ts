@@ -181,6 +181,7 @@ describe("provenance on a built report", () => {
     rulesSite: "amazon",
     modelTrainedAt: 1_700_000_000_000,
     modelDigest: "7KQ2M4XZ",
+    priorsKey: "home-kitchen",
   };
 
   function build(provenance?: typeof INPUTS) {

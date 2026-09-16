@@ -249,3 +249,33 @@ describe("the number format a rule declares", () => {
     expect(sanitised?.problems.join(" ")).toContain("neither locale nor machine");
   });
 });
+
+describe("the separator a rule joins its matches with", () => {
+  function withJoin(join: unknown) {
+    return sanitiseRulesDocument({
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        category: { strategy: "selector", value: ".crumb", join },
+      },
+    });
+  }
+
+  it("accepts a separator", () => {
+    expect(withJoin(" > ")?.problems).toEqual([]);
+  });
+
+  it("drops a rule whose separator is not a string", () => {
+    const sanitised = withJoin(7);
+    expect(sanitised?.rules.fields.category).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("join is not a string");
+  });
+
+  it("drops a rule carrying a payload where a separator belongs", () => {
+    const sanitised = withJoin("x".repeat(64));
+    expect(sanitised?.rules.fields.category).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("join is longer than");
+  });
+});

@@ -61,7 +61,7 @@ function fieldProblem(value: unknown, depth: number): string | null {
     return "not an object";
   }
   const rule = value as Record<string, unknown>;
-  const own = numberFormatProblem(rule.format) ?? strategyProblem(rule);
+  const own = numberFormatProblem(rule.format) ?? joinProblem(rule.join) ?? strategyProblem(rule);
   if (own !== null) {
     return own;
   }
@@ -103,6 +103,19 @@ function numberFormatProblem(format: unknown): string | null {
     return null;
   }
   return `format is neither locale nor machine: ${JSON.stringify(format)}`;
+}
+
+const MAX_JOIN_LENGTH = 8;
+
+function joinProblem(join: unknown): string | null {
+  if (join === undefined) {
+    return null;
+  }
+  if (typeof join !== "string") {
+    return `join is not a string: ${JSON.stringify(join)}`;
+  }
+  // a separator, not a payload a remote rule can grow
+  return join.length > MAX_JOIN_LENGTH ? `join is longer than ${MAX_JOIN_LENGTH}` : null;
 }
 
 function jsonRecordsFieldsProblem(fields: unknown): string | null {

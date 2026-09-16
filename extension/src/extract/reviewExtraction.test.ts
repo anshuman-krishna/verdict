@@ -137,3 +137,30 @@ describe("how a rule says its numbers are written", () => {
     ).toBe(1234);
   });
 });
+
+describe("a field spread over several nodes", () => {
+  const html = `<nav class="crumbs"><a>Home &amp; Kitchen</a><a>Kettles</a></nav>` +
+    `<h1 class="title">a kettle</h1>`;
+
+  function snapshotWith(join?: string) {
+    const root = parse(html);
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        category: { strategy: "selector", value: ".crumbs a", ...(join === undefined ? {} : { join }) },
+      },
+    };
+    return extractProductSnapshot(root, rules, PAGE, "https://www.amazon.com/dp/B0BXYZ1234");
+  }
+
+  it("reads back as the trail it is when the rule says how to join it", () => {
+    expect(snapshotWith(" > ")?.category).toBe("Home & Kitchen > Kettles");
+  });
+
+  it("takes the first match when the rule says nothing", () => {
+    expect(snapshotWith()?.category).toBe("Home & Kitchen");
+  });
+});

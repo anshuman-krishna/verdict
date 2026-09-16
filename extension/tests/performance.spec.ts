@@ -7,7 +7,7 @@ import { ANALYSIS_BUDGET_MS, formatVerdict, judge, measure } from "../src/perf/b
 import { syntheticProductPageHtml, syntheticReviews } from "../src/perf/syntheticLoad";
 import { buildReport } from "../src/score/buildReport";
 import { localModelSet, type CombinerModel } from "../src/score/combine";
-import { PLACEHOLDER_PRIORS } from "../src/score/priors";
+import { priorsFor } from "../src/score/priors";
 
 
 const DEFAULT_PATH_REVIEWS = 60;
@@ -58,7 +58,7 @@ function timeAnalysis(count: number) {
       claimedRating: product?.claimedRating ?? 4.6,
       productText: PRODUCT_TEXT,
       model: localModelSet(MODEL),
-      priors: PLACEHOLDER_PRIORS,
+      priors: priorsFor(product?.category ?? null).inputs,
     });
   });
   const verdict = judge(measurement);
