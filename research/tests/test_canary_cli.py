@@ -1,8 +1,8 @@
 import json
 
-from verdict_research.canary.check import CanaryResult, ExtractionOutcome
+from verdict_research.canary.check import CanaryResult, ExtractionOutcome, FieldReading
 from verdict_research.canary.cli import main, run_once
-from verdict_research.canary.state import write_run_history
+from verdict_research.canary.state import read_run_history, write_run_history
 from verdict_research.canary.targets import parse_targets
 
 TARGETS = """
@@ -243,3 +243,74 @@ class TestMain:
             if r["locale"] == "com"
         )
         assert row["medianReviewsExtracted"] == 40
+
+
+def extract_reading(health: str, depth: int):
+    def extract(html: str, url: str) -> ExtractionOutcome:
+        return ExtractionOutcome(
+            review_count=30,
+            rules_version=41,
+            readings=(FieldReading(field="reviews", health=health, depth=depth, tiers=3),),
+        )
+
+    return extract
+
+
+class TestChainSlipReachesTheRun:
+    def history_read_from_the_first_rule(self, tmp_path) -> str:
+        path = str(tmp_path / "history.json")
+        run = run_once(
+            parse_targets(TARGETS),
+            [],
+            lambda url: "<html></html>",
+            extract_reading("primary", 0),
+            clock(),
+        )
+        write_run_history(path, run.combined)
+        return path
+
+    def test_a_run_reports_a_field_that_slipped_since_the_last_one(self, tmp_path):
+        path = self.history_read_from_the_first_rule(tmp_path)
+        run = run_once(
+            parse_targets(TARGETS),
+            read_run_history(path),
+            lambda url: "<html></html>",
+            extract_reading("last-resort", 2),
+            clock(2000.0),
+        )
+        assert run.alerts == []
+        assert {alert.field for alert in run.reading_alerts} == {"reviews"}
+
+    def test_the_status_stays_healthy_while_the_chain_slips(self, tmp_path):
+        path = self.history_read_from_the_first_rule(tmp_path)
+        run = run_once(
+            parse_targets(TARGETS),
+            read_run_history(path),
+            lambda url: "<html></html>",
+            extract_reading("last-resort", 2),
+            clock(2000.0),
+        )
+        assert {result.status for result in run.results} == {"healthy"}
+
+    def test_the_run_sends_the_slip_even_though_no_status_changed(self, tmp_path, capsys):
+        path = self.history_read_from_the_first_rule(tmp_path)
+        sent: list[str] = []
+        code = main(
+            [targets_file(tmp_path), "--history", path],
+            fetch_html=lambda url: "<html></html>",
+            extract=extract_reading("missing", -1),
+            now=clock(2000.0),
+            send=sent.append,
+        )
+        assert code == 0
+        assert "read further down the chain" in sent[0]
+
+    def test_the_printed_report_names_the_field_and_the_rule_that_answered(self, tmp_path, capsys):
+        main(
+            [targets_file(tmp_path), "--history", str(tmp_path / "absent.json")],
+            fetch_html=lambda url: "<html></html>",
+            extract=extract_reading("fallback", 1),
+            now=clock(),
+            send=lambda message: None,
+        )
+        assert "reviews: fallback, rule 2 of 3" in capsys.readouterr().out

@@ -1,4 +1,5 @@
 import { resolveFieldTraced, type StrategyTrace } from "./interpreter";
+import { newPageIndex, type PageIndex } from "./structuredData";
 import { normaliseDate, normaliseNumber } from "./normalise";
 import type { NumberFormat, RulesDocument } from "./rules";
 import type { ParsedProductPage } from "./sites";
@@ -35,24 +36,34 @@ function numberLocale(trace: readonly StrategyTrace[], locale: string): string {
   return format === "machine" ? MACHINE_NUMBER_LOCALE : locale;
 }
 
-export function extractReviews(root: ParentNode, rules: RulesDocument, locale: string): Review[] {
+export function extractReviews(
+  root: ParentNode,
+  rules: RulesDocument,
+  locale: string,
+  index: PageIndex = newPageIndex(),
+): Review[] {
   const rule = rules.fields.reviews;
   if (rule === undefined) {
     return [];
   }
-  const { values, trace } = resolveFieldTraced(root, rule);
+  const { values, trace } = resolveFieldTraced(root, rule, index);
   const readAs = numberLocale(trace, locale);
   return values
     .map((value) => coerceReview(value, readAs))
     .filter((review): review is Review => review !== null);
 }
 
-function stringField(root: ParentNode, rules: RulesDocument, field: string): string | null {
+function stringField(
+  root: ParentNode,
+  rules: RulesDocument,
+  field: string,
+  index: PageIndex,
+): string | null {
   const rule = rules.fields[field];
   if (rule === undefined) {
     return null;
   }
-  const { values, trace } = resolveFieldTraced(root, rule);
+  const { values, trace } = resolveFieldTraced(root, rule, index);
   // a match list can open with a shape this field cannot use, which does not end it
   const strings = values.filter((value): value is string => typeof value === "string");
   const join = trace[trace.length - 1]?.join;
@@ -67,12 +78,13 @@ function firstNumber(
   rules: RulesDocument,
   field: string,
   locale: string,
+  index: PageIndex,
 ): number | null {
   const rule = rules.fields[field];
   if (rule === undefined) {
     return null;
   }
-  const { values, trace } = resolveFieldTraced(root, rule);
+  const { values, trace } = resolveFieldTraced(root, rule, index);
   const readAs = numberLocale(trace, locale);
   for (const value of values) {
     if (typeof value === "number") {
@@ -91,19 +103,20 @@ export function extractProductSnapshot(
   rules: RulesDocument,
   page: ParsedProductPage,
   url: string,
+  index: PageIndex = newPageIndex(),
 ): ProductSnapshot | null {
-  const title = stringField(root, rules, "title");
+  const title = stringField(root, rules, "title", index);
   if (title === null) {
     return null;
   }
   return {
     title,
-    category: stringField(root, rules, "category"),
-    claimedRating: firstNumber(root, rules, "claimedRating", page.locale),
-    reviewCount: firstNumber(root, rules, "reviewCount", page.locale),
+    category: stringField(root, rules, "category", index),
+    claimedRating: firstNumber(root, rules, "claimedRating", page.locale, index),
+    reviewCount: firstNumber(root, rules, "reviewCount", page.locale, index),
     site: page.site,
     locale: page.locale,
     url,
-    thumbnailUrl: safeThumbnailUrl(stringField(root, rules, "thumbnailUrl")),
+    thumbnailUrl: safeThumbnailUrl(stringField(root, rules, "thumbnailUrl", index)),
   };
 }

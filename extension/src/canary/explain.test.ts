@@ -116,3 +116,29 @@ describe("what a page would be scored against", () => {
     );
   });
 });
+
+describe("which serialisation answered", () => {
+  it("names the source of the step that read the page's own markup", () => {
+    const root = parse(`
+      <div itemscope itemtype="https://schema.org/Product">
+        <h1 itemprop="name">Stovetop Kettle</h1>
+      </div>
+    `);
+    const formatted = formatExplanation(explainExtraction(root, URL_, startingRules("amazon")));
+    expect(formatted).toContain("embedded-json via microdata");
+    expect(formatted).toContain('"Stovetop Kettle"');
+  });
+
+  it("says nothing about a source for the steps that read a script block", () => {
+    const root = parse(
+      `<script type="application/ld+json">${JSON.stringify({
+        "@type": "Product",
+        name: "a kettle",
+      })}</script>`,
+    );
+    const lines = formatExplanation(explainExtraction(root, URL_, startingRules("amazon")))
+      .split("\n")
+      .filter((line) => line.includes("title"));
+    expect(lines.join("\n")).not.toContain(" via ");
+  });
+});

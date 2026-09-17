@@ -1,5 +1,6 @@
 // explicit extension, so scripts/signRules.mjs can load this under plain node
 import { parseJsonPath } from "./jsonpath.ts";
+import { isStructuredSource, STRUCTURED_SOURCES } from "./structuredData.ts";
 import type { FieldRule, RulesDocument } from "./rules";
 
 
@@ -78,6 +79,7 @@ function strategyProblem(rule: Record<string, unknown>): string | null {
       return (
         nonEmptyString(rule.path, "path") ??
         optionalString(rule.scriptSelector, "scriptSelector") ??
+        sourceProblem(rule.source) ??
         unreadablePath(rule.path as string)
       );
     case "selector":
@@ -88,6 +90,7 @@ function strategyProblem(rule: Record<string, unknown>): string | null {
       return (
         nonEmptyString(rule.path, "path") ??
         optionalString(rule.scriptSelector, "scriptSelector") ??
+        sourceProblem(rule.source) ??
         unreadablePath(rule.path as string) ??
         jsonRecordsFieldsProblem(rule.fields)
       );
@@ -103,6 +106,14 @@ function numberFormatProblem(format: unknown): string | null {
     return null;
   }
   return `format is neither locale nor machine: ${JSON.stringify(format)}`;
+}
+
+// a source the interpreter does not have would read nothing, silently
+function sourceProblem(source: unknown): string | null {
+  if (source === undefined || isStructuredSource(source)) {
+    return null;
+  }
+  return `source is none of ${STRUCTURED_SOURCES.join(", ")}: ${JSON.stringify(source)}`;
 }
 
 const MAX_JOIN_LENGTH = 8;

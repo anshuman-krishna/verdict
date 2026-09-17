@@ -1,6 +1,8 @@
+import { readFields, type FieldReading } from "../extract/health";
 import { parseProductUrl } from "../extract/sites";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import type { RulesDocument } from "../extract/rules";
+import { newPageIndex } from "../extract/structuredData";
 import type { ProductSnapshot, Review } from "../extract/types";
 
 
@@ -11,6 +13,8 @@ export interface CanaryExtraction {
   rulesVersion: number;
   reviewCount: number;
   title: string | null;
+  // how far down each chain the page was read, which moves before extraction breaks
+  readings: FieldReading[];
 }
 
 export interface FullExtraction extends CanaryExtraction {
@@ -31,14 +35,16 @@ export function extractFull(
     rulesVersion: rules.version,
   };
   if (page === null) {
-    return { ...base, reviewCount: 0, title: null, product: null, reviews: [] };
+    return { ...base, reviewCount: 0, title: null, readings: [], product: null, reviews: [] };
   }
-  const product = extractProductSnapshot(document, rules, page, url);
-  const reviews = extractReviews(document, rules, page.locale);
+  const index = newPageIndex();
+  const product = extractProductSnapshot(document, rules, page, url, index);
+  const reviews = extractReviews(document, rules, page.locale, index);
   return {
     ...base,
     reviewCount: reviews.length,
     title: product?.title ?? null,
+    readings: readFields(document, rules, index),
     product,
     reviews,
   };

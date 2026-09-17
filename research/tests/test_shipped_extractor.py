@@ -161,3 +161,31 @@ class TestNodeReviewExtractor:
         extractor = NodeReviewExtractor(extractor_path=tmp_path / "absent.mjs")
         with pytest.raises(ExtractorError, match="just canary-extractor"):
             extractor("<html></html>", "https://www.amazon.com/dp/B0ABCDEF12")
+
+
+class TestParsingTheReadings:
+    def test_reads_how_far_down_each_chain_the_page_was_read(self):
+        outcome = parse_extractor_output(
+            json.dumps(
+                {
+                    "reviewCount": 42,
+                    "rulesVersion": 41,
+                    "readings": [
+                        {"field": "title", "health": "primary", "depth": 0, "tiers": 4},
+                        {"field": "reviews", "health": "last-resort", "depth": 2, "tiers": 3},
+                    ],
+                }
+            )
+        )
+        assert [reading.health for reading in outcome.readings] == ["primary", "last-resort"]
+        assert outcome.readings[1].tiers == 3
+
+    def test_an_extractor_built_before_readings_existed_still_reports_a_count(self):
+        outcome = parse_extractor_output('{"reviewCount": 42, "rulesVersion": 41}')
+        assert outcome.readings == ()
+
+    def test_a_reading_missing_a_field_is_an_error_not_a_silent_drop(self):
+        with pytest.raises(ExtractorError, match="missing a field"):
+            parse_extractor_output(
+                '{"reviewCount": 1, "rulesVersion": 41, "readings": [{"field": "title"}]}'
+            )

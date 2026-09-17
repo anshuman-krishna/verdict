@@ -9,6 +9,7 @@ import {
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import { mergeReviews } from "../extract/reviewIdentity";
 import { parseProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/sites";
+import { newPageIndex } from "../extract/structuredData";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
@@ -111,7 +112,9 @@ export async function analyzePage(
   if (Object.keys(deps.rules.fields).length === 0) {
     return null;
   }
-  const product = extractProductSnapshot(document, deps.rules, page, url);
+  // one reading of this page's structured data, shared by the product and the reviews
+  const index = newPageIndex();
+  const product = extractProductSnapshot(document, deps.rules, page, url, index);
   if (product === null) {
     const unreadable: AnalysisResult = {
       page,
@@ -123,7 +126,7 @@ export async function analyzePage(
     return unreadable;
   }
   options.onRecognised?.(page);
-  const reviews = extractReviews(document, deps.rules, page.locale);
+  const reviews = extractReviews(document, deps.rules, page.locale, index);
   const productKey = await cacheKey(page.productId, page.site);
   const previousChecks = await earlierChecks(productKey, deps);
   const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options, productKey);

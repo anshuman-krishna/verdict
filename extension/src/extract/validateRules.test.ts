@@ -279,3 +279,44 @@ describe("the separator a rule joins its matches with", () => {
     expect(sanitised?.problems.join(" ")).toContain("join is longer than");
   });
 });
+
+describe("the source a rule reads its json from", () => {
+  function withSource(source: unknown) {
+    return sanitiseRulesDocument({
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: {
+        title: { strategy: "selector", value: ".title" },
+        claimedRating: { strategy: "embedded-json", path: "$.rating", source },
+        reviews: {
+          strategy: "json-records",
+          path: "$.reviews[*]",
+          source,
+          fields: { rating: "$.rating" },
+        },
+      },
+    });
+  }
+
+  it("accepts each serialisation the interpreter can read", () => {
+    for (const source of ["script", "microdata", "rdfa"]) {
+      expect(withSource(source)?.problems).toEqual([]);
+    }
+  });
+
+  it("accepts a rule that names no source, which reads a script block", () => {
+    expect(withSource(undefined)?.problems).toEqual([]);
+  });
+
+  it("drops a rule naming a source this build does not have", () => {
+    const sanitised = withSource("rdfa-lite");
+    expect(sanitised?.rules.fields.claimedRating).toBeUndefined();
+    expect(sanitised?.rules.fields.reviews).toBeUndefined();
+    expect(sanitised?.problems.join(" ")).toContain("source is none of");
+  });
+
+  it("drops a rule whose source is not a string at all", () => {
+    expect(withSource(["microdata"])?.rules.fields.claimedRating).toBeUndefined();
+  });
+});

@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { bundledRulesFor } from "../src/extract/bundledRules";
-
-import type { RulesDocument } from "../src/extract/rules";
-
-const BUNDLED_AMAZON_RULES = bundledRulesFor("amazon") as RulesDocument;
+import { startingRules } from "../src/extract/bundledRules";
 import { runFixture, type FixtureResult } from "../src/fixtures/harness";
 import { buildCorpusReport, formatReport } from "../src/fixtures/report";
 import { loadCorpus } from "./fixtureCorpus";
+
+// what the content script actually reads a page with, standard fallbacks and all,
+// because a harness measuring a ruleset the product never runs measures nothing
+const AMAZON_RULES = startingRules("amazon");
 
 const GATED = process.env.VERDICT_FIXTURE_GATE === "1";
 
@@ -18,7 +18,7 @@ describe("fixture corpus", () => {
       fixture.name,
       new DOMParser().parseFromString(fixture.html, "text/html"),
       fixture.expectation,
-      BUNDLED_AMAZON_RULES,
+      AMAZON_RULES,
     ),
   );
   const report = buildCorpusReport(results);

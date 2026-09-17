@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { FieldReading } from "../extract/health";
 import type { FixtureResult } from "./harness";
 import { buildCorpusReport, formatReport } from "./report";
 
@@ -12,6 +13,7 @@ function result(overrides: Partial<FixtureResult> = {}): FixtureResult {
     knownFailure: null,
     extractedReviews: 30,
     checks: [],
+    readings: [],
     ...overrides,
   };
 }
@@ -138,5 +140,27 @@ describe("formatReport", () => {
       result({ name: "known", ok: false, knownFailure: "legacy pagination" }),
     ]);
     expect(formatReport(report)).toContain("[known: legacy pagination]");
+  });
+});
+
+describe("a fixture that passes on the last rule in its chain", () => {
+  function readAt(health: FieldReading["health"], depth: number): FieldReading {
+    return { field: "reviews", health, depth, tiers: 3, strategy: "selector", source: null };
+  }
+
+  it("is named, because it passes today and breaks the day that rule does", () => {
+    const report = buildCorpusReport([
+      result({ name: "b0kettle", readings: [readAt("last-resort", 2)] }),
+    ]);
+    expect(report.lateReadings).toEqual([
+      { name: "b0kettle", reading: readAt("last-resort", 2) },
+    ]);
+    expect(formatReport(report)).toContain("b0kettle reviews: selector, rule 3 of 3");
+  });
+
+  it("is not named when the chain still has somewhere to fall", () => {
+    const report = buildCorpusReport([result({ readings: [readAt("fallback", 1)] })]);
+    expect(report.lateReadings).toEqual([]);
+    expect(formatReport(report)).not.toContain("last rule in the chain");
   });
 });

@@ -6,7 +6,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from verdict_research.canary.alert import CanaryAlert, decide_alerts, send_alerts
+from verdict_research.canary.alert import (
+    CanaryAlert,
+    ReadingAlert,
+    decide_alerts,
+    decide_reading_alerts,
+    send_alerts,
+)
 from verdict_research.canary.check import (
     CanaryResult,
     CanarySummary,
@@ -41,6 +47,7 @@ class CanaryRun:
     combined: list[CanaryResult]
     current: list[CanarySummary]
     alerts: list[CanaryAlert]
+    reading_alerts: list[ReadingAlert]
 
 
 def run_once(
@@ -60,6 +67,7 @@ def run_once(
         combined=combined,
         current=current,
         alerts=decide_alerts(previous, current),
+        reading_alerts=decide_reading_alerts(previous, current),
     )
 
 
@@ -68,6 +76,11 @@ def _report(results: list[CanaryResult]) -> None:
         detail = f"{result.review_count} reviews" if result.review_count is not None else "no read"
         error = f", {result.error}" if result.error else ""
         print(f"{result.site}.{result.locale}: {result.status}, {detail}{error}")
+        late = [reading for reading in result.readings if reading.health != "primary"]
+        for reading in late:
+            print(
+                f"  {reading.field}: {reading.health}, rule {reading.depth + 1} of {reading.tiers}"
+            )
 
 
 def main(
@@ -108,7 +121,7 @@ def main(
     )
     _report(run.results)
 
-    send_alerts(run.alerts, send or resolve_sender(args.alert_webhook))
+    send_alerts(run.alerts, send or resolve_sender(args.alert_webhook), run.reading_alerts)
 
     if not args.write:
         print("nothing written, pass --write to update the status page")

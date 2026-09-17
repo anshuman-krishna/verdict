@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from verdict_research.canary.check import ExtractionOutcome
+from verdict_research.canary.check import ExtractionOutcome, FieldReading
 from verdict_research.schema import (
     ProductSnapshot,
     Review,
@@ -95,11 +95,29 @@ def _one_object(stdout: str) -> dict:
         raise ExtractorError(f"the extractor wrote something that is not json: {error}") from error
 
 
+def _readings(entries: object) -> tuple[FieldReading, ...]:
+    if not isinstance(entries, list):
+        return ()
+    return tuple(
+        FieldReading(
+            field=str(entry["field"]),
+            health=entry["health"],
+            depth=int(entry["depth"]),
+            tiers=int(entry["tiers"]),
+            strategy=entry.get("strategy"),
+            source=entry.get("source"),
+        )
+        for entry in entries
+    )
+
+
 def parse_extractor_output(stdout: str) -> ExtractionOutcome:
     data = _one_object(stdout)
     try:
         return ExtractionOutcome(
-            review_count=int(data["reviewCount"]), rules_version=int(data["rulesVersion"])
+            review_count=int(data["reviewCount"]),
+            rules_version=int(data["rulesVersion"]),
+            readings=_readings(data.get("readings", [])),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ExtractorError(f"the extractor's output is missing a field: {error}") from error

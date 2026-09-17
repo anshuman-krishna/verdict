@@ -1,5 +1,7 @@
+import { readingFor, type FieldReading } from "../extract/health";
 import { resolveFieldTraced, type StrategyTrace } from "../extract/interpreter";
 import type { RulesDocument } from "../extract/rules";
+import { newPageIndex } from "../extract/structuredData";
 import type { Review } from "../extract/types";
 import { resolvePriors } from "../score/priors";
 import { extractFull, type FullExtraction } from "./extractOnce";
@@ -12,6 +14,7 @@ export interface FieldExplanation {
   field: string;
   value: unknown;
   steps: StrategyTrace[];
+  reading: FieldReading;
 }
 
 export interface Explanation {
@@ -40,11 +43,11 @@ export function explainExtraction(
   rules: RulesDocument,
 ): Explanation {
   const extraction = extractFull(document, url, rules);
-  const fields = Object.entries(rules.fields).map(([field, rule]) => ({
-    field,
-    value: valueOf(field, extraction),
-    steps: resolveFieldTraced(document, rule).trace,
-  }));
+  const index = newPageIndex();
+  const fields = Object.entries(rules.fields).map(([field, rule]) => {
+    const steps = resolveFieldTraced(document, rule, index).trace;
+    return { field, value: valueOf(field, extraction), steps, reading: readingFor(field, rule, steps) };
+  });
   return {
     url,
     site: extraction.site,
@@ -69,9 +72,28 @@ function matchCount(matched: number): string {
 }
 
 function stepLine(step: StrategyTrace): string {
+  const source = step.source === undefined ? "" : ` via ${step.source}`;
   const format = step.format === "machine" ? ", machine numbers" : "";
   const join = step.join === undefined ? "" : `, joined with ${JSON.stringify(step.join)}`;
-  return `    ${step.strategy}  ${step.target}  ${matchCount(step.matched)}${format}${join}`;
+  const target = `${step.strategy}${source}`;
+  return `    ${target}  ${step.target}  ${matchCount(step.matched)}${format}${join}`;
+}
+
+// the line that matters when nothing looks wrong yet, SPEC.md section 13
+function readingLine(fields: readonly FieldExplanation[]): string {
+  const late = fields.filter((field) => field.reading.health !== "primary");
+  if (fields.length === 0) {
+    return "no chain ran";
+  }
+  if (late.length === 0) {
+    return "every field answered on its first rule";
+  }
+  const named = late.map((field) => {
+    const { health, depth, tiers } = field.reading;
+    const where = health === "missing" ? "nothing answered" : `rule ${depth + 1} of ${tiers}`;
+    return `${field.field} ${health}, ${where}`;
+  });
+  return `read further down the chain: ${named.join("; ")}`;
 }
 
 function reviewLine(review: Review): string {
@@ -100,6 +122,7 @@ export function formatExplanation(explanation: Explanation): string {
       lines.push(stepLine(step));
     }
   }
+  lines.push("", readingLine(explanation.fields));
   lines.push(
     "",
     `priors: ${explanation.priorsKey ?? "default, no category estimate matched"}`,

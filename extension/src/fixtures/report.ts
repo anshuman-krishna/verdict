@@ -1,3 +1,4 @@
+import type { FieldReading } from "../extract/health";
 import type { FixtureResult } from "./harness";
 
 export const REQUIRED_PASS_RATE = 0.95;
@@ -7,6 +8,12 @@ export interface LocaleTally {
   locale: string;
   total: number;
   passed: number;
+}
+
+// a field read from the end of its chain passes today and breaks the day that rule does
+export interface LateReading {
+  name: string;
+  reading: FieldReading;
 }
 
 export interface CorpusReport {
@@ -19,6 +26,7 @@ export interface CorpusReport {
   meetsCriterion: boolean;
   failures: FixtureResult[];
   unexpectedFailures: FixtureResult[];
+  lateReadings: LateReading[];
 }
 
 export function buildCorpusReport(results: readonly FixtureResult[]): CorpusReport {
@@ -49,6 +57,11 @@ export function buildCorpusReport(results: readonly FixtureResult[]): CorpusRepo
     meetsCriterion: meetsPassRate && meetsLocaleCoverage,
     failures: results.filter((result) => !result.ok),
     unexpectedFailures: results.filter((result) => !result.ok && result.knownFailure === null),
+    lateReadings: results.flatMap((result) =>
+      result.readings
+        .filter((reading) => reading.health === "last-resort")
+        .map((reading) => ({ name: result.name, reading })),
+    ),
   };
 }
 
@@ -79,6 +92,15 @@ export function formatReport(report: CorpusReport): string {
       }
       lines.push(`  ${check.field}: expected ${show(check.expected)}, got ${show(check.actual)}`);
       lines.push(`    ${describeStrategies(check)}`);
+    }
+  }
+
+  if (report.lateReadings.length > 0) {
+    lines.push("");
+    lines.push("read from the last rule in the chain, so one more change breaks it:");
+    for (const late of report.lateReadings) {
+      const { field, depth, tiers, strategy } = late.reading;
+      lines.push(`  ${late.name} ${field}: ${strategy}, rule ${depth + 1} of ${tiers}`);
     }
   }
 

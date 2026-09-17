@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from verdict_research.canary.check import CanaryResult
+from verdict_research.canary.check import CanaryResult, FieldReading
 
 RUN_HISTORY_VERSION = 1
 DEFAULT_RETAINED_CHECKS = 30
@@ -39,6 +39,17 @@ def write_run_history(path: str | Path, results: list[CanaryResult]) -> None:
                 "reviewCount": result.review_count,
                 "rulesVersion": result.rules_version,
                 "error": result.error,
+                "readings": [
+                    {
+                        "field": reading.field,
+                        "health": reading.health,
+                        "depth": reading.depth,
+                        "tiers": reading.tiers,
+                        "strategy": reading.strategy,
+                        "source": reading.source,
+                    }
+                    for reading in result.readings
+                ],
             }
             for result in results
         ],
@@ -60,6 +71,22 @@ def prune(
     return sorted(kept, key=lambda r: (r.site, r.locale, r.checked_at))
 
 
+def _readings(entries: Any) -> tuple[FieldReading, ...]:
+    if not isinstance(entries, list):
+        raise RunHistoryError("expected a list of readings")
+    return tuple(
+        FieldReading(
+            field=str(entry["field"]),
+            health=entry["health"],
+            depth=int(entry["depth"]),
+            tiers=int(entry["tiers"]),
+            strategy=entry.get("strategy"),
+            source=entry.get("source"),
+        )
+        for entry in entries
+    )
+
+
 def _result(entry: Any) -> CanaryResult:
     if not isinstance(entry, dict):
         raise RunHistoryError("expected an object per check")
@@ -73,6 +100,8 @@ def _result(entry: Any) -> CanaryResult:
             review_count=entry["reviewCount"],
             rules_version=entry["rulesVersion"],
             error=entry.get("error"),
+            # a history written before this build recorded them is not a broken file
+            readings=_readings(entry.get("readings", [])),
         )
     except (KeyError, TypeError, ValueError) as error:
         raise RunHistoryError(f"a stored check is missing a field: {error}") from error

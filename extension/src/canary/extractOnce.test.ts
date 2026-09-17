@@ -33,6 +33,17 @@ describe("extractOnce", () => {
       rulesVersion: 41,
       reviewCount: 2,
       title: "a product",
+      readings: [
+        { field: "title", health: "primary", depth: 0, tiers: 1, strategy: "selector", source: null },
+        {
+          field: "reviews",
+          health: "primary",
+          depth: 0,
+          tiers: 1,
+          strategy: "embedded-json",
+          source: null,
+        },
+      ],
     });
   });
 
@@ -61,6 +72,7 @@ describe("extractOnce", () => {
       rulesVersion: 41,
       reviewCount: 0,
       title: null,
+      readings: [],
     });
   });
 

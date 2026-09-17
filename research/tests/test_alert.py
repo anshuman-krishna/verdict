@@ -1,10 +1,12 @@
 from verdict_research.canary.alert import (
     CanaryAlert,
+    ReadingAlert,
     decide_alerts,
+    decide_reading_alerts,
     format_alert_message,
     send_alerts,
 )
-from verdict_research.canary.check import CanarySummary
+from verdict_research.canary.check import CanarySummary, FieldReading
 
 
 def summary(locale: str, status: str, last_verified: float = 1000.0) -> CanarySummary:
@@ -92,3 +94,147 @@ class TestSendAlerts:
         sent = []
         assert send_alerts([], sent.append) is False
         assert sent == []
+
+
+def reading(field: str, health: str, depth: int = 0, tiers: int = 3) -> FieldReading:
+    return FieldReading(field=field, health=health, depth=depth, tiers=tiers)
+
+
+def summary_with(readings: tuple[FieldReading, ...], rules_version: int = 41) -> CanarySummary:
+    return CanarySummary(
+        site="amazon",
+        locale="com",
+        last_verified=1000.0,
+        status="healthy",
+        rules_version=rules_version,
+        median_reviews_extracted=120.0,
+        readings=readings,
+    )
+
+
+class TestDecideReadingAlerts:
+    def test_alerts_when_a_field_starts_answering_further_down_the_chain(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("reviews", "primary"),))],
+            [summary_with((reading("reviews", "last-resort", depth=2),))],
+        )
+        assert alerts == [
+            ReadingAlert(
+                site="amazon",
+                locale="com",
+                field="reviews",
+                previous="primary",
+                current="last-resort",
+            )
+        ]
+
+    def test_alerts_when_a_field_stops_answering_at_all(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "fallback"),))],
+            [summary_with((reading("title", "missing", depth=-1),))],
+        )
+        assert [alert.current for alert in alerts] == ["missing"]
+
+    def test_says_nothing_when_a_field_is_read_the_same_way_as_before(self):
+        readings = (reading("title", "fallback"), reading("reviews", "primary"))
+        assert decide_reading_alerts([summary_with(readings)], [summary_with(readings)]) == []
+
+    def test_says_nothing_when_a_field_recovered(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "last-resort"),))],
+            [summary_with((reading("title", "primary"),))],
+        )
+        assert alerts == []
+
+    # a new ruleset is a new chain, so the depths are not the same measurement
+    def test_says_nothing_when_the_rules_changed_between_the_runs(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "primary"),), rules_version=41)],
+            [summary_with((reading("title", "missing"),), rules_version=42)],
+        )
+        assert alerts == []
+
+    def test_says_nothing_about_a_field_the_previous_run_never_read(self):
+        alerts = decide_reading_alerts(
+            [summary_with(())],
+            [summary_with((reading("category", "missing"),))],
+        )
+        assert alerts == []
+
+    def test_treats_a_health_this_build_does_not_know_as_the_worst(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "missing"),))],
+            [summary_with((reading("title", "something newer"),))],
+        )
+        assert [alert.current for alert in alerts] == ["something newer"]
+
+
+class TestSendingReadingAlerts:
+    def test_sends_a_chain_slip_even_when_no_status_changed(self):
+        sent: list[str] = []
+        slipped = [
+            ReadingAlert(
+                site="amazon",
+                locale="com",
+                field="reviews",
+                previous="primary",
+                current="fallback",
+            )
+        ]
+        assert send_alerts([], sent.append, slipped) is True
+        assert "read further down the chain" in sent[0]
+        assert "primary to fallback" in sent[0]
+
+    def test_sends_nothing_when_neither_the_status_nor_the_chain_moved(self):
+        sent: list[str] = []
+        assert send_alerts([], sent.append, []) is False
+        assert sent == []
+
+
+class TestNamingWhereAFieldIsReadFromNow:
+    def test_says_which_serialisation_answered_after_the_slip(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("reviews", "primary"),))],
+            [
+                summary_with(
+                    (
+                        FieldReading(
+                            field="reviews",
+                            health="last-resort",
+                            depth=2,
+                            tiers=3,
+                            strategy="json-records",
+                            source="microdata",
+                        ),
+                    )
+                )
+            ],
+        )
+        assert alerts[0].read_from == "microdata"
+        assert "now from microdata" in format_alert_message([], alerts)
+
+    def test_falls_back_to_the_strategy_when_no_source_is_recorded(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "primary"),))],
+            [
+                summary_with(
+                    (
+                        FieldReading(
+                            field="title",
+                            health="last-resort",
+                            depth=3,
+                            tiers=4,
+                            strategy="selector",
+                        ),
+                    )
+                )
+            ],
+        )
+        assert "now from selector" in format_alert_message([], alerts)
+
+    def test_says_nothing_extra_when_the_reading_names_neither(self):
+        alerts = decide_reading_alerts(
+            [summary_with((reading("title", "primary"),))],
+            [summary_with((reading("title", "missing", depth=-1),))],
+        )
+        assert "now from" not in format_alert_message([], alerts)

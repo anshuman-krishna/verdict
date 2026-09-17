@@ -70,3 +70,34 @@ describe("resolveFieldTraced", () => {
     expect(resolveField(root, rule)).toEqual(resolveFieldTraced(root, rule).values);
   });
 });
+
+describe("the source a step read from", () => {
+  it("names the serialisation when the rule read the page's own markup", () => {
+    const root = parse('<div itemscope itemtype="https://schema.org/Product"></div>');
+    const rule: FieldRule = {
+      strategy: "embedded-json",
+      source: "microdata",
+      path: "$..[?(@.@type=='Product')]",
+    };
+    expect(resolveFieldTraced(root, rule).trace).toEqual([
+      {
+        strategy: "embedded-json",
+        depth: 0,
+        target: "$..[?(@.@type=='Product')]",
+        matched: 1,
+        format: "locale",
+        source: "microdata",
+      },
+    ]);
+  });
+
+  it("says nothing about a source for a rule that read a script block, which is the default", () => {
+    const root = parse('<script type="application/ld+json">{"rating":"4.6"}</script>');
+    const explicit: FieldRule = { strategy: "embedded-json", source: "script", path: "$.rating" };
+    const implicit: FieldRule = { strategy: "embedded-json", path: "$.rating" };
+    expect(resolveFieldTraced(root, explicit).trace).toEqual(
+      resolveFieldTraced(root, implicit).trace,
+    );
+    expect(resolveFieldTraced(root, explicit).trace[0]?.source).toBeUndefined();
+  });
+});

@@ -1,4 +1,5 @@
 import type { FieldRule, RulesDocument } from "./rules";
+import { STRUCTURED_SOURCES, type StructuredSource } from "./structuredData";
 
 // schema.org product markup is a published standard rather than one storefront's
 // dom, so these paths are the one ruleset that can be written without a saved page
@@ -7,105 +8,103 @@ import type { FieldRule, RulesDocument } from "./rules";
 const PRODUCT = "$..[?(@.@type=='Product')]";
 const AGGREGATE = "$..[?(@.@type=='AggregateRating')]";
 const BREADCRUMB = "$..[?(@.@type=='BreadcrumbList')]";
+const REVIEW = "$..[?(@.@type=='Review')]";
 
 // the trail a storefront puts a listing under, read back widest first, which is the
 // order a prior is looked up in. SPEC.md 5.1 wants the category, and a breadcrumb is
 // where a page actually says it.
 export const CATEGORY_SEPARATOR = " > ";
 
+// the same vocabulary in the three serialisations the standard allows, json-ld first
+// because it is one parse of one block, and the attribute forms after it
+function from(source: StructuredSource): { source?: StructuredSource } {
+  return source === "script" ? {} : { source };
+}
+
+function perSource<T>(build: (source: StructuredSource) => T): T[] {
+  return STRUCTURED_SOURCES.map(build);
+}
+
+function chain(rules: readonly FieldRule[]): FieldRule {
+  const [first, ...rest] = rules;
+  if (first === undefined) {
+    throw new Error("a field needs at least one rule");
+  }
+  return rest.length === 0 ? first : { ...first, fallback: chain(rest) };
+}
+
+interface PathOptions {
+  format?: "machine";
+  join?: string;
+}
+
+function jsonPaths(paths: readonly string[], options: PathOptions = {}): FieldRule[] {
+  return STRUCTURED_SOURCES.flatMap((source) =>
+    paths.map((path): FieldRule => ({
+      strategy: "embedded-json",
+      path,
+      ...options,
+      ...from(source),
+    })),
+  );
+}
+
+const REVIEW_FIELDS: Readonly<Record<string, string[]>> = {
+  rating: ["$.reviewRating.ratingValue", "$.ratingValue"],
+  text: ["$.reviewBody", "$.description"],
+  date: ["$.datePublished", "$.dateCreated"],
+  // the standard carries no stable account id, and a display name is not one,
+  // so the reviewer signals get nothing here rather than getting a guess
+  reviewerId: ["$.author.@id", "$.author.url"],
+};
+
+const CATEGORY_PATHS = [
+  // category is one string or a list of them, and a list is already the trail
+  `${PRODUCT}.category[*]`,
+  `${PRODUCT}.category`,
+  `${BREADCRUMB}.itemListElement[*].item.name`,
+  `${BREADCRUMB}.itemListElement[*].name`,
+];
+
+// every chain ends in a selector because an itemprop outside any itemscope is markup
+// the structured reader will not claim, and nothing else would find it
 export const STANDARD_FIELDS: Readonly<Record<string, FieldRule>> = {
-  title: {
-    strategy: "embedded-json",
-    path: `${PRODUCT}.name`,
-    fallback: { strategy: "selector", value: 'meta[property="og:title"]', attribute: "content" },
-  },
-  category: {
-    strategy: "embedded-json",
-    // category is one string or a list of them, and a list is already the trail
-    path: `${PRODUCT}.category[*]`,
-    join: CATEGORY_SEPARATOR,
-    fallback: {
-      strategy: "embedded-json",
-      path: `${PRODUCT}.category`,
+  title: chain([
+    ...jsonPaths([`${PRODUCT}.name`]),
+    { strategy: "selector", value: 'meta[property="og:title"]', attribute: "content" },
+  ]),
+  category: chain([
+    ...jsonPaths(CATEGORY_PATHS, { join: CATEGORY_SEPARATOR }),
+    {
+      strategy: "selector",
+      value: '[itemtype$="schema.org/BreadcrumbList"] [itemprop="name"]',
       join: CATEGORY_SEPARATOR,
-      fallback: {
-        strategy: "embedded-json",
-        path: `${BREADCRUMB}.itemListElement[*].item.name`,
-        join: CATEGORY_SEPARATOR,
-        fallback: {
-          strategy: "embedded-json",
-          path: `${BREADCRUMB}.itemListElement[*].name`,
-          join: CATEGORY_SEPARATOR,
-          fallback: {
-            strategy: "selector",
-            value: '[itemtype$="schema.org/BreadcrumbList"] [itemprop="name"]',
-            join: CATEGORY_SEPARATOR,
-          },
-        },
-      },
     },
-  },
-  claimedRating: {
-    strategy: "embedded-json",
-    format: "machine",
-    path: `${AGGREGATE}.ratingValue`,
-    fallback: {
-      strategy: "embedded-json",
+  ]),
+  claimedRating: chain([
+    ...jsonPaths([`${AGGREGATE}.ratingValue`, "$..aggregateRating.ratingValue"], {
       format: "machine",
-      path: "$..aggregateRating.ratingValue",
-      fallback: {
-        strategy: "selector",
-        value: '[itemprop="ratingValue"]',
-        attribute: "content",
-      },
-    },
-  },
-  reviewCount: {
-    strategy: "embedded-json",
-    format: "machine",
-    path: `${AGGREGATE}.reviewCount`,
-    fallback: {
-      strategy: "embedded-json",
-      format: "machine",
-      path: `${AGGREGATE}.ratingCount`,
-      fallback: {
-        strategy: "selector",
-        value: '[itemprop="reviewCount"]',
-        attribute: "content",
-      },
-    },
-  },
-  thumbnailUrl: {
-    strategy: "embedded-json",
+    }),
+    { strategy: "selector", value: '[itemprop="ratingValue"]', attribute: "content" },
+  ]),
+  reviewCount: chain([
+    ...jsonPaths([`${AGGREGATE}.reviewCount`, `${AGGREGATE}.ratingCount`], { format: "machine" }),
+    { strategy: "selector", value: '[itemprop="reviewCount"]', attribute: "content" },
+  ]),
+  thumbnailUrl: chain([
     // image is a url, a list of them, or an ImageObject, in that order of frequency
-    path: `${PRODUCT}.image[*]`,
-    fallback: {
-      strategy: "embedded-json",
-      path: `${PRODUCT}.image.url`,
-      fallback: {
-        strategy: "embedded-json",
-        path: `${PRODUCT}.image`,
-        fallback: {
-          strategy: "selector",
-          value: 'meta[property="og:image"]',
-          attribute: "content",
-        },
-      },
-    },
-  },
-  reviews: {
-    strategy: "json-records",
-    format: "machine",
-    path: "$..[?(@.@type=='Review')]",
-    fields: {
-      rating: ["$.reviewRating.ratingValue", "$.ratingValue"],
-      text: ["$.reviewBody", "$.description"],
-      date: ["$.datePublished", "$.dateCreated"],
-      // the standard carries no stable account id, and a display name is not one,
-      // so the reviewer signals get nothing here rather than getting a guess
-      reviewerId: ["$.author.@id", "$.author.url"],
-    },
-  },
+    ...jsonPaths([`${PRODUCT}.image[*]`, `${PRODUCT}.image.url`, `${PRODUCT}.image`]),
+    { strategy: "selector", value: 'meta[property="og:image"]', attribute: "content" },
+  ]),
+  reviews: chain(
+    perSource((source): FieldRule => ({
+      strategy: "json-records",
+      format: "machine",
+      path: REVIEW,
+      fields: REVIEW_FIELDS,
+      ...from(source),
+    })),
+  ),
 };
 
 const MAX_APPENDED_DEPTH = 8;

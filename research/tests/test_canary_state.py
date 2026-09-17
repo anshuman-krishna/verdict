@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from verdict_research.canary.check import CanaryResult
+from verdict_research.canary.check import CanaryResult, FieldReading
 from verdict_research.canary.state import (
     RUN_HISTORY_VERSION,
     RunHistoryError,
@@ -10,6 +10,19 @@ from verdict_research.canary.state import (
     read_run_history,
     write_run_history,
 )
+
+
+def result_with_readings(readings):
+    return CanaryResult(
+        site="amazon",
+        locale="com",
+        url="https://www.amazon.com/dp/B0ABCDEF12",
+        checked_at=1.0,
+        status="healthy",
+        review_count=30,
+        rules_version=41,
+        readings=readings,
+    )
 
 
 def result(site="amazon", locale="com", checked_at=1.0, status="healthy", reviews=30):
@@ -92,3 +105,34 @@ class TestPrune:
     def test_refuses_a_retention_of_zero(self):
         with pytest.raises(ValueError, match="at least 1"):
             prune([result()], retained=0)
+
+
+class TestReadingsRoundTrip:
+    def readings(self):
+        return (
+            FieldReading(field="title", health="primary", depth=0, tiers=4),
+            FieldReading(field="reviews", health="last-resort", depth=2, tiers=3),
+        )
+
+    def test_a_reading_survives_being_written_and_read_back(self, tmp_path):
+        path = tmp_path / "history.json"
+        write_run_history(path, [result_with_readings(self.readings())])
+        assert read_run_history(path)[0].readings == self.readings()
+
+    def test_a_history_written_before_readings_existed_still_loads(self, tmp_path):
+        path = tmp_path / "history.json"
+        write_run_history(path, [result()])
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for check in document["checks"]:
+            del check["readings"]
+        path.write_text(json.dumps(document), encoding="utf-8")
+        assert read_run_history(path)[0].readings == ()
+
+    def test_a_reading_missing_a_field_is_a_broken_history(self, tmp_path):
+        path = tmp_path / "history.json"
+        write_run_history(path, [result_with_readings(self.readings())])
+        document = json.loads(path.read_text(encoding="utf-8"))
+        del document["checks"][0]["readings"][0]["tiers"]
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with pytest.raises(RunHistoryError):
+            read_run_history(path)

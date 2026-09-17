@@ -152,3 +152,81 @@ describe("a page that splits its json across blocks", () => {
     expect(resolveField(root, rule)).toEqual(["one", "two"]);
   });
 });
+
+describe("reading the page's own structured data", () => {
+  it("runs a json-ld path against microdata, because the rules have one vocabulary", () => {
+    const root = parse(`
+      <div itemscope itemtype="https://schema.org/Product">
+        <span itemprop="name">Kettle</span>
+      </div>
+    `);
+    const rule: FieldRule = {
+      strategy: "embedded-json",
+      source: "microdata",
+      path: "$..[?(@.@type=='Product')].name",
+    };
+    expect(resolveField(root, rule)).toEqual(["Kettle"]);
+  });
+
+  it("builds records out of rdfa lite the same way it builds them out of a block", () => {
+    const root = parse(`
+      <div typeof="Product">
+        <div property="review" typeof="Review">
+          <span property="reviewBody">Boils fast.</span>
+          <meta property="datePublished" content="2024-03-02">
+        </div>
+      </div>
+    `);
+    const rule: FieldRule = {
+      strategy: "json-records",
+      source: "rdfa",
+      path: "$..[?(@.@type=='Review')]",
+      fields: { text: "$.reviewBody", date: "$.datePublished" },
+    };
+    expect(resolveField(root, rule)).toEqual([{ text: "Boils fast.", date: "2024-03-02" }]);
+  });
+
+  it("falls through a source that says nothing to one that does", () => {
+    const root = parse(`
+      <div typeof="Product"><span property="name">from rdfa</span></div>
+    `);
+    const rule: FieldRule = {
+      strategy: "embedded-json",
+      path: "$..[?(@.@type=='Product')].name",
+      fallback: {
+        strategy: "embedded-json",
+        source: "microdata",
+        path: "$..[?(@.@type=='Product')].name",
+        fallback: {
+          strategy: "embedded-json",
+          source: "rdfa",
+          path: "$..[?(@.@type=='Product')].name",
+        },
+      },
+    };
+    expect(resolveField(root, rule)).toEqual(["from rdfa"]);
+  });
+
+  it("reads a composite container's own markup, not the whole page's", () => {
+    const root = parse(`
+      <div class="review" itemscope itemtype="https://schema.org/Review">
+        <span itemprop="reviewBody">first</span>
+      </div>
+      <div class="review" itemscope itemtype="https://schema.org/Review">
+        <span itemprop="reviewBody">second</span>
+      </div>
+    `);
+    const rule: FieldRule = {
+      strategy: "composite",
+      container: ".review",
+      fields: {
+        text: {
+          strategy: "embedded-json",
+          source: "microdata",
+          path: "$..[?(@.@type=='Review')].reviewBody",
+        },
+      },
+    };
+    expect(resolveField(root, rule)).toEqual([{ text: "first" }, { text: "second" }]);
+  });
+});

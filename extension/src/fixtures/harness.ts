@@ -1,7 +1,9 @@
+import { readFields, type FieldReading } from "../extract/health";
 import { resolveFieldTraced, type StrategyTrace } from "../extract/interpreter";
 import { parseProductUrl } from "../extract/sites";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import type { RulesDocument } from "../extract/rules";
+import { newPageIndex } from "../extract/structuredData";
 import type { FixtureExpectation, Layout } from "./expectation";
 
 
@@ -24,6 +26,8 @@ export interface FixtureResult {
   knownFailure: string | null;
   extractedReviews: number;
   checks: FieldCheck[];
+  // a fixture can pass on the last rule in the chain, which is a pass worth seeing
+  readings: FieldReading[];
 }
 
 export class FixtureError extends Error {}
@@ -39,8 +43,9 @@ export function runFixture(
     throw new FixtureError(`${name}: "url" is not a product url this build can parse`);
   }
 
-  const snapshot = extractProductSnapshot(document, rules, page, expectation.url);
-  const reviews = extractReviews(document, rules, page.locale);
+  const index = newPageIndex();
+  const snapshot = extractProductSnapshot(document, rules, page, expectation.url, index);
+  const reviews = extractReviews(document, rules, page.locale, index);
   const base = {
     name,
     site: page.site,
@@ -48,6 +53,7 @@ export function runFixture(
     layout: expectation.layout,
     knownFailure: expectation.knownFailure ?? null,
     extractedReviews: reviews.length,
+    readings: readFields(document, rules, index),
   };
 
   if (snapshot === null) {

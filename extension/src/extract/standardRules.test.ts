@@ -258,3 +258,147 @@ describe("the category trail a page states", () => {
     expect(resolvePriors(category, priors).key).toBe("kettles");
   });
 });
+
+// a storefront that marks its page up rather than embedding a json block is read by
+// the same rules, because the vocabulary is the same and only the spelling differs
+describe("the standard ruleset on a page with no json-ld at all", () => {
+  const MICRODATA_PAGE = `
+    <nav itemscope itemtype="https://schema.org/BreadcrumbList">
+      <span itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="https://www.amazon.com/home"><span itemprop="name">Home & Kitchen</span></a>
+      </span>
+      <span itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a itemprop="item" href="https://www.amazon.com/kettles"><span itemprop="name">Kettles</span></a>
+      </span>
+    </nav>
+    <div itemscope itemtype="https://schema.org/Product">
+      <h1 itemprop="name">Stovetop Kettle, 1.7 Litre</h1>
+      <img itemprop="image" src="https://www.amazon.com/images/kettle.jpg">
+      <div itemprop="aggregateRating" itemscope itemtype="https://schema.org/AggregateRating">
+        <meta itemprop="ratingValue" content="4.6">
+        <meta itemprop="reviewCount" content="8000">
+      </div>
+      <div itemprop="review" itemscope itemtype="https://schema.org/Review">
+        <span itemprop="reviewBody">Boils fast.</span>
+        <time itemprop="datePublished" datetime="2024-03-02">2 March 2024</time>
+        <div itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
+          <meta itemprop="ratingValue" content="5">
+        </div>
+      </div>
+      <div itemprop="review" itemscope itemtype="https://schema.org/Review">
+        <span itemprop="reviewBody">Handle got warm.</span>
+        <time itemprop="datePublished" datetime="2024-03-04">4 March 2024</time>
+        <div itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
+          <meta itemprop="ratingValue" content="3">
+        </div>
+      </div>
+    </div>
+  `;
+
+  it("reads the whole product snapshot out of microdata", () => {
+    const product = extractProductSnapshot(parse(MICRODATA_PAGE), RULES, PAGE, URL_);
+    expect(product).toMatchObject({
+      title: "Stovetop Kettle, 1.7 Litre",
+      claimedRating: 4.6,
+      reviewCount: 8000,
+      thumbnailUrl: "https://www.amazon.com/images/kettle.jpg",
+    });
+  });
+
+  it("reads the breadcrumb trail out of microdata, which is what the prior keys on", () => {
+    expect(extractProductSnapshot(parse(MICRODATA_PAGE), RULES, PAGE, URL_)?.category).toBe(
+      `Home & Kitchen${CATEGORY_SEPARATOR}Kettles`,
+    );
+  });
+
+  it("reads the reviews out of microdata, which no selector could have built", () => {
+    expect(extractReviews(parse(MICRODATA_PAGE), RULES, "com")).toEqual([
+      { rating: 5, text: "Boils fast.", date: "2024-03-02", verified: null, reviewerId: null },
+      { rating: 3, text: "Handle got warm.", date: "2024-03-04", verified: null, reviewerId: null },
+    ]);
+  });
+
+  it("reads a rating written as text rather than as a meta content attribute", () => {
+    const root = parse(`
+      <div itemscope itemtype="https://schema.org/Product">
+        <h1 itemprop="name">a kettle</h1>
+        <div itemprop="aggregateRating" itemscope itemtype="https://schema.org/AggregateRating">
+          <span itemprop="ratingValue">4.4</span>
+          <span itemprop="ratingCount">120</span>
+        </div>
+      </div>
+    `);
+    const product = extractProductSnapshot(root, RULES, PAGE, URL_);
+    expect(product?.claimedRating).toBe(4.4);
+    expect(product?.reviewCount).toBe(120);
+  });
+
+  const RDFA_PAGE = `
+    <div vocab="https://schema.org/" typeof="Product">
+      <h1 property="name">Paperback Novel</h1>
+      <span property="category">Books</span>
+      <div property="aggregateRating" typeof="AggregateRating">
+        <span property="ratingValue" content="4.1">4.1 out of 5</span>
+        <span property="reviewCount" content="312">312 reviews</span>
+      </div>
+      <div property="review" typeof="Review">
+        <span property="reviewBody">Read it in a weekend.</span>
+        <meta property="datePublished" content="2024-05-11">
+        <div property="reviewRating" typeof="Rating">
+          <meta property="ratingValue" content="4">
+        </div>
+      </div>
+    </div>
+  `;
+
+  it("reads a product marked up in rdfa lite", () => {
+    const product = extractProductSnapshot(parse(RDFA_PAGE), RULES, PAGE, URL_);
+    expect(product).toMatchObject({
+      title: "Paperback Novel",
+      category: "Books",
+      claimedRating: 4.1,
+      reviewCount: 312,
+    });
+  });
+
+  it("reads the reviews out of rdfa lite", () => {
+    expect(extractReviews(parse(RDFA_PAGE), RULES, "com")).toEqual([
+      {
+        rating: 4,
+        text: "Read it in a weekend.",
+        date: "2024-05-11",
+        verified: null,
+        reviewerId: null,
+      },
+    ]);
+  });
+
+  it("prefers a json block to the markup when the page carries both", () => {
+    const root = parse(
+      `${block({ "@type": "Product", name: "what the block says" })}
+       <div itemscope itemtype="https://schema.org/Product">
+         <h1 itemprop="name">what the markup says</h1>
+       </div>`,
+    );
+    expect(extractProductSnapshot(root, RULES, PAGE, URL_)?.title).toBe("what the block says");
+  });
+});
+
+// the page is read once per extraction and not once for the life of the tab, because a
+// storefront that navigates without a page load hands the same document a new listing
+describe("a page that changed between two extractions", () => {
+  it("is read again rather than answered from the last reading", () => {
+    const root = parse(`
+      <div itemscope itemtype="https://schema.org/Product">
+        <h1 itemprop="name">the first listing</h1>
+      </div>
+    `);
+    expect(extractProductSnapshot(root, RULES, PAGE, URL_)?.title).toBe("the first listing");
+
+    const heading = (root as Element).querySelector("h1") as Element;
+    heading.textContent = "the listing after navigating";
+    expect(extractProductSnapshot(root, RULES, PAGE, URL_)?.title).toBe(
+      "the listing after navigating",
+    );
+  });
+});
