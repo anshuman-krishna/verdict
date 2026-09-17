@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
+import { newTranslator } from "../i18n/translator";
 import type { Report } from "../score/report";
 import { getPanelShadowRootForTesting, previouslyLine, VerdictPanelElement } from "./panel";
 import type { RosetteInput } from "./rosette";
@@ -335,6 +336,73 @@ describe("what the panel says about a listing checked before", () => {
 
     expect(getPanelShadowRootForTesting(panel).querySelector(".previously")?.textContent).toBe(
       "You checked this listing 2 days ago, when it read clean.",
+    );
+  });
+});
+
+describe("the panel in another locale", () => {
+  const german = newTranslator("de-DE", { "panel.claimed": "angegeben" }, "de");
+
+  function renderIn(report: Report): ShadowRoot {
+    const panel = new VerdictPanelElement();
+    document.body.appendChild(panel);
+    panel.render(report, rosetteInput, Date.now(), { translator: german });
+    return getPanelShadowRootForTesting(panel);
+  }
+
+  it("writes the rating with the reader's own decimal mark", () => {
+    expect(renderIn(sampleReport()).querySelector(".claimed")?.textContent).toBe("4,6");
+  });
+
+  it("groups review counts the way the reader's locale groups them", () => {
+    const summary = renderIn(sampleReport()).querySelector(".summary")?.textContent ?? "";
+    expect(summary).toContain("1.208");
+    expect(summary).toContain("8.431");
+  });
+
+  it("uses a translated line where there is one and english where there is not", () => {
+    const root = renderIn(sampleReport());
+    expect(root.querySelector(".figures")?.textContent).toContain("angegeben");
+    expect(root.querySelector(".figures")?.textContent).toContain("adjusted");
+  });
+
+  it("reads a stored report's evidence back through the catalogue", () => {
+    const report = sampleReport({
+      evidence: [
+        {
+          signal: "duplicate text",
+          strength: "strong",
+          value: 0.2,
+          detail: "3 clusters of near duplicate text, about 20 percent of reviews with text.",
+          messages: [
+            {
+              id: "evidence.duplicateText.clusters",
+              count: 3,
+              params: { percent: 20 },
+            },
+          ],
+        },
+      ],
+    });
+    const translated = newTranslator(
+      "de-DE",
+      { "evidence.duplicateText.clusters": { one: "ein Block", other: "{count} Blocke, {percent} Prozent" } },
+      "de",
+    );
+    const panel = new VerdictPanelElement();
+    document.body.appendChild(panel);
+    panel.render(report, rosetteInput, Date.now(), { translator: translated });
+    expect(getPanelShadowRootForTesting(panel).querySelector(".detail")?.textContent).toBe(
+      "3 Blocke, 20 Prozent",
+    );
+  });
+
+  it("falls back to the stored english for a row saved before messages existed", () => {
+    const panel = new VerdictPanelElement();
+    document.body.appendChild(panel);
+    panel.render(sampleReport(), rosetteInput, Date.now(), { translator: german });
+    expect(getPanelShadowRootForTesting(panel).querySelector(".detail")?.textContent).toBe(
+      "the rating histogram does not look organic",
     );
   });
 });

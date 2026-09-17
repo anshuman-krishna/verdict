@@ -70,6 +70,20 @@ export function siteForHost(
   ) ?? null;
 }
 
+// which locale of a storefront a host is, before any url has been parsed off it
+export function localeForHost(
+  hostname: string,
+  sites: readonly SiteDefinition[] = SITES,
+): string | null {
+  for (const site of sites) {
+    const found = Object.entries(site.locales).find(([, entry]) => entry.host === hostname);
+    if (found !== undefined) {
+      return found[0];
+    }
+  }
+  return null;
+}
+
 // a storefront that has not declared its ceiling gets the shallow default
 export const DEFAULT_REVIEW_PAGE_CAP = 5;
 

@@ -1,6 +1,8 @@
 import { safeThumbnailUrl } from "../extract/sites";
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import type { Rescored } from "../score/rescore";
-import { BAND_COLORS, BAND_LABELS, parseStoredReport, type Report } from "../score/report";
+import { BAND_COLORS, parseStoredReport, type Report } from "../score/report";
+import { bandLabel, evidenceDetail, signalLabel, strengthLabel } from "../score/reportText";
 import { provenanceLines } from "../score/reportDocument";
 import type { HistoryEntry, PreviousCheck } from "../storage/history";
 import { escapeHtml } from "./escape";
@@ -15,55 +17,53 @@ function percent(share: number): number {
   return Math.round(share * 100);
 }
 
-export function intervalLine(report: Report): string {
+export function intervalLine(report: Report, t: Translator = ENGLISH_TRANSLATOR): string {
   const low = percent(report.confidence.low);
   const high = percent(report.confidence.high);
   return low === high
-    ? `Estimated ${low} percent of reviews.`
-    : `Estimated between ${low} and ${high} percent of reviews.`;
+    ? t.text("detail.intervalPoint", { percent: low })
+    : t.text("detail.intervalRange", { low, high });
 }
 
-export function unavailableLine(report: Report): string | null {
+export function unavailableLine(
+  report: Report,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string | null {
   if (report.unavailableSignals.length === 0) {
     return null;
   }
-  const signals = report.unavailableSignals;
-  const joined =
-    signals.length < 2
-      ? (signals[0] as string)
-      : `${signals.slice(0, -1).join(", ")} and ${signals[signals.length - 1]}`;
-  return `${joined} could not be read on this page, which widens the estimate.`;
+  const named = report.unavailableSignals.map((signal) => signalLabel(signal, t));
+  return t.text("detail.unavailable", { signals: t.join(named) });
 }
 
 // the stored band came from the model that was current when the check ran
-export function rescoredLine(report: Report, rescored: Rescored | null): string | null {
+export function rescoredLine(
+  report: Report,
+  rescored: Rescored | null,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string | null {
   if (rescored === null || rescored.band === report.band) {
     return null;
   }
-  return `Scored again with the current model, this reads as ${BAND_LABELS[rescored.band]}.`;
+  return t.text("detail.rescored", { band: bandLabel(rescored.band, t) });
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-export function earlierChecksMarkup(checks: readonly PreviousCheck[]): string {
+export function earlierChecksMarkup(
+  checks: readonly PreviousCheck[],
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
   if (checks.length === 0) {
     return "";
   }
   const rows = checks
     .map((check) => {
-      const band = check.band === null ? "" : BAND_LABELS[check.band];
-      const rating = check.adjustedRating === null ? "" : check.adjustedRating.toFixed(1);
-      return `<div class="earlier-row"><span>${formatDate(check.timestamp)}</span>` +
+      const band = check.band === null ? "" : bandLabel(check.band, t);
+      const rating = check.adjustedRating === null ? "" : t.decimal(check.adjustedRating, 1);
+      return `<div class="earlier-row"><span>${t.date(check.timestamp)}</span>` +
         `<span>${band}</span><span>${rating}</span></div>`;
     })
     .join("");
-  return `<h2>earlier checks</h2><div class="earlier">${rows}</div>`;
+  return `<h2>${t.text("detail.earlierChecks")}</h2><div class="earlier">${rows}</div>`;
 }
 
 export function renderReportDetail(
@@ -72,13 +72,14 @@ export function renderReportDetail(
   rescored: Rescored | null,
   callbacks: ReportDetailCallbacks,
   earlierChecks: readonly PreviousCheck[] = [],
+  t: Translator = ENGLISH_TRANSLATOR,
 ): void {
   const report = parseStoredReport(entry.report);
   const thumbnail = safeThumbnailUrl(entry.thumbnailUrl);
 
   container.innerHTML = `
     <header>
-      <button type="button" class="back" aria-label="Back to history">&#8592;</button>
+      <button type="button" class="back" aria-label="${t.text("detail.back")}">&#8592;</button>
       <span class="wordmark">verdict</span>
     </header>
     <div class="detail">
@@ -86,9 +87,9 @@ export function renderReportDetail(
         ${thumbnail !== null ? `<img src="${escapeHtml(thumbnail)}" alt="" width="40" height="40" />` : ""}
         <span class="detail-title">${escapeHtml(entry.title)}</span>
       </div>
-      ${report === null ? unreadable() : body(report, rescored)}
-      <p class="checked">Checked ${formatDate(entry.timestamp)}.</p>
-      ${earlierChecksMarkup(earlierChecks)}
+      ${report === null ? unreadable(t) : body(report, rescored, t)}
+      <p class="checked">${t.text("detail.checked", { date: t.date(entry.timestamp) })}</p>
+      ${earlierChecksMarkup(earlierChecks, t)}
     </div>
   `;
 
@@ -104,48 +105,50 @@ export function renderReportDetail(
   wireEvidence(container);
 }
 
-function unreadable(): string {
-  return `<p class="empty">This check was saved by an older version, so only its heading is readable.</p>`;
+function unreadable(t: Translator): string {
+  return `<p class="empty">${t.text("detail.unreadable")}</p>`;
 }
 
-function body(report: Report, rescored: Rescored | null): string {
+function body(report: Report, rescored: Rescored | null, t: Translator): string {
   const kept = report.totalReviewCount - report.excludedReviewCount;
-  const restated = rescoredLine(report, rescored);
-  const unavailable = unavailableLine(report);
+  const restated = rescoredLine(report, rescored, t);
+  const unavailable = unavailableLine(report, t);
   return `
-    <p class="detail-band" style="color: ${BAND_COLORS[report.band]}">${BAND_LABELS[report.band]}</p>
+    <p class="detail-band" style="color: ${BAND_COLORS[report.band]}">${bandLabel(report.band, t)}</p>
     <dl class="figures">
-      <div><dd>${report.adjustedRating.toFixed(1)}</dd><dt>adjusted</dt></div>
-      <div><dd>${report.claimedRating.toFixed(1)}</dd><dt>claimed</dt></div>
+      <div><dd>${t.decimal(report.adjustedRating, 1)}</dd><dt>${t.text("panel.adjusted")}</dt></div>
+      <div><dd>${t.decimal(report.claimedRating, 1)}</dd><dt>${t.text("panel.claimed")}</dt></div>
     </dl>
-    <div class="strip" role="img" aria-label="${kept.toLocaleString()} reviews kept, ${report.excludedReviewCount.toLocaleString()} excluded">
+    <div class="strip" role="img" aria-label="${
+      t.text("detail.stripAlt", { kept, excluded: report.excludedReviewCount })
+    }">
       <div class="kept" style="flex-grow: ${kept}"></div>
       <div class="excluded" style="flex-grow: ${report.excludedReviewCount}"></div>
     </div>
     <p class="strip-labels">
-      <span>kept ${kept.toLocaleString()}</span>
-      <span>excluded ${report.excludedReviewCount.toLocaleString()}</span>
+      <span>${t.count("panel.kept", kept)}</span>
+      <span>${t.count("panel.excluded", report.excludedReviewCount)}</span>
     </p>
-    <p class="interval">${intervalLine(report)}</p>
+    <p class="interval">${intervalLine(report, t)}</p>
     ${unavailable === null ? "" : `<p class="unavailable">${unavailable}</p>`}
     ${restated === null ? "" : `<p class="rescored">${restated}</p>`}
-    <h2>evidence</h2>
+    <h2>${t.text("detail.evidence")}</h2>
     <div class="register" role="list">
-      ${report.evidence.map(evidenceRow).join("")}
+      ${report.evidence.map((row, index) => evidenceRow(row, index, t)).join("")}
     </div>
-    <h2>how this was produced</h2>
+    <h2>${t.text("detail.howProduced")}</h2>
     <ul class="provenance">
       ${provenanceLines(report.provenance).map((line) => `<li>${escapeHtml(line)}</li>`).join("")}
     </ul>
     <div class="actions">
-      <button type="button" class="export-report">Export this report</button>
-      <button type="button" class="export-report-json">Export as JSON</button>
+      <button type="button" class="export-report">${t.text("detail.exportText")}</button>
+      <button type="button" class="export-report-json">${t.text("detail.exportJson")}</button>
     </div>
     ${report.serial === "" ? "" : `<p class="serial">${escapeHtml(report.serial)}</p>`}
   `;
 }
 
-function evidenceRow(row: Report["evidence"][number], index: number): string {
+function evidenceRow(row: Report["evidence"][number], index: number, t: Translator): string {
   return `
     <div class="row" role="listitem">
       <button
@@ -154,10 +157,12 @@ function evidenceRow(row: Report["evidence"][number], index: number): string {
         aria-expanded="false"
         aria-controls="detail-evidence-${index}"
       >
-        <span class="signal">${escapeHtml(row.signal)}</span>
-        <span class="strength">${escapeHtml(row.strength)}</span>
+        <span class="signal">${escapeHtml(signalLabel(row.signal, t))}</span>
+        <span class="strength">${escapeHtml(strengthLabel(row.strength, t))}</span>
       </button>
-      <div class="detail-text" id="detail-evidence-${index}" hidden>${escapeHtml(row.detail)}</div>
+      <div class="detail-text" id="detail-evidence-${index}" hidden>${
+        escapeHtml(evidenceDetail(row, t))
+      }</div>
     </div>
   `;
 }

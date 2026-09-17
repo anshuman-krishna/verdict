@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { translatorForBrowser } from "../../i18n/locale";
 import { rescore } from "../../score/rescore";
 import { BUNDLED_MODEL } from "../../score/model";
 import { parseStoredReport } from "../../score/report";
@@ -46,6 +47,8 @@ export function entryForSerial(
   return entries.find((entry) => parseStoredReport(entry.report)?.serial === serial) ?? null;
 }
 
+const translator = translatorForBrowser();
+
 async function refresh(openId: number | null = null): Promise<void> {
   const app = document.getElementById("app");
   if (app === null) {
@@ -76,6 +79,7 @@ async function refresh(openId: number | null = null): Promise<void> {
           ),
       },
       earlier,
+      translator,
     );
     return;
   }
@@ -101,7 +105,7 @@ async function refresh(openId: number | null = null): Promise<void> {
       },
     },
     "",
-    { pendingPolicyChanges: policyChanges },
+    { pendingPolicyChanges: policyChanges, translator },
   );
 }
 

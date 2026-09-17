@@ -6,7 +6,8 @@ import { browserUrlWatcher } from "../contentScript/navigation";
 import { createSession } from "../contentScript/session";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
 import { startingRules } from "../extract/bundledRules";
-import { contentScriptMatches, siteForHost } from "../extract/sites";
+import { contentScriptMatches, localeForHost, siteForHost } from "../extract/sites";
+import { translatorForBrowser } from "../i18n/locale";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL, BUNDLED_MODEL_IDENTITY } from "../score/model";
@@ -35,6 +36,8 @@ export default defineContentScript({
     }
     // everything stored lives in the extension, never in the storefront's own origin
     const rules = await readRules(site.id, startingRules(site.id));
+    // the reader's own language where we have one, and the storefront's as the last guess
+    const translator = translatorForBrowser(localeForHost(location.hostname));
 
     const deps: OrchestratorDeps = {
       rules,
@@ -65,7 +68,8 @@ export default defineContentScript({
     const checkOptions = { cache: reviewsCacheVia() };
 
     const session = createSession({
-      createMount: () => createProgressiveMount(document, deps, checkOptions),
+      createMount: () =>
+        createProgressiveMount(document, deps, checkOptions, undefined, translator),
       // a panel describing the listing we just left is worse than no panel
       teardown: () => removeMountedElements(document),
       analyse: async (href, mount) => {

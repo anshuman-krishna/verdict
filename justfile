@@ -145,6 +145,13 @@ sign-rules *args:
     set -euo pipefail
     cd extension && node scripts/sign-rules.mjs {{args}}
 
+#   just translations --stub de
+# count what each language says, or print the file a new one starts as
+translations *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    node extension/scripts/translations.mjs {{args}}
+
 # CLAUDE.md non negotiables 4 and 6, across everything git tracks
 # check the shipped prose for em dashes and accusatory wording
 prose:
@@ -165,4 +172,4 @@ release: (ext "zip")
     set -euo pipefail
     cd extension && node scripts/release-manifest.mjs
 
-check: (ext "build") (ext "test") (py "lint") (py "test") parity prose
+check: (ext "build") (ext "test") (py "lint") (py "test") parity translations prose

@@ -42,6 +42,7 @@ describe("buildEvidence", () => {
       strength: "none",
       value: null,
       detail: "No review text to compare against the product.",
+      messages: [{ id: "evidence.differentProduct.none" }],
     });
   });
 

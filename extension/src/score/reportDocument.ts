@@ -1,4 +1,10 @@
-import { BAND_LABELS, type Report, type ReportProvenance } from "./report";
+import { ENGLISH_TRANSLATOR } from "../i18n/translator";
+import type { Report, ReportProvenance } from "./report";
+import { bandLabel } from "./reportText";
+
+// the one surface that does not follow the reader: a document a seller is invited to
+// dispute has to read the same to both of them, whatever their browsers are set to
+const FIXED = ENGLISH_TRANSLATOR;
 
 export const REPORT_DOCUMENT_VERSION = 1;
 
@@ -64,12 +70,12 @@ export function reportAsText(report: Report, title: string, exportedAt: number):
     `Checked: ${stamp(report.generatedAt)}`,
     `Exported: ${stamp(exportedAt)}`,
     "",
-    `Reading: ${BAND_LABELS[report.band]}`,
-    `Claimed rating: ${report.claimedRating.toFixed(1)}`,
-    `Adjusted rating: ${report.adjustedRating.toFixed(1)}`,
-    `Reviews read: ${report.totalReviewCount.toLocaleString()}`,
-    `Reviews kept: ${kept.toLocaleString()}`,
-    `Reviews excluded: ${report.excludedReviewCount.toLocaleString()}`,
+    `Reading: ${bandLabel(report.band, FIXED)}`,
+    `Claimed rating: ${FIXED.decimal(report.claimedRating, 1)}`,
+    `Adjusted rating: ${FIXED.decimal(report.adjustedRating, 1)}`,
+    `Reviews read: ${FIXED.number(report.totalReviewCount)}`,
+    `Reviews kept: ${FIXED.number(kept)}`,
+    `Reviews excluded: ${FIXED.number(report.excludedReviewCount)}`,
     `Estimated share arriving outside the organic pattern: ${percent(report.estimatedInorganicShare)} percent`,
     `Estimate range: ${percent(report.confidence.low)} to ${percent(report.confidence.high)} percent`,
     "",

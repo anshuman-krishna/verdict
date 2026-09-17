@@ -1,3 +1,4 @@
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import { escapeHtml } from "./escape";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
@@ -45,7 +46,7 @@ export class VerdictNoticeElement extends HTMLElement {
     shadowRoots.set(this, root);
   }
 
-  render(state: NoticeState): void {
+  render(state: NoticeState, t: Translator = ENGLISH_TRANSLATOR): void {
     const root = shadowRoots.get(this);
     if (root === undefined) {
       return;
@@ -70,7 +71,9 @@ export class VerdictNoticeElement extends HTMLElement {
         <div class="actions">
           ${action ? `<button type="button" class="action" ${busy ? "disabled" : ""}>${escapeHtml(actionLabel as string)}</button>` : ""}
           ${link === null ? "" : `<a class="link" href="${escapeHtml(link.href)}" target="_blank" rel="noreferrer noopener">${escapeHtml(link.label)}</a>`}
-          <button type="button" class="close" aria-label="Close">&times;</button>
+          <button type="button" class="close" aria-label="${
+            escapeHtml(t.text("panel.close"))
+          }">&times;</button>
         </div>
       </div>
     `;

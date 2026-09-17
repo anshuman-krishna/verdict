@@ -1,6 +1,7 @@
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import type { FeatureVector } from "./featureVector";
-import type { EvidenceRow, EvidenceStrength } from "./report";
-
+import type { EvidenceMessage, EvidenceRow, EvidenceStrength } from "./report";
+import { SIGNAL_NAMES } from "./combine";
 
 function strengthFromRatio(value: number, weak: number, moderate: number): EvidenceStrength {
   if (value < weak) {
@@ -12,63 +13,103 @@ function strengthFromRatio(value: number, weak: number, moderate: number): Evide
   return "strong";
 }
 
+export function renderEvidenceMessages(
+  messages: readonly EvidenceMessage[],
+  translator: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return messages
+    .map((message) =>
+      message.count === undefined
+        ? translator.text(message.id, message.params)
+        : translator.count(message.id, message.count, message.params)
+    )
+    .join(" ");
+}
+
+function row(
+  feature: keyof typeof SIGNAL_NAMES,
+  strength: EvidenceStrength,
+  value: number | null,
+  messages: EvidenceMessage[],
+): EvidenceRow {
+  return {
+    signal: SIGNAL_NAMES[feature] as string,
+    strength,
+    value,
+    messages,
+    detail: renderEvidenceMessages(messages),
+  };
+}
+
+function percentOf(share: number): number {
+  return Math.round(share * 100);
+}
+
 function ratingShapeRow(vector: FeatureVector): EvidenceRow {
   const result = vector.ratingDeconvolution;
   if (result === null) {
-    return { signal: "rating shape", strength: "none", value: null, detail: "No star ratings to compare against an expected shape." };
+    return row("ratingDeconvolution", "none", null, [{ id: "evidence.ratingShape.none" }]);
   }
-  const percent = Math.round(result.injectedShare * 100);
-  return {
-    signal: "rating shape",
-    strength: strengthFromRatio(result.injectedShare, 0.15, 0.35),
-    value: result.injectedShare,
-    detail: `The rating distribution is consistent with about ${percent} percent of reviews being added outside the organic pattern.`,
-  };
+  return row(
+    "ratingDeconvolution",
+    strengthFromRatio(result.injectedShare, 0.15, 0.35),
+    result.injectedShare,
+    [{ id: "evidence.ratingShape.share", params: { percent: percentOf(result.injectedShare) } }],
+  );
 }
 
 function arrivalTimingRow(vector: FeatureVector): EvidenceRow {
   const result = vector.temporalBurst;
   if (result === null) {
-    return { signal: "arrival timing", strength: "none", value: null, detail: "No dated reviews to place on a timeline." };
+    return row("temporalBurst", "none", null, [{ id: "evidence.arrivalTiming.none" }]);
   }
   if (result.burstCount === 0) {
-    return { signal: "arrival timing", strength: "weak", value: 0, detail: "No unusual clustering in when reviews arrived." };
+    return row("temporalBurst", "weak", 0, [{ id: "evidence.arrivalTiming.quiet" }]);
   }
-  const percent = Math.round(result.burstFraction * 100);
-  return {
-    signal: "arrival timing",
-    strength: strengthFromRatio(result.burstFraction, 0.05, 0.2),
-    value: result.burstFraction,
-    detail: `${result.burstCount} unusual arrival ${result.burstCount === 1 ? "burst" : "bursts"}, covering about ${percent} percent of reviews.`,
-  };
+  return row(
+    "temporalBurst",
+    strengthFromRatio(result.burstFraction, 0.05, 0.2),
+    result.burstFraction,
+    [
+      {
+        id: "evidence.arrivalTiming.bursts",
+        count: result.burstCount,
+        params: { percent: percentOf(result.burstFraction) },
+      },
+    ],
+  );
 }
 
 function verificationRow(vector: FeatureVector): EvidenceRow {
   const result = vector.verificationConcentration;
   if (result === null || result.lift === null) {
-    return { signal: "verification pattern", strength: "none", value: null, detail: "Not enough reviews in unusual arrival windows to compare verification rates." };
+    return row("verificationConcentration", "none", null, [
+      { id: "evidence.verification.none" },
+    ]);
   }
   const lift = result.lift;
-  return {
-    signal: "verification pattern",
-    strength: strengthFromRatio(lift, 1.3, 2),
-    value: lift,
-    detail: `Unverified reviews are about ${lift.toFixed(1)}x as common among five star reviews inside unusual arrival windows as elsewhere.`,
-  };
+  return row("verificationConcentration", strengthFromRatio(lift, 1.3, 2), lift, [
+    { id: "evidence.verification.lift", params: { lift: ENGLISH_TRANSLATOR.decimal(lift, 1) } },
+  ]);
 }
 
 function duplicateTextRow(vector: FeatureVector): EvidenceRow {
   const result = vector.textNearDuplication;
   if (result.duplicateReviewShare === null) {
-    return { signal: "duplicate text", strength: "none", value: null, detail: "No review text to compare." };
+    return row("textNearDuplication", "none", null, [{ id: "evidence.duplicateText.none" }]);
   }
-  const percent = Math.round(result.duplicateReviewShare * 100);
-  return {
-    signal: "duplicate text",
-    strength: strengthFromRatio(result.duplicateReviewShare, 0.05, 0.15),
-    value: result.duplicateReviewShare,
-    detail: `${result.clusterCount} ${result.clusterCount === 1 ? "cluster" : "clusters"} of near duplicate text, about ${percent} percent of reviews with text.`,
-  };
+  return row(
+    "textNearDuplication",
+    strengthFromRatio(result.duplicateReviewShare, 0.05, 0.15),
+    result.duplicateReviewShare,
+    [
+      {
+        id: "evidence.duplicateText.clusters",
+        count: result.clusterCount,
+        params: { percent: percentOf(result.duplicateReviewShare) },
+      },
+    ],
+  );
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -80,34 +121,50 @@ function isoDay(day: number): string {
 function differentProductRow(vector: FeatureVector): EvidenceRow {
   const result = vector.listingDrift;
   if (result.embeddedCount === 0) {
-    return { signal: "different product", strength: "none", value: null, detail: "No review text to compare against the product." };
+    return row("listingDrift", "none", null, [{ id: "evidence.differentProduct.none" }]);
   }
-  const shift = result.changePoint !== null
-    ? ` The wording of reviews shifts around ${isoDay(result.changePoint.day)}.`
-    : "";
+  const shift: EvidenceMessage[] = result.changePoint === null
+    ? []
+    : [{
+      id: "evidence.differentProduct.shift",
+      params: { day: isoDay(result.changePoint.day) },
+    }];
   if (result.offTopicShare === null) {
-    return { signal: "different product", strength: "none", value: null, detail: `No product title to compare the reviews against.${shift}` };
+    return row("listingDrift", "none", null, [
+      { id: "evidence.differentProduct.noTitle" },
+      ...shift,
+    ]);
   }
-  return {
-    signal: "different product",
-    strength: strengthFromRatio(result.offTopicShare, 0.15, 0.4),
-    value: result.offTopicShare,
-    detail: `${result.offTopicCount} of ${result.embeddedCount} reviews with text share no wording with the current product title and category.${shift}`,
-  };
+  return row(
+    "listingDrift",
+    strengthFromRatio(result.offTopicShare, 0.15, 0.4),
+    result.offTopicShare,
+    [
+      {
+        id: "evidence.differentProduct.share",
+        count: result.offTopicCount,
+        params: { embedded: result.embeddedCount },
+      },
+      ...shift,
+    ],
+  );
 }
 
 function reviewerNetworkRow(result: NonNullable<FeatureVector["reviewerGraph"]>): EvidenceRow {
   if (result.identifiedReviewCount === 0) {
-    return { signal: "reviewer network", strength: "none", value: null, detail: "No reviewer identifiers to check against the network." };
+    return row("reviewerGraph", "none", null, [{ id: "evidence.reviewerNetwork.none" }]);
   }
   const share = result.flaggedReviewShare as number;
-  const percent = Math.round(share * 100);
-  return {
-    signal: "reviewer network",
-    strength: strengthFromRatio(share, 0.1, 0.3),
-    value: share,
-    detail: `About ${percent} percent of the reviews here were written by ${result.flaggedReviewerCount} of ${result.knownReviewerCount} accounts that also appear in networks flagged across many products.`,
-  };
+  return row("reviewerGraph", strengthFromRatio(share, 0.1, 0.3), share, [
+    {
+      id: "evidence.reviewerNetwork.share",
+      params: {
+        percent: percentOf(share),
+        flagged: result.flaggedReviewerCount,
+        known: result.knownReviewerCount,
+      },
+    },
+  ]);
 }
 
 export function buildEvidence(vector: FeatureVector): EvidenceRow[] {

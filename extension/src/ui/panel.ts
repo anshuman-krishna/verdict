@@ -1,5 +1,12 @@
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import type { Report } from "../score/report";
-import { BAND_LABELS } from "../score/report";
+import {
+  bandLabel,
+  evidenceDetail,
+  signalLabel,
+  signalLabels,
+  strengthLabel,
+} from "../score/reportText";
 import type { PreviousCheck } from "../storage/history";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
@@ -22,34 +29,35 @@ function prefersReducedMotion(): boolean {
     : false;
 }
 
-function relativeCheckedTime(generatedAt: number, now: number): string {
+function relativeCheckedTime(generatedAt: number, now: number, t: Translator): string {
   const elapsedMs = now - generatedAt;
   if (elapsedMs < 60_000) {
-    return "checked just now";
+    return t.text("panel.checkedJustNow");
   }
   const minutes = Math.round(elapsedMs / 60_000);
   if (minutes < 60) {
-    return `checked ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+    return t.count("panel.checkedMinutes", minutes);
   }
-  const hours = Math.round(minutes / 60);
-  return `checked ${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return t.count("panel.checkedHours", Math.round(minutes / 60));
 }
 
-function joinSignals(signals: readonly string[]): string {
-  if (signals.length < 2) {
-    return signals[0] ?? "";
-  }
-  return `${signals.slice(0, -1).join(", ")} and ${signals[signals.length - 1]}`;
+function joinSignals(signals: readonly string[], t: Translator): string {
+  return t.join(signalLabels(signals, t));
 }
 
-export function confidenceLine(report: Report): string {
+export function confidenceLine(report: Report, t: Translator = ENGLISH_TRANSLATOR): string {
   const low = Math.round(report.confidence.low * 100);
   const high = Math.round(report.confidence.high * 100);
-  const range = low === high ? `${low} percent` : `${low} to ${high} percent`;
-  const unavailable = report.unavailableSignals.length === 0
-    ? ""
-    : ` ${joinSignals(report.unavailableSignals)} could not be read on this page, which widens it.`;
-  return `The estimate sits between ${range} of reviews.${unavailable}`;
+  const estimate = low === high
+    ? t.text("confidence.point", { percent: low })
+    : t.text("confidence.range", { low, high });
+  if (report.unavailableSignals.length === 0) {
+    return estimate;
+  }
+  const widened = t.text("confidence.unavailable", {
+    signals: joinSignals(report.unavailableSignals, t),
+  });
+  return `${estimate} ${widened}`;
 }
 
 export interface FullReportDetail {
@@ -58,19 +66,18 @@ export interface FullReportDetail {
 
 const MS_PER_DAY = 86_400_000;
 
-function daysAgo(then: number, now: number): string {
+function daysAgo(then: number, now: number, t: Translator): string {
   const days = Math.floor((now - then) / MS_PER_DAY);
   if (days < 1) {
-    return "earlier today";
+    return t.text("when.earlierToday");
   }
   if (days === 1) {
-    return "yesterday";
+    return t.text("when.yesterday");
   }
   if (days < 30) {
-    return `${days} days ago`;
+    return t.count("when.days", days);
   }
-  const months = Math.round(days / 30);
-  return months === 1 ? "a month ago" : `${months} months ago`;
+  return t.count("when.months", Math.round(days / 30));
 }
 
 // what changed since last time is the thing worth a sentence, not the count of visits
@@ -78,28 +85,33 @@ export function previouslyLine(
   report: Report,
   previous: PreviousCheck | undefined,
   now: number,
+  t: Translator = ENGLISH_TRANSLATOR,
 ): string | null {
   if (previous === undefined) {
     return null;
   }
-  const when = daysAgo(previous.timestamp, now);
+  const when = daysAgo(previous.timestamp, now, t);
   if (previous.band === null) {
-    return `You checked this listing ${when}.`;
+    return t.text("previously.unknown", { when });
   }
-  if (previous.band === report.band) {
-    return `You checked this listing ${when}, and it read ${BAND_LABELS[previous.band]} then too.`;
-  }
-  return `You checked this listing ${when}, when it read ${BAND_LABELS[previous.band]}.`;
+  const band = bandLabel(previous.band, t);
+  return previous.band === report.band
+    ? t.text("previously.same", { when, band })
+    : t.text("previously.changed", { when, band });
 }
 
 export interface PanelRenderOptions {
   pending?: readonly string[];
   now?: number;
   previousChecks?: readonly PreviousCheck[];
+  translator?: Translator;
 }
 
-export function pendingLine(pending: readonly string[]): string {
-  return `Still reading the ${joinSignals(pending)}, so this may still move.`;
+export function pendingLine(
+  pending: readonly string[],
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return t.text("pending.line", { signals: joinSignals(pending, t) });
 }
 
 export class VerdictPanelElement extends HTMLElement {
@@ -133,20 +145,22 @@ export class VerdictPanelElement extends HTMLElement {
       return;
     }
 
+    const t = options.translator ?? ENGLISH_TRANSLATOR;
     const pending = options.pending ?? [];
-    const previously = previouslyLine(report, options.previousChecks?.[0], now);
+    const previously = previouslyLine(report, options.previousChecks?.[0], now, t);
 
     const params = rosetteParams(rosetteInput);
     const path = rosettePath(params, 44);
-    const bandLabel = BAND_LABELS[report.band];
+    const band = bandLabel(report.band, t);
+    const kept = report.totalReviewCount - report.excludedReviewCount;
     const reducedMotion = prefersReducedMotion();
 
     root.innerHTML = `
       <style>${DESIGN_TOKENS_CSS}${PANEL_CSS}</style>
-      <div class="panel" role="region" aria-label="Verdict report">
+      <div class="panel" role="region" aria-label="${t.text("panel.regionLabel")}">
         <header>
           <span class="wordmark">verdict</span>
-          <button type="button" class="close" aria-label="Close">&times;</button>
+          <button type="button" class="close" aria-label="${t.text("panel.close")}">&times;</button>
         </header>
 
         <div class="headline">
@@ -156,9 +170,10 @@ export class VerdictPanelElement extends HTMLElement {
             role="img"
             aria-labelledby="rosette-alt"
           >
-            <title id="rosette-alt">${bandLabel}, estimated ${Math.round(
-              report.estimatedInorganicShare * 100,
-            )} percent of reviews are inorganic</title>
+            <title id="rosette-alt">${t.text("panel.rosetteAlt", {
+              band,
+              percent: Math.round(report.estimatedInorganicShare * 100),
+            })}</title>
             <path
               d="${path}"
               fill="none"
@@ -169,41 +184,44 @@ export class VerdictPanelElement extends HTMLElement {
           </svg>
           <dl class="figures">
             <div>
-              <dd class="adjusted">${report.adjustedRating.toFixed(1)}</dd>
-              <dt>adjusted</dt>
+              <dd class="adjusted">${t.decimal(report.adjustedRating, 1)}</dd>
+              <dt>${t.text("panel.adjusted")}</dt>
             </div>
             <div>
-              <dd class="claimed">${report.claimedRating.toFixed(1)}</dd>
-              <dt>claimed</dt>
+              <dd class="claimed">${t.decimal(report.claimedRating, 1)}</dd>
+              <dt>${t.text("panel.claimed")}</dt>
             </div>
           </dl>
         </div>
 
         <p class="summary">
-          ${bandLabel}. ${report.excludedReviewCount.toLocaleString()} of
-          ${report.totalReviewCount.toLocaleString()} reviews look inorganic.
+          ${t.text("panel.summary", {
+            band,
+            excluded: report.excludedReviewCount,
+            total: report.totalReviewCount,
+          })}
         </p>
 
         <div
           class="specimen-strip"
           role="img"
-          aria-label="${(report.totalReviewCount - report.excludedReviewCount).toLocaleString()}
-            reviews kept, ${report.excludedReviewCount.toLocaleString()} reviews excluded"
+          aria-label="${t.text("panel.stripAlt", {
+            kept,
+            excluded: report.excludedReviewCount,
+          })}"
         >
-          <div class="kept" style="flex-grow: ${
-            report.totalReviewCount - report.excludedReviewCount
-          }"></div>
+          <div class="kept" style="flex-grow: ${kept}"></div>
           <div class="excluded" style="flex-grow: ${report.excludedReviewCount}"></div>
         </div>
         <div class="specimen-labels">
-          <span>kept ${(report.totalReviewCount - report.excludedReviewCount).toLocaleString()}</span>
-          <span>excluded ${report.excludedReviewCount.toLocaleString()}</span>
+          <span>${t.count("panel.kept", kept)}</span>
+          <span>${t.count("panel.excluded", report.excludedReviewCount)}</span>
         </div>
 
         <div
           class="interval"
           role="img"
-          aria-label="${confidenceLine(report)}"
+          aria-label="${confidenceLine(report, t)}"
         >
           <div
             class="interval-span"
@@ -212,16 +230,16 @@ export class VerdictPanelElement extends HTMLElement {
             }%"
           ></div>
         </div>
-        <p class="interval-note">${confidenceLine(report)}</p>
+        <p class="interval-note">${confidenceLine(report, t)}</p>
         ${previously === null ? "" : `<p class="previously">${previously}</p>`}
         ${
       pending.length === 0
         ? ""
-        : `<p class="pending" role="status">${pendingLine(pending)}</p>`
+        : `<p class="pending" role="status">${pendingLine(pending, t)}</p>`
     }
 
         <div class="evidence">
-          <h2>evidence</h2>
+          <h2>${t.text("panel.evidence")}</h2>
           <div class="register" role="list">
             ${report.evidence
               .map(
@@ -233,11 +251,13 @@ export class VerdictPanelElement extends HTMLElement {
                   aria-expanded="false"
                   aria-controls="evidence-detail-${index}"
                 >
-                  <span class="signal">${row.signal}</span>
-                  <span class="strength">${row.strength}</span>
+                  <span class="signal">${signalLabel(row.signal, t)}</span>
+                  <span class="strength">${strengthLabel(row.strength, t)}</span>
                   <span class="disclosure" aria-hidden="true">&gt;</span>
                 </button>
-                <div class="detail" id="evidence-detail-${index}" hidden>${row.detail}</div>
+                <div class="detail" id="evidence-detail-${index}" hidden>${
+                  evidenceDetail(row, t)
+                }</div>
               </div>
             `,
               )
@@ -246,8 +266,8 @@ export class VerdictPanelElement extends HTMLElement {
         </div>
 
         <footer>
-          <span class="checked">${relativeCheckedTime(report.generatedAt, now)}</span>
-          <button type="button" class="full-report">full report</button>
+          <span class="checked">${relativeCheckedTime(report.generatedAt, now, t)}</span>
+          <button type="button" class="full-report">${t.text("panel.fullReport")}</button>
         </footer>
       </div>
     `;

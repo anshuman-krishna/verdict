@@ -2,6 +2,8 @@ import { browser } from "wxt/browser";
 import { DEFAULT_MAX_PAGES, NO_REVIEWS_CACHE, type FetchProgress } from "../extract/fetchReviewPages";
 import { reviewPageCap } from "../extract/sites";
 import type { ProductSnapshot } from "../extract/types";
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
+import { signalLabel } from "../score/reportText";
 import type { Report } from "../score/report";
 import { STATUS_URL } from "../siteLinks";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
@@ -50,10 +52,12 @@ function mountPanel(
   result: AnalysisResult,
   report: Report,
   openTab: (url: string) => void,
+  translator: Translator,
 ): void {
   const panel = createPanel(document, openTab, () => {});
   panel.render(report, rosetteInputFromReport(report), Date.now(), {
     previousChecks: result.previousChecks,
+    translator,
   });
 }
 
@@ -66,41 +70,49 @@ function createNotice(document: Document): VerdictNoticeElement {
 }
 
 // DESIGN.md section 9: an extraction that failed says so, and points somewhere
-export function unreadableState(): NoticeState {
+export function unreadableState(t: Translator = ENGLISH_TRANSLATOR): NoticeState {
   return {
-    message: "Verdict could not read this page.",
-    link: { label: "extraction status", href: STATUS_URL },
+    message: t.text("notice.unreadable"),
+    link: { label: t.text("notice.statusLink"), href: STATUS_URL },
   };
 }
 
-export function missingSignalsState(missing: readonly string[]): NoticeState {
-  const named = missing.length === 1 ? missing[0] : missing.join(", ");
+export function missingSignalsState(
+  missing: readonly string[],
+  t: Translator = ENGLISH_TRANSLATOR,
+): NoticeState {
+  const named = missing.map((signal) => signalLabel(signal, t)).join(", ");
   return {
-    message: `Verdict could not read enough of this page to judge it. Missing: ${named}.`,
-    link: { label: "extraction status", href: STATUS_URL },
+    message: t.text("notice.missingSignals", { signals: named }),
+    link: { label: t.text("notice.statusLink"), href: STATUS_URL },
   };
 }
 
-export function noModelState(): NoticeState {
-  return { message: "This build of Verdict carries no scoring model, so it cannot judge a page." };
+export function noModelState(t: Translator = ENGLISH_TRANSLATOR): NoticeState {
+  return { message: t.text("notice.noModel") };
 }
 
-function reviewCountPhrase(reviewCount: number): string {
-  return reviewCount === 1 ? "1 review" : `${reviewCount.toLocaleString()} reviews`;
-}
-
-export function notEnoughReviewsMessage(reviewCount: number): string {
-  return `Not enough reviews to judge this one. ${reviewCountPhrase(reviewCount)} found.`;
+export function notEnoughReviewsMessage(
+  reviewCount: number,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return t.text("notice.notEnoughReviews", { reviews: t.count("count.reviews", reviewCount) });
 }
 
 // SPEC.md section 13 would rather say there is nothing more than offer a button that reads nothing
-export function everyPageReadMessage(result: AnalysisResult): string {
+export function everyPageReadMessage(
+  result: AnalysisResult,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
   const pagesRead = result.fetch?.pagesFetched ?? 0;
-  const pages = pagesRead === 1 ? "1 page" : `${pagesRead} pages`;
   const reach = result.fetch?.stoppedBecause === "complete"
-    ? "which is as deep as Verdict reads"
-    : "which is every page this listing has";
-  return `Not enough reviews to judge this one. ${reviewCountPhrase(result.reviews.length)} across ${pages}, ${reach}.`;
+    ? t.text("notice.reachOwnCeiling")
+    : t.text("notice.reachEveryPage");
+  return t.text("notice.everyPageRead", {
+    reviews: t.count("count.reviews", result.reviews.length),
+    pages: t.count("count.pages", pagesRead),
+    reach,
+  });
 }
 
 // SPEC.md section 9: five pages on the first ask, the storefront's own ceiling on the second
@@ -124,8 +136,8 @@ export function nextReadDepth(
   return read.maxPages >= cap ? null : cap;
 }
 
-function mountPlainNotice(document: Document, state: NoticeState): void {
-  createNotice(document).render(state);
+function mountPlainNotice(document: Document, state: NoticeState, t: Translator): void {
+  createNotice(document).render(state, t);
 }
 
 function mountNotEnoughDataNotice(
@@ -135,42 +147,41 @@ function mountNotEnoughDataNotice(
   deps: OrchestratorDeps,
   checkOptions: CheckMoreDeeplyOptions,
   openTab: (url: string) => void,
+  t: Translator,
 ): void {
   const maxPages = nextReadDepth(result, checkOptions);
   if (maxPages === null) {
-    mountPlainNotice(document, { message: everyPageReadMessage(result) });
+    mountPlainNotice(document, { message: everyPageReadMessage(result, t) }, t);
     return;
   }
 
   const notice = createNotice(document);
-  const message = notEnoughReviewsMessage(result.reviews.length);
+  const message = notEnoughReviewsMessage(result.reviews.length, t);
+  const label = t.text("notice.checkMoreDeeply");
+  const pendingLabel = t.text("notice.checkingMoreDeeply");
 
   const renderIdle = (): void => {
     notice.render({
       message,
-      action: {
-        label: "check more deeply",
-        pendingLabel: "checking more deeply...",
-        onClick: () => void runCheck(),
-      },
-    });
+      action: { label, pendingLabel, onClick: () => void runCheck() },
+    }, t);
   };
 
   const runCheck = async (): Promise<void> => {
     notice.render({
       message,
       busy: true,
-      action: { label: "check more deeply", pendingLabel: "checking more deeply...", onClick: () => {} },
-      progress: startingProgressLine(maxPages),
-    });
+      action: { label, pendingLabel, onClick: () => {} },
+      progress: startingProgressLine(maxPages, t),
+    }, t);
     try {
       const next = await checkMoreDeeply(result.page, product, result.reviews, deps, {
         ...checkOptions,
         maxPages,
-        onProgress: (progress) => notice.updateProgress(progressLine(progress)),
+        onProgress: (progress) => notice.updateProgress(progressLine(progress, t)),
       });
       notice.remove();
-      mountResult(document, next, deps, { ...checkOptions, maxPages }, openTab);
+      mountResult(document, next, deps, { ...checkOptions, maxPages }, openTab, t);
     } catch {
       renderIdle();
     }
@@ -179,13 +190,22 @@ function mountNotEnoughDataNotice(
   renderIdle();
 }
 
-function startingProgressLine(maxPages: number): string {
-  return `Reading up to ${maxPages} more pages of reviews.`;
+export function startingProgressLine(
+  maxPages: number,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return t.count("notice.readingUpTo", maxPages);
 }
 
-function progressLine(progress: FetchProgress): string {
-  const reviews = progress.reviewCount === 1 ? "1 review" : `${progress.reviewCount} reviews`;
-  return `${progress.pagesFetched} of ${progress.maxPages} pages read, ${reviews} so far.`;
+export function progressLine(
+  progress: FetchProgress,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return t.text("notice.progress", {
+    read: progress.pagesFetched,
+    total: progress.maxPages,
+    reviews: t.count("count.reviews", progress.reviewCount),
+  });
 }
 
 export function mountResult(
@@ -194,26 +214,27 @@ export function mountResult(
   deps: OrchestratorDeps,
   checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
+  t: Translator = ENGLISH_TRANSLATOR,
 ): void {
   const outcome = result.outcome;
   if (outcome.status === "ok") {
-    mountPanel(document, result, outcome.report, openTab);
+    mountPanel(document, result, outcome.report, openTab, t);
     return;
   }
   if (outcome.status === "unreadable") {
-    mountPlainNotice(document, unreadableState());
+    mountPlainNotice(document, unreadableState(t), t);
     return;
   }
   if (outcome.status === "missing-features") {
-    mountPlainNotice(document, missingSignalsState(outcome.missing));
+    mountPlainNotice(document, missingSignalsState(outcome.missing, t), t);
     return;
   }
   if (outcome.status === "no-model") {
-    mountPlainNotice(document, noModelState());
+    mountPlainNotice(document, noModelState(t), t);
     return;
   }
   if (result.product !== null) {
-    mountNotEnoughDataNotice(document, result, result.product, deps, checkOptions, openTab);
+    mountNotEnoughDataNotice(document, result, result.product, deps, checkOptions, openTab, t);
   }
 }
 
@@ -235,6 +256,7 @@ export function createProgressiveMount(
   deps: OrchestratorDeps,
   checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
+  t: Translator = ENGLISH_TRANSLATOR,
 ): ProgressiveMount {
   let panel: VerdictPanelElement | null = null;
   let waitingNotice: VerdictNoticeElement | null = null;
@@ -258,7 +280,7 @@ export function createProgressiveMount(
         dismissed = true;
         clearWaiting();
       });
-      notice.render({ message: "Reading the reviews on this page.", busy: true });
+      notice.render({ message: t.text("notice.reading"), busy: true }, t);
       waitingNotice = notice;
     },
 
@@ -284,6 +306,7 @@ export function createProgressiveMount(
         panel.render(result.outcome.report, rosetteInputFromReport(result.outcome.report), Date.now(), {
           pending,
           previousChecks: result.previousChecks,
+          translator: t,
         });
         return;
       }
@@ -291,7 +314,7 @@ export function createProgressiveMount(
         return;
       }
       clearWaiting();
-      mountResult(document, result, deps, checkOptions, openTab);
+      mountResult(document, result, deps, checkOptions, openTab, t);
     },
   };
   return mounted;

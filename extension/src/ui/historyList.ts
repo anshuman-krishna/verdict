@@ -1,7 +1,9 @@
 import { safeThumbnailUrl } from "../extract/sites";
+import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import type { PolicyChange } from "../privacy/commitments";
 import type { Rescored } from "../score/rescore";
-import { BAND_COLORS, BAND_LABELS, summarizeReport } from "../score/report";
+import { BAND_COLORS, summarizeReport } from "../score/report";
+import { bandLabel } from "../score/reportText";
 import type { HistoryEntry } from "../storage/history";
 import { escapeHtml } from "./escape";
 import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
@@ -43,14 +45,6 @@ export function groupByProduct(entries: readonly HistoryRow[]): HistoryRow[] {
   return rows;
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function matchesQuery(entry: HistoryEntry, query: string): boolean {
   const trimmed = query.trim().toLowerCase();
   return trimmed === "" || entry.title.toLowerCase().includes(trimmed);
@@ -59,6 +53,7 @@ export function matchesQuery(entry: HistoryEntry, query: string): boolean {
 export interface PopupOptions {
   pendingPolicyChanges?: readonly PolicyChange[];
   now?: number;
+  translator?: Translator;
 }
 
 export function renderPopup(
@@ -68,34 +63,37 @@ export function renderPopup(
   query = "",
   options: PopupOptions = {},
 ): void {
+  const t = options.translator ?? ENGLISH_TRANSLATOR;
   const shown = groupByProduct(entries).filter((entry) => matchesQuery(entry, query));
   container.innerHTML = `
     <header>
       <span class="wordmark">verdict</span>
-      <button type="button" class="open-settings" aria-label="Settings">&#9881;</button>
+      <button type="button" class="open-settings" aria-label="${
+        t.text("popup.settings")
+      }">&#9881;</button>
     </header>
     ${policyNoticeMarkup(options.pendingPolicyChanges ?? [], options.now ?? Date.now())}
     ${
       entries.length === 0
         ? ""
         : `<div class="search">
-      <input type="search" class="search-input" aria-label="Search checks" placeholder="search"
-        value="${escapeHtml(query)}" />
+      <input type="search" class="search-input" aria-label="${t.text("popup.search")}"
+        placeholder="${t.text("popup.searchPlaceholder")}" value="${escapeHtml(query)}" />
     </div>`
     }
     <div class="register" role="list">
       ${
         entries.length === 0
-          ? `<p class="empty">No checks yet.</p>`
+          ? `<p class="empty">${t.text("popup.empty")}</p>`
           : shown.length === 0
-            ? `<p class="empty">No checks match that.</p>`
-            : shown.map((entry) => renderRow(entry)).join("")
+            ? `<p class="empty">${t.text("popup.noMatches")}</p>`
+            : shown.map((entry) => renderRow(entry, t)).join("")
       }
     </div>
     <footer>
-      <button type="button" class="export-json">export json</button>
-      <button type="button" class="export-csv">export csv</button>
-      <button type="button" class="delete-all">delete everything</button>
+      <button type="button" class="export-json">${t.text("popup.exportJson")}</button>
+      <button type="button" class="export-csv">${t.text("popup.exportCsv")}</button>
+      <button type="button" class="delete-all">${t.text("popup.deleteAll")}</button>
     </footer>
   `;
 
@@ -132,11 +130,11 @@ export function renderPopup(
       return;
     }
     deleteButton.dataset.confirming = "true";
-    deleteButton.textContent = "confirm delete";
+    deleteButton.textContent = t.text("popup.confirmDelete");
   });
 }
 
-function renderRow(entry: HistoryRow): string {
+function renderRow(entry: HistoryRow, t: Translator): string {
   const { band, adjustedRating } = summarizeReport(entry.report);
   // the current model's reading, where there is one, so an old band does not go stale
   const shownBand = entry.rescored?.band ?? band;
@@ -151,14 +149,24 @@ function renderRow(entry: HistoryRow): string {
           : ""
       }
       <span class="title">${escapeHtml(entry.title)}</span>
-      ${(entry.checkCount ?? 1) > 1 ? `<span class="repeat">${entry.checkCount}&times;</span>` : ""}
       ${
-        shownBand !== null
-          ? `<span class="band" style="color: ${BAND_COLORS[shownBand]}">${BAND_LABELS[shownBand]}</span>`
+        (entry.checkCount ?? 1) > 1
+          ? `<span class="repeat">${t.number(entry.checkCount ?? 1)}&times;</span>`
           : ""
       }
-      ${adjustedRating !== null ? `<span class="rating">${adjustedRating.toFixed(1)}</span>` : ""}
-      <span class="date">${formatDate(entry.timestamp)}</span>
+      ${
+        shownBand !== null
+          ? `<span class="band" style="color: ${BAND_COLORS[shownBand]}">${
+            bandLabel(shownBand, t)
+          }</span>`
+          : ""
+      }
+      ${
+        adjustedRating !== null
+          ? `<span class="rating">${t.decimal(adjustedRating, 1)}</span>`
+          : ""
+      }
+      <span class="date">${t.date(entry.timestamp)}</span>
     </button>
     </div>
   `;

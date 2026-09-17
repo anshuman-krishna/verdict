@@ -3,6 +3,7 @@ import {
   SITES,
   allowedDomains,
   contentScriptMatches,
+  localeForHost,
   parseProductUrl,
   reviewPageCap,
   reviewPageUrl,
@@ -135,6 +136,18 @@ describe("reviewPageCap", () => {
 
   it("is shallow for a site the registry does not carry at all", () => {
     expect(reviewPageCap("nowhere")).toBe(5);
+  });
+});
+
+describe("localeForHost", () => {
+  it("names which locale of a storefront a host is", () => {
+    expect(localeForHost("www.amazon.de")).toBe("de");
+    expect(localeForHost("www.amazon.co.jp")).toBe("co.jp");
+    expect(localeForHost("www.amazon.com")).toBe("com");
+  });
+
+  it("is null for a host the registry does not carry", () => {
+    expect(localeForHost("www.example.com")).toBeNull();
   });
 });
 

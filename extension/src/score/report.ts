@@ -1,4 +1,6 @@
-import { shortDigest } from "./digest";
+import type { MessageId } from "../i18n/messages.ts";
+import { isMessageId } from "../i18n/messages.ts";
+import { shortDigest } from "./digest.ts";
 
 export type Band = "clean" | "mostly-clean" | "mixed" | "doubtful" | "heavily-manipulated";
 
@@ -20,11 +22,22 @@ export const BAND_COLORS: Record<Band, string> = {
 
 export type EvidenceStrength = "none" | "weak" | "moderate" | "strong";
 
+// the sentences a row is made of rather than the sentence it came out as, so a report
+// stored in one language can be read back in another
+export interface EvidenceMessage {
+  id: MessageId;
+  // the number that picks a plural form, where the line counts something
+  count?: number;
+  params?: Record<string, string | number>;
+}
+
 export interface EvidenceRow {
   signal: string;
   strength: EvidenceStrength;
   detail: string;
   value: number | null;
+  // absent on rows written before this build recorded them
+  messages?: EvidenceMessage[];
 }
 
 export interface ConfidenceInterval {
@@ -103,7 +116,40 @@ function evidenceRow(value: unknown): EvidenceRow | null {
   if (strength === undefined) {
     return null;
   }
-  return { signal: row.signal, strength, detail: row.detail, value: numberAt(row, "value") };
+  const messages = evidenceMessages(row.messages);
+  return {
+    signal: row.signal,
+    strength,
+    detail: row.detail,
+    value: numberAt(row, "value"),
+    ...(messages === null ? {} : { messages }),
+  };
+}
+
+function evidenceMessages(value: unknown): EvidenceMessage[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const built: EvidenceMessage[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    // an id this build does not have would render as nothing, so the stored english stands
+    if (typeof record.id !== "string" || !isMessageId(record.id)) {
+      return null;
+    }
+    const count = numberAt(record, "count");
+    built.push({
+      id: record.id,
+      ...(count === null ? {} : { count }),
+      ...(typeof record.params === "object" && record.params !== null
+        ? { params: record.params as Record<string, string | number> }
+        : {}),
+    });
+  }
+  return built.length === 0 ? null : built;
 }
 
 function stringList(value: unknown): string[] {
