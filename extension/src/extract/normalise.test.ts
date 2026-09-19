@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { SITES } from "./sites";
-import { LOCALE_FORMATS, localeFormat, normaliseDate, normaliseNumber } from "./normalise";
+import {
+  LOCALE_FORMATS,
+  localeFormat,
+  normaliseDate,
+  normaliseDateReading,
+  normaliseNumber,
+} from "./normalise";
 
 describe("normaliseNumber", () => {
   it.each([
@@ -206,5 +212,107 @@ describe("the marketplaces beyond the first four", () => {
   it("keeps a day first date day first, and a month first date month first", () => {
     expect(normaliseDate("05/01/2026", "com.au")).toBe("2026-01-05");
     expect(normaliseDate("01/05/2026", "ca")).toBe("2026-01-05");
+  });
+});
+
+describe("normaliseDateReading", () => {
+  // a wednesday, far enough into the month that a shift back lands cleanly
+  const NOW = Date.UTC(2026, 2, 18, 14, 30);
+
+  it("reads an absolute date as exact, whatever the locale writes", () => {
+    expect(normaliseDateReading("Reviewed on 2 March 2024", "co.uk", NOW)).toEqual({
+      date: "2024-03-02",
+      precision: "exact",
+    });
+    expect(normaliseDateReading("2024年3月2日", "co.jp", NOW)).toEqual({
+      date: "2024-03-02",
+      precision: "exact",
+    });
+  });
+
+  it.each([
+    ["com", "3 days ago", "2026-03-15"],
+    ["com", "yesterday", "2026-03-17"],
+    ["com", "today", "2026-03-18"],
+    ["com", "an hour ago", "2026-03-18"],
+    ["fr", "il y a 3 jours", "2026-03-15"],
+    ["de", "vor 3 Tagen", "2026-03-15"],
+    ["es", "hace 3 días", "2026-03-15"],
+    ["it", "3 giorni fa", "2026-03-15"],
+    ["nl", "3 dagen geleden", "2026-03-15"],
+    ["se", "för 3 dagar sedan", "2026-03-15"],
+    ["pl", "3 dni temu", "2026-03-15"],
+    ["com.br", "há 3 dias", "2026-03-15"],
+    ["co.jp", "3日前", "2026-03-15"],
+  ])("%s resolves %s to a day", (locale, raw, expected) => {
+    expect(normaliseDateReading(raw, locale, NOW)).toEqual({ date: expected, precision: "day" });
+  });
+
+  it.each([
+    ["com", "2 months ago", "2026-01-18"],
+    ["fr", "il y a 2 mois", "2026-01-18"],
+    ["de", "vor 2 Monaten", "2026-01-18"],
+    ["es", "hace 2 meses", "2026-01-18"],
+    ["it", "2 mesi fa", "2026-01-18"],
+    ["nl", "2 maanden geleden", "2026-01-18"],
+    ["se", "för 2 månader sedan", "2026-01-18"],
+    ["pl", "2 miesiące temu", "2026-01-18"],
+    ["com.br", "há 2 meses", "2026-01-18"],
+    ["co.jp", "2か月前", "2026-01-18"],
+  ])("%s resolves %s to a month", (locale, raw, expected) => {
+    expect(normaliseDateReading(raw, locale, NOW)).toEqual({ date: expected, precision: "month" });
+  });
+
+  it.each([
+    ["com", "a year ago", "2025-03-18"],
+    ["fr", "il y a un an", "2025-03-18"],
+    ["de", "vor einem Jahr", "2025-03-18"],
+    ["es", "hace un año", "2025-03-18"],
+    ["it", "un anno fa", "2025-03-18"],
+    ["nl", "een jaar geleden", "2025-03-18"],
+    ["se", "för ett år sedan", "2025-03-18"],
+    ["pl", "rok temu", "2025-03-18"],
+    ["com.br", "há um ano", "2025-03-18"],
+    ["co.jp", "1年前", "2025-03-18"],
+  ])("%s resolves %s to a year", (locale, raw, expected) => {
+    expect(normaliseDateReading(raw, locale, NOW)).toEqual({ date: expected, precision: "year" });
+  });
+
+  it("names a week as its own width rather than rounding it to a day", () => {
+    expect(normaliseDateReading("3 weeks ago", "com", NOW)).toEqual({
+      date: "2026-02-25",
+      precision: "week",
+    });
+  });
+
+  it("lands on the last day of a shorter month rather than overflowing into the next", () => {
+    const endOfMarch = Date.UTC(2026, 2, 31, 9, 0);
+    expect(normaliseDateReading("1 month ago", "com", endOfMarch)).toEqual({
+      date: "2026-02-28",
+      precision: "month",
+    });
+  });
+
+  it("reads either language on a storefront that serves two", () => {
+    expect(normaliseDateReading("2 months ago", "ca", NOW)?.date).toBe("2026-01-18");
+    expect(normaliseDateReading("il y a 2 mois", "ca", NOW)?.date).toBe("2026-01-18");
+  });
+
+  it("refuses text that names no unit, so a count on its own is never a date", () => {
+    expect(normaliseDateReading("2 ago", "com", NOW)).toBeNull();
+    expect(normaliseDateReading("great value", "com", NOW)).toBeNull();
+    expect(normaliseDateReading("", "com", NOW)).toBeNull();
+  });
+
+  it("refuses a relative phrase with no count and no word for one", () => {
+    expect(normaliseDateReading("months ago", "com", NOW)).toBeNull();
+  });
+
+  it("refuses a count nobody would write on a review page", () => {
+    expect(normaliseDateReading("4000 days ago", "com", NOW)).toBeNull();
+  });
+
+  it("does not read a bare unit as a date without the word that puts it behind us", () => {
+    expect(normaliseDateReading("2 months warranty", "com", NOW)).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ export interface PopupCallbacks {
   onOpenEntry?: (id: number) => void;
   onAcknowledgePolicy?: () => void;
   onUnwatch?: (productKey: string) => void;
+  onResumeAnalysis?: () => void;
 }
 
 export interface HistoryRow extends HistoryEntry {
@@ -58,6 +59,20 @@ export interface PopupOptions {
   now?: number;
   translator?: Translator;
   watchlist?: readonly WatchEntry[];
+  analysisEnabled?: boolean;
+}
+
+// somebody who turned verdict off sees nothing anywhere, so the one window that is still
+// theirs says why, and offers the way back
+function pausedMarkup(analysisEnabled: boolean, t: Translator): string {
+  if (analysisEnabled) {
+    return "";
+  }
+  return `
+    <section class="paused" role="status">
+      <p>${t.text("popup.paused")}</p>
+      <button type="button" class="resume-analysis">${t.text("popup.resume")}</button>
+    </section>`;
 }
 
 export function renderPopup(
@@ -77,6 +92,7 @@ export function renderPopup(
       }">&#9881;</button>
     </header>
     ${policyNoticeMarkup(options.pendingPolicyChanges ?? [], options.now ?? Date.now())}
+    ${pausedMarkup(options.analysisEnabled ?? true, t)}
     ${watchlistMarkup(options.watchlist ?? [], t)}
     ${
       entries.length === 0
@@ -108,6 +124,10 @@ export function renderPopup(
   bindWatchlist(container, { onUnwatch: callbacks.onUnwatch });
 
   container.querySelector(".open-settings")?.addEventListener("click", callbacks.onOpenSettings);
+  const resume = callbacks.onResumeAnalysis;
+  if (resume !== undefined) {
+    container.querySelector(".resume-analysis")?.addEventListener("click", resume);
+  }
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);
 

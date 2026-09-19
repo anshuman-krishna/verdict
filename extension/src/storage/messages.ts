@@ -32,6 +32,7 @@ export interface WatchDraft {
 
 export type StorageRequest =
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "settings" }
+  | { type: typeof STORAGE_MESSAGE_TYPE; op: "analysis-allowed"; site: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "rules"; site: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-add"; entry: HistoryDraft }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-of-product"; productKey: string }
@@ -56,6 +57,7 @@ export type StorageRequest =
 
 export interface StorageResults {
   settings: ContentSettings;
+  "analysis-allowed": boolean;
   rules: RulesDocument;
   "history-add": null;
   "history-of-product": PreviousCheck[];

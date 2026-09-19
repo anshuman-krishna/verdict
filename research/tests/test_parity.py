@@ -212,6 +212,7 @@ def run(vector: dict):
                 date=r["date"],
                 verified=r["verified"],
                 reviewer_id=r["reviewerId"],
+                date_precision=r.get("datePrecision"),
             )
             for r in data["reviews"]
         ]

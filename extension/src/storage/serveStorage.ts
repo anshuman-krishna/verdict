@@ -17,6 +17,7 @@ import {
   getGraphContributionEnabled,
   getHistoryEnabled,
   getReputationLookupEnabled,
+  isAnalysisAllowedOn,
 } from "./settings";
 
 export interface StorageSender {
@@ -27,6 +28,8 @@ export interface StorageSender {
 export interface ServeStorageDeps {
   rules: (siteId: string) => Promise<RulesDocument>;
   hosts?: readonly string[];
+  // a tab opened for a check on the website, where a paused platform is still read
+  isCheckTab?: (tabId: number | undefined) => boolean;
 }
 
 const REFUSED: StorageResponse = { ok: false };
@@ -56,14 +59,23 @@ export async function serveStorageRequest(
     return REFUSED;
   }
   try {
-    return { ok: true, value: await run(message, deps) };
+    return { ok: true, value: await run(message, deps, sender) };
   } catch {
     return REFUSED;
   }
 }
 
-async function run(request: StorageRequest, deps: ServeStorageDeps) {
+async function run(request: StorageRequest, deps: ServeStorageDeps, sender: StorageSender) {
   switch (request.op) {
+    case "analysis-allowed":
+      if (!isSafeSiteId(request.site)) {
+        throw new Error("not a site id");
+      }
+      // the reader asked for this one, so the switch they set for browsing does not apply
+      if (deps.isCheckTab?.(sender.tab?.id) === true) {
+        return true;
+      }
+      return await isAnalysisAllowedOn(request.site);
     case "settings":
       // read only, so a page cannot turn anything on for the user
       return {

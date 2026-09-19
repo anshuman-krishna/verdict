@@ -14,6 +14,7 @@ import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL, BUNDLED_MODEL_IDENTITY } from "../score/model";
 import { priorsFor } from "../score/priors";
 import {
+  isAnalysisAllowed,
   queueContributionEdges,
   readChecksOfProduct,
   readRules,
@@ -36,6 +37,10 @@ export default defineContentScript({
     // the host decides which storefront's rules apply, before anything is parsed
     const site = siteForHost(location.hostname);
     if (site === null) {
+      return;
+    }
+    // turned off, or paused on this platform, means nothing is read and nothing is drawn
+    if (!(await isAnalysisAllowed(site.id))) {
       return;
     }
     // everything stored lives in the extension, never in the storefront's own origin

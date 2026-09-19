@@ -126,6 +126,32 @@ hide, so the panel says "this platform does not record verification pattern" rat
 
 a model whose sketch does not cover its own coefficients fails `just preflight`.
 
+### a date written as text carries how wide it is
+
+not every platform prints a date. some write "2 months ago", and every review that says it
+resolves to the same day. fed to the burst detector, that would manufacture a burst on exactly
+the listings with the most reviews, which is the thing verdict exists to measure.
+
+so a date that was read as text is resolved against the moment the page was read, and stored
+with how wide the window it named was:
+
+```
+  "3 days ago"    ──► 2026-03-15   day      counts on the timeline
+  "3 weeks ago"   ──► 2026-02-25   week     too wide for a timeline
+  "2 months ago"  ──► 2026-01-18   month    too wide for a timeline
+  "2 March 2024"  ──► 2024-03-02   exact    what an absolute date is, and the absent case
+```
+
+ten languages are read, one per storefront locale, and the same field crosses into python and
+into the review cache, so a stored review still says what its date was worth.
+
+- arrival timing and verification concentration are built from exact and day dates only. a
+  month bucket is not in the series at all, so it can neither make a burst nor hide one.
+- a coarse date still counts as a date toward the minimum sample, because the review was read
+  and placed.
+- with no timeline to measure, the two signals that need one come back unread, the panel says
+  so, and the interval widens by what is unknown.
+
 ### a saved listing is compared against the day you saved it
 
 a listing you keep an eye on is stored under the same local hash everything else is keyed by,
@@ -144,6 +170,21 @@ nothing is fetched on a schedule and nothing is polled. a watched listing is rea
 open it, the way an unwatched one is, because a browser quietly fetching pages nobody asked
 for is traffic the reader did not choose. the watchlist is capped, lives in indexeddb beside
 the history, and is counted on the options page next to everything else this browser holds.
+
+### it can be told to read nothing
+
+the options page carries a switch that stops verdict reading pages at all, and a box per
+platform this build runs on. nothing is read, nothing is drawn, and nothing is stored while it
+is off, which is what somebody who wants it quiet on one storefront would otherwise have to
+uninstall for.
+
+a listing opened from the check page on the website is still read, because that is a check
+somebody asked for rather than a page they happened to open. the background knows which tab it
+opened for a check, so the content script does not have to be told by the page.
+
+the switch lives in `chrome.storage.sync`, so it follows the reader to their other browsers.
+with it off, the popup is the one window still theirs, so it says verdict is not reading and
+offers the way back rather than showing an empty list and letting them guess.
 
 ### the panel never waits on the network
 
@@ -320,6 +361,7 @@ limits apply at both layers:
 |---|---|
 | caddy | refuses bodies over 2 mib, drops connections that trickle headers or bodies |
 | service | enforces the same 2 mib body limit itself, in case it ever runs without the proxy |
+| service | starts at most `VERDICT_REQUESTS_PER_SECOND` requests a second, and holds at most `VERDICT_MAX_CONCURRENT_REQUESTS` at once |
 | graph | keeps at most `VERDICT_MAX_RETAINED_EDGES` edges, 2,000,000 by default |
 
 past the edge cap, `/v1/graph/contribute` answers 503 with a `Retry-After` header. the
@@ -327,6 +369,18 @@ extension treats that as "try later", and `verdict_contributions_refused_total` 
 refusals. expired edges are pruned after every recompute, including one that failed. the limits
 both sides rely on are pinned in `tests/contract/serviceLimits.json`, and each test suite checks
 its own constants against that file.
+
+the rate ceiling is the whole service's, not one client's, and that is on purpose. the caddyfile
+strips the client address before anything reaches the application, so there is nothing in the
+process that could tell one caller from another, and a limit that needed to would have to start
+by writing down who was asking. a request over the ceiling is answered 429, one that arrives
+with nothing free is answered 503, both carry `Retry-After`, and
+`verdict_requests_shed_rate_total` and `verdict_requests_shed_concurrency_total` count them.
+
+on the other side of that, the extension now waits as long as it was asked to before offering
+its contribution queue again, rather than arriving on the next alarm regardless. it will not be
+held off for longer than a day by any header, so a service that asks for silence forever does
+not get it.
 
 ### backups
 

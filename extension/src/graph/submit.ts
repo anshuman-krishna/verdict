@@ -1,7 +1,13 @@
 import { getGraphContributionEnabled } from "../storage/settings";
 import { fetchWithin } from "../net/fetchWithin";
 import type { ContributionEdge } from "./edge";
-import { clearContributionQueue, deleteContributions, listDueContributions } from "./queue";
+import { holdUntil } from "../net/retryAfter";
+import {
+  clearContributionQueue,
+  deferContributions,
+  deleteContributions,
+  listDueContributions,
+} from "./queue";
 
 // tests/contract/serviceLimits.json, the service refuses anything larger
 export const MAX_EDGES_PER_BATCH = 500;
@@ -17,11 +23,14 @@ export interface FlushDeps {
   timeoutMs?: number;
   isEnabled?: () => Promise<boolean>;
   clearQueue?: () => Promise<void>;
+  hold?: (until: number) => Promise<unknown>;
 }
 
 export interface FlushResult {
   submitted: number;
   dropped?: number;
+  // when the service asked to be left alone, rather than the caller having to guess
+  heldUntil?: number;
 }
 
 interface Queued {
@@ -99,6 +108,8 @@ export async function flushDueContributions(deps: FlushDeps): Promise<FlushResul
   }
 
   let submitted = 0;
+  let heldUntil: number | undefined;
+  const hold = deps.hold ?? deferContributions;
   for (const chunk of chunks) {
     const ids = chunk.map((item) => item.id);
     let response: Response | null;
@@ -130,8 +141,17 @@ export async function flushDueContributions(deps: FlushDeps): Promise<FlushResul
       dropped += chunk.length;
       continue;
     }
+    heldUntil = holdUntil(response.headers.get("retry-after"), now());
+    await hold(heldUntil);
     break;
   }
 
-  return dropped > 0 ? { submitted, dropped } : { submitted };
+  const result: FlushResult = { submitted };
+  if (dropped > 0) {
+    result.dropped = dropped;
+  }
+  if (heldUntil !== undefined) {
+    result.heldUntil = heldUntil;
+  }
+  return result;
 }

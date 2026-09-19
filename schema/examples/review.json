@@ -12,5 +12,13 @@
     "date": null,
     "verified": null,
     "reviewerId": null
+  },
+  {
+    "rating": 4,
+    "text": "Quiet, and the fit is right.",
+    "date": "2026-01-18",
+    "datePrecision": "month",
+    "verified": null,
+    "reviewerId": null
   }
 ]

@@ -10,6 +10,11 @@ import {
   setReputationLookupEnabled,
   getAcknowledgedPolicyVersion,
   setAcknowledgedPolicyVersion,
+  getAnalysisEnabled,
+  setAnalysisEnabled,
+  getPausedSites,
+  setSitePaused,
+  isAnalysisAllowedOn,
 } from "./settings";
 
 describe("settings", () => {
@@ -72,5 +77,57 @@ describe("the acknowledged privacy policy version", () => {
     await expect(getAcknowledgedPolicyVersion()).resolves.toBe(0);
     await setAcknowledgedPolicyVersion(2.5);
     await expect(getAcknowledgedPolicyVersion()).resolves.toBe(0);
+  });
+});
+
+
+describe("whether verdict reads the pages a reader opens", () => {
+  it("reads them until somebody says otherwise", async () => {
+    await expect(getAnalysisEnabled()).resolves.toBe(true);
+    await expect(getPausedSites()).resolves.toEqual([]);
+    await expect(isAnalysisAllowedOn("amazon")).resolves.toBe(true);
+  });
+
+  it("stops everywhere when the switch is off", async () => {
+    await setAnalysisEnabled(false);
+    await expect(isAnalysisAllowedOn("amazon")).resolves.toBe(false);
+    await expect(isAnalysisAllowedOn("google-maps")).resolves.toBe(false);
+    await setAnalysisEnabled(true);
+  });
+
+  it("mirrors the switch to chrome.storage.sync, so it follows the reader", async () => {
+    await setAnalysisEnabled(false);
+    await expect(browser.storage.sync.get("analysisEnabled")).resolves.toEqual({
+      analysisEnabled: false,
+    });
+    await setAnalysisEnabled(true);
+  });
+
+  it("pauses one platform without touching the others", async () => {
+    await setSitePaused("google-maps", true);
+    await expect(getPausedSites()).resolves.toEqual(["google-maps"]);
+    await expect(isAnalysisAllowedOn("google-maps")).resolves.toBe(false);
+    await expect(isAnalysisAllowedOn("amazon")).resolves.toBe(true);
+  });
+
+  it("does not list the same platform twice, however many times it is paused", async () => {
+    await setSitePaused("amazon", true);
+    await setSitePaused("amazon", true);
+    await expect(getPausedSites()).resolves.toEqual(["amazon", "google-maps"]);
+  });
+
+  it("starts reading a platform again when it is unpaused", async () => {
+    await setSitePaused("amazon", false);
+    await setSitePaused("google-maps", false);
+    await expect(getPausedSites()).resolves.toEqual([]);
+    await expect(isAnalysisAllowedOn("amazon")).resolves.toBe(true);
+  });
+
+  it("mirrors the paused platforms to chrome.storage.sync too", async () => {
+    await setSitePaused("amazon", true);
+    await expect(browser.storage.sync.get("pausedSites")).resolves.toEqual({
+      pausedSites: ["amazon"],
+    });
+    await setSitePaused("amazon", false);
   });
 });

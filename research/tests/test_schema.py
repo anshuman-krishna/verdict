@@ -74,3 +74,25 @@ def test_product_snapshot_round_trips_through_the_dataclass():
 def test_product_snapshot_null_title_is_rejected():
     invalid = {**PRODUCT_SNAPSHOT_EXAMPLE, "title": None}
     assert not is_valid("productSnapshot", invalid)
+
+
+def test_review_carrying_a_coarse_date_round_trips():
+    original = REVIEW_EXAMPLES[2]
+    assert original["datePrecision"] == "month"
+    review = review_from_json(original)
+    assert review.date_precision == "month"
+    assert not review.has_timeline_date
+    assert review_to_json(review) == original
+    assert is_valid("review", original)
+
+
+def test_a_review_with_no_precision_reads_as_exact_and_writes_none_back():
+    review = review_from_json(REVIEW_EXAMPLES[0])
+    assert review.date_precision is None
+    assert review.has_timeline_date
+    assert "datePrecision" not in review_to_json(review)
+
+
+def test_review_with_an_unknown_precision_is_rejected():
+    invalid = {**REVIEW_EXAMPLES[0], "datePrecision": "fortnight"}
+    assert not is_valid("review", invalid)

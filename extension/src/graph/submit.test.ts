@@ -1,7 +1,14 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
 import type { ContributionEdge } from "./edge";
-import { deleteContributions, enqueueContributionEdges, listDueContributions } from "./queue";
+import { DEFAULT_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS } from "../net/retryAfter";
+import {
+  clearContributionQueue,
+  countQueuedContributions,
+  deleteContributions,
+  enqueueContributionEdges,
+  listDueContributions,
+} from "./queue";
 import { chunkForService, flushDueContributions } from "./submit";
 
 const FAR_FUTURE = 10_000_000_000_000;
@@ -9,8 +16,7 @@ const FAR_FUTURE = 10_000_000_000_000;
 const optedIn = async () => true;
 
 async function clearQueue(): Promise<void> {
-  const due = await listDueContributions(FAR_FUTURE);
-  await deleteContributions(due.map((d) => d.id));
+  await clearContributionQueue();
 }
 
 function edge(overrides: Partial<ContributionEdge> = {}): ContributionEdge {
@@ -69,15 +75,15 @@ describe("flushDueContributions", () => {
     expect(Object.keys(init.headers as Record<string, string>)).toEqual(["content-type"]);
   });
 
-  it("leaves due edges queued for the next attempt when the service responds with an error status", async () => {
+  it("leaves edges queued for a later attempt when the service responds with an error status", async () => {
     await clearQueue();
     await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: false });
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, headers: new Headers() });
 
     const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
-    expect(result).toEqual({ submitted: 0 });
-    expect(await listDueContributions(FAR_FUTURE)).toHaveLength(1);
+    expect(result).toEqual({ submitted: 0, heldUntil: FAR_FUTURE + DEFAULT_RETRY_AFTER_MS });
+    expect(await countQueuedContributions()).toBe(1);
   });
 
   it("leaves due edges queued instead of throwing when fetch itself rejects", async () => {
@@ -133,7 +139,7 @@ describe("a service that never answers", () => {
     it("drops it rather than retrying it every alarm forever", async () => {
       await clearQueue();
       await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
-      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 422 });
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 422, headers: new Headers() });
 
       const result = await flushDueContributions({
         endpoint: "https://x",
@@ -149,18 +155,23 @@ describe("a service that never answers", () => {
     it.each([408, 425, 429])("keeps the queue on %i, which means try later", async (status) => {
       await clearQueue();
       await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
-      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status });
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status, headers: new Headers() });
 
       const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
-      expect(result).toEqual({ submitted: 0 });
-      await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1);
+      expect(result).toEqual({ submitted: 0, heldUntil: FAR_FUTURE + DEFAULT_RETRY_AFTER_MS });
+      await expect(countQueuedContributions()).resolves.toBe(1);
+      // held, not dropped, and not due again until the hold is over
+      await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(0);
+      await expect(
+        listDueContributions(FAR_FUTURE + DEFAULT_RETRY_AFTER_MS),
+      ).resolves.toHaveLength(1);
     });
 
     it("keeps the queue when the service is merely having a bad day", async () => {
       await clearQueue();
       await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
-      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503, headers: new Headers() });
 
       await flushDueContributions({
         endpoint: "https://x",
@@ -169,7 +180,41 @@ describe("a service that never answers", () => {
         now: () => FAR_FUTURE,
       });
 
-      await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1);
+      await expect(countQueuedContributions()).resolves.toBe(1);
+    });
+
+    it("waits as long as the service asked, rather than as long as it guessed", async () => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const headers = new Headers({ "retry-after": "120" });
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 429, headers });
+
+      const result = await flushDueContributions({
+        endpoint: "https://x",
+        isEnabled: optedIn,
+        fetchImpl,
+        now: () => FAR_FUTURE,
+      });
+
+      expect(result.heldUntil).toBe(FAR_FUTURE + 120_000);
+      await expect(listDueContributions(FAR_FUTURE + 119_000)).resolves.toHaveLength(0);
+      await expect(listDueContributions(FAR_FUTURE + 120_000)).resolves.toHaveLength(1);
+    });
+
+    it("will not be silenced for longer than a day by whatever the header says", async () => {
+      await clearQueue();
+      await enqueueContributionEdges([edge()], () => 1_000_000, () => 0);
+      const headers = new Headers({ "retry-after": "99999999" });
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503, headers });
+
+      const result = await flushDueContributions({
+        endpoint: "https://x",
+        isEnabled: optedIn,
+        fetchImpl,
+        now: () => FAR_FUTURE,
+      });
+
+      expect(result.heldUntil).toBe(FAR_FUTURE + MAX_RETRY_AFTER_MS);
     });
   });
 });
@@ -229,7 +274,7 @@ describe("a queue larger than one request", () => {
   it("drops only the refused chunk and still sends the rest", async () => {
     await clearQueue();
     await enqueueContributionEdges(Array.from({ length: 1000 }, () => edge()), () => 1_000_000, () => 0);
-    const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: false, status: 422 }).mockResolvedValue({ ok: true });
+    const fetchImpl = vi.fn().mockResolvedValueOnce({ ok: false, status: 422, headers: new Headers() }).mockResolvedValue({ ok: true });
 
     const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
@@ -243,13 +288,17 @@ describe("a queue larger than one request", () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: false, status: 503, headers: new Headers() })
       .mockResolvedValue({ ok: true });
 
     const result = await flushDueContributions({ endpoint: "https://x", isEnabled: optedIn, fetchImpl, now: () => FAR_FUTURE });
 
-    expect(result).toEqual({ submitted: 500 });
+    expect(result).toEqual({ submitted: 500, heldUntil: FAR_FUTURE + DEFAULT_RETRY_AFTER_MS });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    await expect(listDueContributions(FAR_FUTURE)).resolves.toHaveLength(1000);
+    // everything not accepted is still there, held rather than sent again straight away
+    await expect(countQueuedContributions()).resolves.toBe(1000);
+    await expect(
+      listDueContributions(FAR_FUTURE + DEFAULT_RETRY_AFTER_MS),
+    ).resolves.toHaveLength(1000);
   });
 });

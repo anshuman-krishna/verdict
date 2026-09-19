@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import type { ReportOutcome } from "../score/buildReport";
 import { analyzeViaHiddenTab } from "../bridge/analyzeViaTab";
+import { CheckTabs } from "../bridge/checkTabs";
 import { handleBridgeMessage } from "../bridge/handler";
 import { isTrustedSiteOrigin, senderOrigin } from "../bridge/origins";
 import { BridgeRateLimiter } from "../bridge/rateLimit";
@@ -40,9 +41,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   // the storefront page shares its storage with our content script, so the writing happens here
-  serveStorageRequest(message, sender, { rules: (siteId) => trustedRulesForSite(siteId) }).then(
-    sendResponse,
-  );
+  serveStorageRequest(message, sender, {
+    rules: (siteId) => trustedRulesForSite(siteId),
+    isCheckTab: (tabId) => checkTabs.has(tabId),
+  }).then(sendResponse);
   return true;
 });
 
@@ -51,6 +53,8 @@ function addResultListener(listener: ResultListener): () => void {
   return () => resultListeners.delete(listener);
 }
 
+const checkTabs = new CheckTabs();
+
 function analyzeUrl(url: string) {
   return analyzeViaHiddenTab(url, {
     createTab: async (tabUrl) => {
@@ -58,9 +62,13 @@ function analyzeUrl(url: string) {
       if (tab.id === undefined) {
         throw new Error("browser.tabs.create returned a tab with no id");
       }
+      checkTabs.remember(tab.id);
       return tab.id;
     },
-    removeTab: (tabId) => browser.tabs.remove(tabId),
+    removeTab: async (tabId) => {
+      checkTabs.forget(tabId);
+      await browser.tabs.remove(tabId);
+    },
     addResultListener,
   });
 }

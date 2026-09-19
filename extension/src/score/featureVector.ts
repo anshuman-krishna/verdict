@@ -1,4 +1,4 @@
-import type { Review } from "../extract/types";
+import { hasDate, hasTimelineDate, type Review } from "../extract/types";
 import { hashedTerms, type EmbeddingBackend } from "./embeddingBackend";
 import {
   listingIdentityDrift,
@@ -22,6 +22,8 @@ import {
 export const MINIMUM_REVIEW_COUNT = 30;
 export const MINIMUM_DATED_REVIEW_COUNT = 20;
 export const MINIMUM_HISTORY_DAYS = 21;
+// fewer timeline dates than that is no measurable history, rather than a short one
+export const MINIMUM_TIMELINE_REVIEW_COUNT = MINIMUM_DATED_REVIEW_COUNT;
 
 const MS_PER_DAY = 86_400_000;
 
@@ -36,18 +38,30 @@ export function dayIndex(iso: string): number {
   return Math.floor(Date.parse(iso) / MS_PER_DAY);
 }
 
+export function timelineDays(reviews: readonly Review[]): number[] {
+  return reviews.filter(hasTimelineDate).map((review) => dayIndex(review.date));
+}
+
+export function hasTimeline(reviews: readonly Review[]): boolean {
+  return timelineDays(reviews).length >= MINIMUM_TIMELINE_REVIEW_COUNT;
+}
+
+// a coarse date counts as a date, because the review was read and placed in a month, and it
+// does not count toward the span, because a history measured off month buckets is a guess.
+// a sample with no timeline loses the two signals that need one and keeps the other four,
+// rather than the report refusing to say anything at all
 export function meetsMinimumDataThresholds(reviews: readonly Review[]): boolean {
   if (reviews.length < MINIMUM_REVIEW_COUNT) {
     return false;
   }
-  const datedDays = reviews
-    .filter((review): review is Review & { date: string } => review.date !== null)
-    .map((review) => dayIndex(review.date));
-  if (datedDays.length < MINIMUM_DATED_REVIEW_COUNT) {
+  if (reviews.filter(hasDate).length < MINIMUM_DATED_REVIEW_COUNT) {
     return false;
   }
-  const span = Math.max(...datedDays) - Math.min(...datedDays);
-  return span >= MINIMUM_HISTORY_DAYS;
+  const days = timelineDays(reviews);
+  if (days.length < MINIMUM_TIMELINE_REVIEW_COUNT) {
+    return true;
+  }
+  return Math.max(...days) - Math.min(...days) >= MINIMUM_HISTORY_DAYS;
 }
 
 export function buildRatingHistogram(reviews: readonly Review[]): number[] | null {
@@ -65,8 +79,10 @@ export function buildRatingHistogram(reviews: readonly Review[]): number[] | nul
   return bins.map((count) => count / rated.length);
 }
 
+// the change point this feeds is a date shown to a reader, so a month bucket does not get
+// to name the day a listing changed
 export function deriveDayIndices(reviews: readonly Review[]): (number | null)[] {
-  return reviews.map((review) => (review.date === null ? null : dayIndex(review.date)));
+  return reviews.map((review) => (hasTimelineDate(review) ? dayIndex(review.date) : null));
 }
 
 export interface DailyCounts {
@@ -74,10 +90,10 @@ export interface DailyCounts {
   minDay: number;
 }
 
+// only dates that named a single day, since every review saying "2 months ago" would
+// otherwise land on one day and manufacture the burst this is here to measure
 export function buildDailyCounts(reviews: readonly Review[]): DailyCounts | null {
-  const days = reviews
-    .filter((review): review is Review & { date: string } => review.date !== null)
-    .map((review) => dayIndex(review.date));
+  const days = reviews.filter(hasTimelineDate).map((review) => dayIndex(review.date));
   if (days.length === 0) {
     return null;
   }
@@ -97,7 +113,7 @@ export function deriveInsideBurst(
   bursts: readonly Burst[],
 ): boolean[] {
   return reviews.map((review) => {
-    if (review.date === null) {
+    if (!hasTimelineDate(review)) {
       return false;
     }
     const day = dayIndex(review.date) - minDay;

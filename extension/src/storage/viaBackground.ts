@@ -48,6 +48,14 @@ export function readSettings(send: SendToBackground = realSend): Promise<Content
   return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "settings" }, NOTHING_ENABLED);
 }
 
+// a preference, not a consent, so a background we cannot reach does not stop a report
+export function isAnalysisAllowed(
+  site: string,
+  send: SendToBackground = realSend,
+): Promise<boolean> {
+  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "analysis-allowed", site }, true);
+}
+
 export function readRules(
   site: string,
   bundledDefault: RulesDocument,

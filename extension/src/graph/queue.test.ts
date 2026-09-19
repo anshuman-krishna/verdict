@@ -5,6 +5,7 @@ import {
   QUEUE_CAP,
   clearContributionQueue,
   countQueuedContributions,
+  deferContributions,
   deleteContributions,
   enqueueContributionEdges,
   listDueContributions,
@@ -165,5 +166,26 @@ describe("where the hold interval's randomness comes from", () => {
       mathRandom.mockRestore();
       getRandomValues.mockRestore();
     }
+  });
+});
+
+describe("deferContributions", () => {
+  it("holds everything that was due until the time it is given", async () => {
+    await clearContributionQueue();
+    await enqueueContributionEdges([edge(), edge()], () => 0, () => 0);
+    const held = await deferContributions(9_000_000);
+
+    expect(held).toBe(2);
+    await expect(listDueContributions(8_999_999)).resolves.toEqual([]);
+    await expect(listDueContributions(9_000_000)).resolves.toHaveLength(2);
+    await expect(countQueuedContributions()).resolves.toBe(2);
+  });
+
+  it("does not pull an edge already held further out back in", async () => {
+    await clearContributionQueue();
+    await enqueueContributionEdges([edge()], () => 10_000_000, () => 1);
+    const before = await nextContributionDueAt();
+    expect(await deferContributions(1_000_000)).toBe(0);
+    await expect(nextContributionDueAt()).resolves.toBe(before);
   });
 });

@@ -75,6 +75,19 @@ describe("reviews cache", () => {
     expect(cached?.cachedAt).toEqual(expect.any(Number));
   });
 
+  it("keeps how wide a coarse date was, so a cached read scores the way a fresh one did", async () => {
+    const coarse = { ...review, date: "2026-01-18", datePrecision: "month" as const };
+    await setCachedReviews("p-coarse", "amazon", [coarse]);
+    const cached = await getCachedReviews("p-coarse", "amazon");
+    expect(cached?.reviews).toEqual([{ ...coarse, text: null }]);
+  });
+
+  it("writes nothing about precision for a date the page wrote in full", async () => {
+    await setCachedReviews("p-exact", "amazon", [review]);
+    const cached = await getCachedReviews("p-exact", "amazon");
+    expect(cached?.reviews[0]).not.toHaveProperty("datePrecision");
+  });
+
   it("keys the same product and site to the same hash", async () => {
     const first = await cacheKey("p-2", "amazon");
     const second = await cacheKey("p-2", "amazon");

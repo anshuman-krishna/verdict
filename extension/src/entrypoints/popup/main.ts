@@ -6,7 +6,9 @@ import { parseStoredReport } from "../../score/report";
 import { PRIVACY_POLICY_VERSION, pendingPolicyChanges } from "../../privacy/commitments";
 import {
   getAcknowledgedPolicyVersion,
+  getAnalysisEnabled,
   setAcknowledgedPolicyVersion,
+  setAnalysisEnabled,
 } from "../../storage/settings";
 import {
   deleteAllHistory,
@@ -87,6 +89,7 @@ async function refresh(openId: number | null = null): Promise<void> {
 
   const policyChanges = pendingPolicyChanges(await getAcknowledgedPolicyVersion());
   const watchlist = await listWatchlist();
+  const analysisEnabled = await getAnalysisEnabled();
   renderPopup(
     app,
     entries.map((entry) => ({ ...entry, rescored: rescore(entry, BUNDLED_MODEL) })),
@@ -109,9 +112,13 @@ async function refresh(openId: number | null = null): Promise<void> {
         await unwatchListing(productKey);
         await refresh();
       },
+      onResumeAnalysis: async () => {
+        await setAnalysisEnabled(true);
+        await refresh();
+      },
     },
     "",
-    { pendingPolicyChanges: policyChanges, translator, watchlist },
+    { pendingPolicyChanges: policyChanges, translator, watchlist, analysisEnabled },
   );
 }
 

@@ -37,6 +37,8 @@ from verdict_research.schema import Review
 MINIMUM_REVIEW_COUNT = 30
 MINIMUM_DATED_REVIEW_COUNT = 20
 MINIMUM_HISTORY_DAYS = 21
+# fewer timeline dates than that is no measurable history, rather than a short one
+MINIMUM_TIMELINE_REVIEW_COUNT = MINIMUM_DATED_REVIEW_COUNT
 
 _EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
 _SECONDS_PER_DAY = 86_400
@@ -57,13 +59,27 @@ def day_index(iso: str) -> int:
     return int(epoch_seconds // _SECONDS_PER_DAY)
 
 
+def timeline_days(reviews: list[Review]) -> list[int]:
+    return [day_index(r.date) for r in reviews if r.has_timeline_date]
+
+
+def has_timeline(reviews: list[Review]) -> bool:
+    return len(timeline_days(reviews)) >= MINIMUM_TIMELINE_REVIEW_COUNT
+
+
+# a coarse date counts as a date, because the review was read and placed in a month, and it
+# does not count toward the span, because a history measured off month buckets is a guess.
+# a sample with no timeline loses the two signals that need one and keeps the other four,
+# rather than the report refusing to say anything at all
 def meets_minimum_data_thresholds(reviews: list[Review]) -> bool:
     if len(reviews) < MINIMUM_REVIEW_COUNT:
         return False
-    dated_days = [day_index(r.date) for r in reviews if r.date is not None]
-    if len(dated_days) < MINIMUM_DATED_REVIEW_COUNT:
+    if len([r for r in reviews if r.date is not None]) < MINIMUM_DATED_REVIEW_COUNT:
         return False
-    return max(dated_days) - min(dated_days) >= MINIMUM_HISTORY_DAYS
+    days = timeline_days(reviews)
+    if len(days) < MINIMUM_TIMELINE_REVIEW_COUNT:
+        return True
+    return max(days) - min(days) >= MINIMUM_HISTORY_DAYS
 
 
 def build_rating_histogram(reviews: list[Review]) -> list[float] | None:
@@ -77,8 +93,10 @@ def build_rating_histogram(reviews: list[Review]) -> list[float] | None:
     return [count / len(rated) for count in bins]
 
 
+# the change point this feeds is a date shown to a reader, so a month bucket does not get to
+# name the day a listing changed
 def derive_day_indices(reviews: list[Review]) -> list[int | None]:
-    return [None if r.date is None else day_index(r.date) for r in reviews]
+    return [day_index(r.date) if r.has_timeline_date else None for r in reviews]
 
 
 @dataclass
@@ -87,8 +105,10 @@ class DailyCounts:
     min_day: int
 
 
+# only dates that named a single day, since every review saying "2 months ago" would
+# otherwise land on one day and manufacture the burst this is here to measure
 def build_daily_counts(reviews: list[Review]) -> DailyCounts | None:
-    days = [day_index(r.date) for r in reviews if r.date is not None]
+    days = [day_index(r.date) for r in reviews if r.has_timeline_date]
     if not days:
         return None
     min_day, max_day = min(days), max(days)
@@ -101,7 +121,7 @@ def build_daily_counts(reviews: list[Review]) -> DailyCounts | None:
 def derive_inside_burst(reviews: list[Review], min_day: int, bursts: list[Burst]) -> list[bool]:
     result = []
     for review in reviews:
-        if review.date is None:
+        if not review.has_timeline_date:
             result.append(False)
             continue
         day = day_index(review.date) - min_day

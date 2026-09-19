@@ -15,6 +15,8 @@ class MetricsRegistry:
     backup_failures_total: int = 0
     contributions_refused_total: int = 0
     prune_failures_total: int = 0
+    requests_shed_rate_total: int = 0
+    requests_shed_concurrency_total: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def record_contribution(self, edge_count: int) -> None:
@@ -25,6 +27,13 @@ class MetricsRegistry:
     def record_contribution_refused(self) -> None:
         with self._lock:
             self.contributions_refused_total += 1
+
+    def record_shed(self, reason: str) -> None:
+        with self._lock:
+            if reason == "rate":
+                self.requests_shed_rate_total += 1
+            else:
+                self.requests_shed_concurrency_total += 1
 
     def record_prune_failure(self) -> None:
         with self._lock:
@@ -59,6 +68,8 @@ class MetricsRegistry:
                 "verdict_backup_failures_total": self.backup_failures_total,
                 "verdict_contributions_refused_total": self.contributions_refused_total,
                 "verdict_prune_failures_total": self.prune_failures_total,
+                "verdict_requests_shed_rate_total": self.requests_shed_rate_total,
+                "verdict_requests_shed_concurrency_total": self.requests_shed_concurrency_total,
             }
         lines = [f"# TYPE {name} counter\n{name} {value}" for name, value in counters.items()]
         lines += [f"# TYPE {name} gauge\n{name} {value}" for name, value in (gauges or {}).items()]

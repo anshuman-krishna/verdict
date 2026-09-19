@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { DatePrecision } from "../src/extract/normalise";
 import { applyModel, quantileValue, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
@@ -182,6 +183,7 @@ function run(vector: Vector): unknown {
           rating: number | null;
           text: string | null;
           date: string | null;
+          datePrecision?: DatePrecision;
           verified: boolean | null;
           reviewerId: string | null;
         }[];

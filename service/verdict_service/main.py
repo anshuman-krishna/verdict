@@ -6,7 +6,7 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
 from verdict_service.api.body_limit import MAX_REQUEST_BODY_BYTES, BodySizeLimit
 from verdict_service.api.contribution import (
@@ -15,6 +15,13 @@ from verdict_service.api.contribution import (
     create_contribution_router,
 )
 from verdict_service.api.health import create_health_router
+from verdict_service.api.load_shedding import (
+    DEFAULT_BURST_REQUESTS,
+    DEFAULT_MAX_CONCURRENT_REQUESTS,
+    DEFAULT_REQUESTS_PER_SECOND,
+    LoadShedder,
+    load_shedding_dependency,
+)
 from verdict_service.api.metrics import create_metrics_router
 from verdict_service.api.reputation import create_reputation_router
 from verdict_service.api.store import FlaggedHashStore, InMemoryFlaggedHashStore
@@ -54,6 +61,13 @@ BACKUP_CHECK_INTERVAL_SECONDS = 60 * 60
 BACKUP_MAX_AGE_SECONDS = 2 * BACKUP_INTERVAL_SECONDS
 BACKUP_DIR = default_backup_dir(Path(DATABASE_PATH)) if DATABASE_PATH else None
 MAX_RETAINED_EDGES = int(os.environ.get("VERDICT_MAX_RETAINED_EDGES", DEFAULT_MAX_RETAINED_EDGES))
+REQUESTS_PER_SECOND = float(
+    os.environ.get("VERDICT_REQUESTS_PER_SECOND", DEFAULT_REQUESTS_PER_SECOND)
+)
+BURST_REQUESTS = int(os.environ.get("VERDICT_BURST_REQUESTS", DEFAULT_BURST_REQUESTS))
+MAX_CONCURRENT_REQUESTS = int(
+    os.environ.get("VERDICT_MAX_CONCURRENT_REQUESTS", DEFAULT_MAX_CONCURRENT_REQUESTS)
+)
 
 _connection: Database | None = None
 
@@ -148,9 +162,18 @@ api = FastAPI(title="verdict-service", lifespan=lifespan)
 
 capacity_guard = CapacityGuard(contribution_edge_store, MAX_RETAINED_EDGES)
 
-api.include_router(create_reputation_router(flagged_hash_store, metrics))
+# the two endpoints caddy lets through are the two that can be arrived at in volume
+shedder = LoadShedder(
+    requests_per_second=REQUESTS_PER_SECOND,
+    burst=BURST_REQUESTS,
+    max_concurrent=MAX_CONCURRENT_REQUESTS,
+)
+public = [Depends(load_shedding_dependency(shedder, metrics))]
+
+api.include_router(create_reputation_router(flagged_hash_store, metrics), dependencies=public)
 api.include_router(
-    create_contribution_router(contribution_edge_store, metrics=metrics, capacity=capacity_guard)
+    create_contribution_router(contribution_edge_store, metrics=metrics, capacity=capacity_guard),
+    dependencies=public,
 )
 api.include_router(
     create_health_router(

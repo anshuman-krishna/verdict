@@ -62,6 +62,25 @@ export async function deleteContributions(ids: readonly number[]): Promise<void>
   }
 }
 
+// a service that asked for a pause gets one, rather than the same queue arriving again on
+// the next flush. nothing is dropped, it is only held
+export async function deferContributions(until: number): Promise<number> {
+  const db = await openDatabase();
+  const store = db
+    .transaction(STORE_NAMES.graphContributionQueue, "readwrite")
+    .objectStore(STORE_NAMES.graphContributionQueue);
+  const all = await requestToPromise<QueuedContribution[]>(store.getAll());
+  let held = 0;
+  for (const item of all) {
+    if (item.readyAt >= until) {
+      continue;
+    }
+    await put(store, { ...item, readyAt: until });
+    held += 1;
+  }
+  return held;
+}
+
 export async function countQueuedContributions(): Promise<number> {
   const db = await openDatabase();
   const store = db

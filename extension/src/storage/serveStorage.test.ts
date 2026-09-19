@@ -7,9 +7,11 @@ import { countQueuedContributions, deleteContributions, listDueContributions } f
 import { isOurContentScript, serveStorageRequest } from "./serveStorage";
 import { deleteAllWatchlist, listWatchlist } from "./watchlist";
 import {
+  setAnalysisEnabled,
   setGraphContributionEnabled,
   setHistoryEnabled,
   setReputationLookupEnabled,
+  setSitePaused,
 } from "./settings";
 
 const RULES: RulesDocument = {
@@ -371,5 +373,57 @@ describe("the watchlist over the message port", () => {
 
     expect(response).toEqual({ ok: false });
     await expect(listWatchlist()).resolves.toEqual([]);
+  });
+});
+
+describe("whether the content script may read this page at all", () => {
+  it("answers yes while nothing is paused", async () => {
+    await setAnalysisEnabled(true);
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "amazon" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: true, value: true });
+  });
+
+  it("answers no once the switch is off", async () => {
+    await setAnalysisEnabled(false);
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "amazon" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: true, value: false });
+    await setAnalysisEnabled(true);
+  });
+
+  it("answers no for a platform that is paused, and yes for one that is not", async () => {
+    await setSitePaused("amazon", true);
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "amazon" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: true, value: false });
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "google-maps" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: true, value: true });
+    await setSitePaused("amazon", false);
+  });
+
+  it("still reads a listing in a tab the website asked to check", async () => {
+    await setAnalysisEnabled(false);
+    const deps = { ...DEPS, isCheckTab: (tabId: number | undefined) => tabId === 7 };
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "amazon" }), STOREFRONT, deps),
+    ).resolves.toEqual({ ok: true, value: true });
+    await setAnalysisEnabled(true);
+  });
+
+  it("refuses a site id that is not one", async () => {
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "../../etc" }), STOREFRONT, DEPS),
+    ).resolves.toEqual({ ok: false });
+  });
+
+  it("refuses to answer anything at all to a page that is not our content script", async () => {
+    await expect(
+      serveStorageRequest(request("analysis-allowed", { site: "amazon" }), {
+        tab: { id: 7 },
+        url: "https://evil.example/dp/B0ABCDEF12",
+      }, DEPS),
+    ).resolves.toEqual({ ok: false });
   });
 });

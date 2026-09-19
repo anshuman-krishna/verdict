@@ -147,6 +147,8 @@ export const ENGLISH = {
   "popup.exportCsv": "export csv",
   "popup.deleteAll": "delete everything",
   "popup.confirmDelete": "confirm delete",
+  "popup.paused": "Verdict is not reading the pages you open.",
+  "popup.resume": "Start reading again",
 
   "watch.add": "Keep an eye on this",
   "watch.remove": "Stop watching",

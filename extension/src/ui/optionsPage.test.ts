@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
 import type { Holdings } from "../storage/holdings";
-import { renderOptions } from "./optionsPage";
+import { platformLabel, renderOptions } from "./optionsPage";
 
 function callbacks() {
   return {
+    onToggleAnalysis: vi.fn(),
+    onTogglePlatform: vi.fn(),
     onToggleHistory: vi.fn(),
     onToggleReputationLookup: vi.fn(),
     onToggleGraphContribution: vi.fn(),
@@ -30,6 +32,7 @@ const NOTHING_HELD: Holdings = {
 
 function state(overrides: Partial<Parameters<typeof renderOptions>[1]> = {}) {
   return {
+    analysisEnabled: true,
     historyEnabled: true,
     reputationLookupEnabled: false,
     graphContributionEnabled: false,
@@ -380,5 +383,74 @@ describe("the watchlist on the options page", () => {
     container.querySelector<HTMLButtonElement>(".clear-watchlist")?.click();
 
     expect(cbs.onClearWatchlist).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe("the switch that stops verdict reading anything", () => {
+  const platforms = [
+    { id: "amazon", label: "Amazon", paused: false },
+    { id: "google-maps", label: "Google Maps", paused: true },
+  ];
+
+  it("reflects the current state", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ analysisEnabled: false }), callbacks());
+    expect(container.querySelector<HTMLInputElement>(".analysis-toggle")?.checked).toBe(false);
+  });
+
+  it("calls onToggleAnalysis with the new state", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state({ analysisEnabled: true }), cbs);
+
+    const toggle = container.querySelector<HTMLInputElement>(".analysis-toggle") as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event("change"));
+
+    expect(cbs.onToggleAnalysis).toHaveBeenCalledWith(false);
+  });
+
+  it("shows a box per platform, ticked for the ones it reads", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ platforms }), callbacks());
+
+    const boxes = container.querySelectorAll<HTMLInputElement>(".platform-toggle");
+    expect([...boxes].map((box) => [box.dataset.site, box.checked])).toEqual([
+      ["amazon", true],
+      ["google-maps", false],
+    ]);
+  });
+
+  it("says nothing about where when the build reads one platform", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ platforms: [platforms[0]!] }), callbacks());
+    expect(container.querySelector(".platforms")).toBeNull();
+  });
+
+  it("reports unticking a platform as pausing it", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state({ platforms }), cbs);
+
+    const box = container.querySelector<HTMLInputElement>(".platform-toggle") as HTMLInputElement;
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+
+    expect(cbs.onTogglePlatform).toHaveBeenCalledWith("amazon", true);
+  });
+
+  it("leaves the platforms alone while nothing is being read at all", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({ analysisEnabled: false, platforms }), callbacks());
+    const boxes = container.querySelectorAll<HTMLInputElement>(".platform-toggle");
+    expect([...boxes].every((box) => box.disabled)).toBe(true);
+  });
+});
+
+describe("platformLabel", () => {
+  it("names a platform the way a reader would write it", () => {
+    expect(platformLabel("amazon")).toBe("Amazon");
+    expect(platformLabel("google-maps")).toBe("Google Maps");
   });
 });

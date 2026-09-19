@@ -9,7 +9,15 @@ import {
 } from "../storage/holdings";
 import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
 
+export interface Platform {
+  id: string;
+  label: string;
+  paused: boolean;
+}
+
 export interface OptionsState {
+  analysisEnabled: boolean;
+  platforms?: readonly Platform[];
   historyEnabled: boolean;
   reputationLookupEnabled: boolean;
   graphContributionEnabled: boolean;
@@ -20,6 +28,8 @@ export interface OptionsState {
 }
 
 export interface OptionsCallbacks {
+  onToggleAnalysis: (enabled: boolean) => void;
+  onTogglePlatform: (site: string, paused: boolean) => void;
   onToggleHistory: (enabled: boolean) => void;
   onToggleReputationLookup: (enabled: boolean) => void;
   onToggleGraphContribution: (enabled: boolean) => void;
@@ -33,6 +43,40 @@ export interface OptionsCallbacks {
   onAcknowledgePolicy: () => void;
 }
 
+// a registry id is what a platform is called in the code, and this is what it is called on a
+// page somebody reads, without the registry having to carry a second name per platform
+export function platformLabel(site: string): string {
+  return site
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// the platforms this build runs on, so a build that reads one platform says nothing about lists
+function platformMarkup(state: OptionsState): string {
+  const platforms = state.platforms ?? [];
+  if (platforms.length < 2) {
+    return "";
+  }
+  const rows = platforms
+    .map((platform) => `
+        <label class="platform">
+          <input
+            type="checkbox"
+            class="platform-toggle"
+            data-site="${escapeHtml(platform.id)}"
+            ${platform.paused ? "" : "checked"}
+            ${state.analysisEnabled ? "" : "disabled"}
+          />
+          ${escapeHtml(platform.label)}
+        </label>`)
+    .join("");
+  return `
+      <fieldset class="platforms">
+        <legend>Where</legend>${rows}
+      </fieldset>`;
+}
+
 export function renderOptions(
   container: HTMLElement,
   state: OptionsState,
@@ -44,6 +88,18 @@ export function renderOptions(
       <span class="wordmark">verdict</span>
     </header>
     ${policyNoticeMarkup(state.pendingPolicyChanges ?? [], now)}
+    <section class="setting">
+      <label>
+        <input type="checkbox" class="analysis-toggle" ${state.analysisEnabled ? "checked" : ""} />
+        Read the pages I open
+      </label>
+      <p class="hint">
+        Turning this off leaves Verdict installed and silent: no page is read and no panel is
+        drawn, anywhere. A listing you open from the check page on the website is still read,
+        because that is a check you asked for.
+      </p>
+      ${platformMarkup(state)}
+    </section>
     <section class="setting">
       <label>
         <input type="checkbox" class="history-toggle" ${state.historyEnabled ? "checked" : ""} />
@@ -170,6 +226,22 @@ export function renderOptions(
   `;
 
   bindPolicyNotice(container, { onAcknowledge: callbacks.onAcknowledgePolicy });
+
+  container
+    .querySelector<HTMLInputElement>(".analysis-toggle")
+    ?.addEventListener("change", (event) => {
+      callbacks.onToggleAnalysis((event.target as HTMLInputElement).checked);
+    });
+
+  for (const toggle of container.querySelectorAll<HTMLInputElement>(".platform-toggle")) {
+    toggle.addEventListener("change", () => {
+      const site = toggle.dataset.site;
+      if (site !== undefined) {
+        // the box says read this platform, the setting it writes says paused
+        callbacks.onTogglePlatform(site, !toggle.checked);
+      }
+    });
+  }
 
   container.querySelector<HTMLInputElement>(".history-toggle")?.addEventListener("change", (event) => {
     callbacks.onToggleHistory((event.target as HTMLInputElement).checked);

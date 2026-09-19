@@ -1,3 +1,5 @@
+import { browser } from "wxt/browser";
+import { siteIdsMatchedBy } from "../../extract/sites";
 import { setGraphContributionWithPermission } from "../../graph/permission";
 import { setReputationLookupWithPermission } from "../../reputation/permission";
 import { clearContributionQueue } from "../../graph/queue";
@@ -9,13 +11,27 @@ import { importHistory, importResultLine } from "../../storage/importHistory";
 import { clearReviewsCache } from "../../storage/reviewsCache";
 import {
   getAcknowledgedPolicyVersion,
+  getAnalysisEnabled,
   getGraphContributionEnabled,
   getHistoryEnabled,
+  getPausedSites,
   getReputationLookupEnabled,
   setAcknowledgedPolicyVersion,
+  setAnalysisEnabled,
   setHistoryEnabled,
+  setSitePaused,
 } from "../../storage/settings";
-import { renderOptions } from "../../ui/optionsPage";
+import { platformLabel, renderOptions, type Platform } from "../../ui/optionsPage";
+
+// what this build actually runs on, so a store build never offers a platform it cannot read
+function platformsOfThisBuild(paused: readonly string[]): Platform[] {
+  const declared = browser.runtime.getManifest().content_scripts ?? [];
+  return siteIdsMatchedBy(declared.flatMap((script) => script.matches ?? [])).map((id) => ({
+    id,
+    label: platformLabel(id),
+    paused: paused.includes(id),
+  }));
+}
 
 function download(filename: string, content: string, mimeType: string): void {
   const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
@@ -31,6 +47,8 @@ async function refresh(importMessage: string | null = null): Promise<void> {
   if (app === null) {
     return;
   }
+  const analysisEnabled = await getAnalysisEnabled();
+  const platforms = platformsOfThisBuild(await getPausedSites());
   const historyEnabled = await getHistoryEnabled();
   const reputationLookupEnabled = await getReputationLookupEnabled();
   const graphContributionEnabled = await getGraphContributionEnabled();
@@ -39,6 +57,8 @@ async function refresh(importMessage: string | null = null): Promise<void> {
   renderOptions(
     app,
     {
+      analysisEnabled,
+      platforms,
       historyEnabled,
       reputationLookupEnabled,
       graphContributionEnabled,
@@ -47,6 +67,14 @@ async function refresh(importMessage: string | null = null): Promise<void> {
       importMessage,
     },
     {
+      onToggleAnalysis: async (enabled) => {
+        await setAnalysisEnabled(enabled);
+        await refresh();
+      },
+      onTogglePlatform: async (site, paused) => {
+        await setSitePaused(site, paused);
+        await refresh();
+      },
       onToggleHistory: async (enabled) => {
         await setHistoryEnabled(enabled);
       },

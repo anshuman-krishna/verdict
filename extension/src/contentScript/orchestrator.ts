@@ -150,7 +150,7 @@ export async function analyzePage(
     return unreadable;
   }
   options.onRecognised?.(page);
-  const reviews = extractReviews(document, deps.rules, page.locale, index);
+  const reviews = extractReviews(document, deps.rules, page.locale, index, deps.now?.());
   const productKey = await cacheKey(page.productId, page.site);
   const previousChecks = await earlierChecks(productKey, deps);
   const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options, productKey);
@@ -352,7 +352,7 @@ export async function checkMoreDeeply(
       }
       const html = await response.text();
       const parsed = new DOMParser().parseFromString(html, "text/html");
-      return extractReviews(parsed, deps.rules, page.locale);
+      return extractReviews(parsed, deps.rules, page.locale, newPageIndex(), deps.now?.());
     },
   });
 

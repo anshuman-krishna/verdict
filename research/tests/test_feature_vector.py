@@ -4,13 +4,17 @@ from verdict_research.features.feature_vector import (
     MINIMUM_DATED_REVIEW_COUNT,
     MINIMUM_HISTORY_DAYS,
     MINIMUM_REVIEW_COUNT,
+    MINIMUM_TIMELINE_REVIEW_COUNT,
     FeatureVectorInputs,
     build_daily_counts,
     build_feature_vector,
     build_rating_histogram,
     day_index,
+    derive_day_indices,
     derive_inside_burst,
+    has_timeline,
     meets_minimum_data_thresholds,
+    timeline_days,
 )
 from verdict_research.features.temporal_burst import Burst
 from verdict_research.schema import Review
@@ -19,8 +23,73 @@ FLAT_PRIOR = [0.2, 0.2, 0.2, 0.2, 0.2]
 KERNEL = [0, 0, 0, 0.35, 0.65]
 
 
-def review(rating=None, text=None, date=None, verified=None, reviewer_id=None):
-    return Review(rating=rating, text=text, date=date, verified=verified, reviewer_id=reviewer_id)
+def review(rating=None, text=None, date=None, verified=None, reviewer_id=None, date_precision=None):
+    return Review(
+        rating=rating,
+        text=text,
+        date=date,
+        verified=verified,
+        reviewer_id=reviewer_id,
+        date_precision=date_precision,
+    )
+
+
+def coarse(count):
+    return [review(rating=5, date="2024-01-15", date_precision="month") for _ in range(count)]
+
+
+def test_a_coarse_date_counts_toward_the_dated_reviews():
+    assert meets_minimum_data_thresholds(coarse(MINIMUM_REVIEW_COUNT))
+
+
+def test_a_coarse_date_stays_out_of_the_timeline():
+    reviews = coarse(MINIMUM_REVIEW_COUNT)
+    assert timeline_days(reviews) == []
+    assert build_daily_counts(reviews) is None
+
+
+def test_a_coarse_sample_leaves_the_timeline_signals_unread():
+    result = build_feature_vector(
+        coarse(MINIMUM_REVIEW_COUNT), FeatureVectorInputs(FLAT_PRIOR, KERNEL)
+    )
+    assert result.temporal_burst is None
+    assert result.verification_concentration is None
+    assert result.meets_minimum_data
+    assert result.rating_deconvolution is not None
+
+
+def test_a_coarse_date_never_names_the_day_a_listing_changed():
+    reviews = [
+        review(date="2024-01-03"),
+        review(date="2024-01-03", date_precision="day"),
+        review(date="2024-01-03", date_precision="month"),
+        review(),
+    ]
+    day = day_index("2024-01-03")
+    assert derive_day_indices(reviews) == [day, day, None, None]
+
+
+def test_a_coarse_date_is_never_inside_a_burst():
+    reviews = [review(date="2024-01-03", date_precision="month")]
+    bursts = [Burst(start_day=0, end_day=100, review_count=1)]
+    assert derive_inside_burst(reviews, day_index("2024-01-01"), bursts) == [False]
+
+
+def test_a_week_is_as_coarse_as_a_month_and_a_day_is_not():
+    assert timeline_days([review(date="2024-01-03", date_precision="week")]) == []
+    assert len(timeline_days([review(date="2024-01-03", date_precision="day")])) == 1
+    assert len(timeline_days([review(date="2024-01-03", date_precision="exact")])) == 1
+    assert len(timeline_days([review(date="2024-01-03")])) == 1
+
+
+def test_the_span_comes_back_once_there_is_a_timeline_to_measure():
+    assert not has_timeline(coarse(MINIMUM_REVIEW_COUNT))
+    mixed = coarse(MINIMUM_REVIEW_COUNT) + [
+        review(rating=5, date="2024-01-15", date_precision="day")
+        for _ in range(MINIMUM_TIMELINE_REVIEW_COUNT)
+    ]
+    assert has_timeline(mixed)
+    assert not meets_minimum_data_thresholds(mixed)
 
 
 def test_day_index_hand_computed_2024_03_15_is_19797_days_after_epoch():

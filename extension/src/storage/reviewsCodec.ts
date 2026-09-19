@@ -1,3 +1,4 @@
+import type { DatePrecision } from "../extract/normalise";
 import type { Review } from "../extract/types";
 import { EMBEDDING_DIMENSIONS, embedTermCounts, hashTerms } from "../score/textEmbedding";
 import {
@@ -12,6 +13,7 @@ export const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export interface StoredReview {
   rating: number | null;
   date: string | null;
+  datePrecision?: DatePrecision;
   verified: boolean | null;
   reviewerId: string | null;
   textSignature: string[] | null;
@@ -59,7 +61,7 @@ export async function cacheKey(productId: string, site: string): Promise<string>
 
 export function toStored(review: Review): StoredReview {
   const text = review.text;
-  return {
+  const stored: StoredReview = {
     rating: review.rating,
     date: review.date,
     verified: review.verified,
@@ -72,6 +74,10 @@ export function toStored(review: Review): StoredReview {
           ),
     textTermCounts: text === null || text.length === 0 ? null : hashTerms(text),
   };
+  if (review.datePrecision !== undefined) {
+    stored.datePrecision = review.datePrecision;
+  }
+  return stored;
 }
 
 export function toRecord(
@@ -103,6 +109,9 @@ export function hydrateCacheRecord(record: ReviewsCacheRecord): CachedReviews {
       verified: stored.verified,
       reviewerId: stored.reviewerId,
     };
+    if (stored.datePrecision !== undefined) {
+      review.datePrecision = stored.datePrecision;
+    }
     reviews.push(review);
     if (Array.isArray(stored.textSignature)) {
       signatures.set(review, stored.textSignature.map((value) => BigInt(value)));

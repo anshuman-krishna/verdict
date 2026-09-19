@@ -5,12 +5,16 @@ import {
   buildFeatureVector,
   buildRatingHistogram,
   dayIndex,
+  deriveDayIndices,
   deriveInsideBurst,
+  hasTimeline,
   meetsMinimumDataThresholds,
   MINIMUM_DATED_REVIEW_COUNT,
   MINIMUM_HISTORY_DAYS,
   MINIMUM_REVIEW_COUNT,
+  MINIMUM_TIMELINE_REVIEW_COUNT,
   parseFeatureVector,
+  timelineDays,
   type FeatureVector,
 } from "./featureVector";
 import { flattenFeatureVector } from "./combine";
@@ -73,6 +77,74 @@ describe("meetsMinimumDataThresholds", () => {
       return review({ date: i < MINIMUM_DATED_REVIEW_COUNT ? "2024-01-05" : null });
     });
     expect(meetsMinimumDataThresholds(reviews)).toBe(true);
+  });
+});
+
+describe("a date the page named a window for rather than a day", () => {
+  const coarse = (count: number) =>
+    Array.from({ length: count }, () =>
+      review({ rating: 5, date: "2024-01-15", datePrecision: "month" }),
+    );
+
+  it("counts toward the dated reviews, because the review was read and placed", () => {
+    const reviews = [...coarse(MINIMUM_REVIEW_COUNT)];
+    expect(meetsMinimumDataThresholds(reviews)).toBe(true);
+  });
+
+  it("stays out of the timeline, so a month bucket cannot manufacture a burst", () => {
+    const reviews = [...coarse(MINIMUM_REVIEW_COUNT)];
+    expect(timelineDays(reviews)).toEqual([]);
+    expect(buildDailyCounts(reviews)).toBeNull();
+  });
+
+  it("leaves the two signals that need a timeline unread rather than computed", () => {
+    const result = buildFeatureVector(coarse(MINIMUM_REVIEW_COUNT), {
+      organicPrior: [0.1, 0.1, 0.2, 0.3, 0.3],
+      injectionKernel: [0, 0, 0, 0.3, 0.7],
+    });
+    expect(result.temporalBurst).toBeNull();
+    expect(result.verificationConcentration).toBeNull();
+    expect(result.meetsMinimumData).toBe(true);
+    expect(result.ratingDeconvolution).not.toBeNull();
+  });
+
+  it("never names the day a listing changed, since it is not a day anybody posted on", () => {
+    expect(
+      deriveDayIndices([
+        review({ date: "2024-01-03" }),
+        review({ date: "2024-01-03", datePrecision: "day" }),
+        review({ date: "2024-01-03", datePrecision: "month" }),
+        review(),
+      ]),
+    ).toEqual([dayIndex("2024-01-03"), dayIndex("2024-01-03"), null, null]);
+  });
+
+  it("is never inside a burst, even on the day it resolved to", () => {
+    const reviews = [review({ date: "2024-01-03", datePrecision: "month" })];
+    const result = deriveInsideBurst(reviews, dayIndex("2024-01-01"), [
+      { startDay: 0, endDay: 100, reviewCount: 1 },
+    ]);
+    expect(result).toEqual([false]);
+  });
+
+  it("a week is as coarse as a month, and a day named as a day is not", () => {
+    expect(timelineDays([review({ date: "2024-01-03", datePrecision: "week" })])).toEqual([]);
+    expect(timelineDays([review({ date: "2024-01-03", datePrecision: "day" })])).toHaveLength(1);
+    expect(timelineDays([review({ date: "2024-01-03", datePrecision: "exact" })])).toHaveLength(1);
+    expect(timelineDays([review({ date: "2024-01-03" })])).toHaveLength(1);
+  });
+
+  it("does not ask for a 21 day history it has no timeline to measure", () => {
+    expect(hasTimeline(coarse(MINIMUM_REVIEW_COUNT))).toBe(false);
+    const mixed = [
+      ...coarse(MINIMUM_REVIEW_COUNT),
+      ...Array.from({ length: MINIMUM_TIMELINE_REVIEW_COUNT }, () =>
+        review({ date: "2024-01-15", datePrecision: "day" }),
+      ),
+    ];
+    // once there is a timeline to measure, the span it has to clear comes back
+    expect(hasTimeline(mixed)).toBe(true);
+    expect(meetsMinimumDataThresholds(mixed)).toBe(false);
   });
 });
 

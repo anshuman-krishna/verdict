@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { RulesDocument } from "../extract/rules";
 import { STORAGE_MESSAGE_TYPE } from "./messages";
 import {
+  isAnalysisAllowed,
   NOTHING_ENABLED,
   queueContributionEdges,
   readRules,
@@ -121,5 +122,28 @@ describe("the reviews cache the content script sees", () => {
     const sent = JSON.stringify(send.mock.calls[0]?.[0]);
     expect(sent).not.toContain("several words");
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ op: "reviews-put", pagesFetched: 1 }));
+  });
+});
+
+
+describe("asking whether this page may be read", () => {
+  it("passes the platform and returns what the background said", async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true, value: false });
+    await expect(isAnalysisAllowed("amazon", send)).resolves.toBe(false);
+    expect(send).toHaveBeenCalledWith({
+      type: STORAGE_MESSAGE_TYPE,
+      op: "analysis-allowed",
+      site: "amazon",
+    });
+  });
+
+  it("reads the page when the background cannot be reached, since a pause is a preference", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("no background"));
+    await expect(isAnalysisAllowed("amazon", send)).resolves.toBe(true);
+  });
+
+  it("reads the page when the background refuses to answer", async () => {
+    const send = vi.fn().mockResolvedValue({ ok: false });
+    await expect(isAnalysisAllowed("amazon", send)).resolves.toBe(true);
   });
 });

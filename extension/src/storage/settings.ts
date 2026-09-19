@@ -1,5 +1,6 @@
 import { getPref, setPref } from "./prefs";
 import { getSyncedBoolean, setSyncedBoolean } from "./syncedBoolean";
+import { getSyncedStrings, setSyncedStrings } from "./syncedList";
 
 const HISTORY_ENABLED_KEY = "historyEnabled";
 
@@ -49,4 +50,36 @@ export async function getAcknowledgedPolicyVersion(): Promise<number> {
 
 export function setAcknowledgedPolicyVersion(version: number) {
   return setPref(ACKNOWLEDGED_POLICY_VERSION_KEY, version);
+}
+
+const ANALYSIS_ENABLED_KEY = "analysisEnabled";
+
+const DEFAULT_ANALYSIS_ENABLED = true;
+
+export async function getAnalysisEnabled(): Promise<boolean> {
+  return getSyncedBoolean(ANALYSIS_ENABLED_KEY, DEFAULT_ANALYSIS_ENABLED);
+}
+
+export function setAnalysisEnabled(enabled: boolean) {
+  return setSyncedBoolean(ANALYSIS_ENABLED_KEY, enabled);
+}
+
+const PAUSED_SITES_KEY = "pausedSites";
+
+export function getPausedSites(): Promise<string[]> {
+  return getSyncedStrings(PAUSED_SITES_KEY);
+}
+
+export async function setSitePaused(site: string, paused: boolean): Promise<string[]> {
+  const current = await getPausedSites();
+  const next = paused ? [...current, site] : current.filter((entry) => entry !== site);
+  return setSyncedStrings(PAUSED_SITES_KEY, next);
+}
+
+// what the content script asks before it reads a page: the switch, then this platform
+export async function isAnalysisAllowedOn(site: string): Promise<boolean> {
+  if (!(await getAnalysisEnabled())) {
+    return false;
+  }
+  return !(await getPausedSites()).includes(site);
 }

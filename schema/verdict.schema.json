@@ -22,6 +22,10 @@
           "format": "date",
           "description": "ISO 8601 date the review was posted, null if extraction could not find one"
         },
+        "datePrecision": {
+          "enum": ["exact", "day", "week", "month", "year"],
+          "description": "how wide the window the page named was, absent when the page wrote an absolute date"
+        },
         "verified": {
           "type": ["boolean", "null"],
           "description": "verified purchase flag, null if extraction could not determine it"

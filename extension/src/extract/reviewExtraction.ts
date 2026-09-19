@@ -1,24 +1,32 @@
 import { resolveFieldTraced, type StrategyTrace } from "./interpreter";
 import { newPageIndex, type PageIndex } from "./structuredData";
-import { normaliseDate, normaliseNumber } from "./normalise";
+import { normaliseDateReading, normaliseNumber } from "./normalise";
 import type { NumberFormat, RulesDocument } from "./rules";
 import type { ParsedProductPage } from "./sites";
 import { safeThumbnailUrl } from "./sites";
 import type { ProductSnapshot, Review } from "./types";
 
 
-function coerceReview(value: unknown, locale: string): Review | null {
+function coerceReview(value: unknown, locale: string, now: number): Review | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
   const record = value as Record<string, unknown>;
-  return {
+  const reading = typeof record.date === "string"
+    ? normaliseDateReading(record.date, locale, now)
+    : null;
+  const review: Review = {
     rating: coerceNumber(record.rating, locale),
     text: typeof record.text === "string" ? record.text : null,
-    date: typeof record.date === "string" ? normaliseDate(record.date, locale) : null,
+    date: reading?.date ?? null,
     verified: typeof record.verified === "boolean" ? record.verified : null,
     reviewerId: typeof record.reviewerId === "string" ? record.reviewerId : null,
   };
+  // an exact date is the absent case, so nothing that reads absolute dates carries a width
+  if (reading !== null && reading.precision !== "exact") {
+    review.datePrecision = reading.precision;
+  }
+  return review;
 }
 
 function coerceNumber(value: unknown, locale: string): number | null {
@@ -41,6 +49,8 @@ export function extractReviews(
   rules: RulesDocument,
   locale: string,
   index: PageIndex = newPageIndex(),
+  // a date written relative to when the page was served resolves against when it was read
+  now: number = Date.now(),
 ): Review[] {
   const rule = rules.fields.reviews;
   if (rule === undefined) {
@@ -49,7 +59,7 @@ export function extractReviews(
   const { values, trace } = resolveFieldTraced(root, rule, index);
   const readAs = numberLocale(trace, locale);
   return values
-    .map((value) => coerceReview(value, readAs))
+    .map((value) => coerceReview(value, readAs, now))
     .filter((review): review is Review => review !== null);
 }
 

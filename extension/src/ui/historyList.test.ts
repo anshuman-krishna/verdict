@@ -344,3 +344,21 @@ describe("the privacy notice in the popup", () => {
     expect(container.querySelector(".policy-notice")).not.toBeNull();
   });
 });
+
+describe("the popup when verdict has been told to read nothing", () => {
+  it("says so, and offers the way back", () => {
+    const container = document.createElement("div");
+    const onResumeAnalysis = vi.fn();
+    renderPopup(container, [], callbacks({ onResumeAnalysis }), "", { analysisEnabled: false });
+
+    expect(container.querySelector(".paused")?.textContent).toContain("not reading");
+    container.querySelector<HTMLButtonElement>(".resume-analysis")?.click();
+    expect(onResumeAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it("says nothing while it is reading, which is the usual case", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks());
+    expect(container.querySelector(".paused")).toBeNull();
+  });
+});

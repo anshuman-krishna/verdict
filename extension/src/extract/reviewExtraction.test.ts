@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { RulesDocument } from "./rules";
 import { extractProductSnapshot, extractReviews } from "./reviewExtraction";
+import { newPageIndex } from "./structuredData";
 
 function parse(html: string): ParentNode {
   const container = document.createElement("div");
@@ -30,6 +31,46 @@ describe("extractReviews", () => {
     expect(extractReviews(root, rules, "com")).toEqual([
       { rating: 5, text: "great", date: "2024-01-01", verified: true, reviewerId: "r1" },
       { rating: 1, text: "bad", date: null, verified: null, reviewerId: null },
+    ]);
+  });
+
+
+  it("records how wide a relative date was, and resolves it against when the page was read", () => {
+    const root = parse(`
+      <script type="application/ld+json">
+        { "reviewsData": { "reviews": [
+          { "rating": 5, "text": "great", "date": "2 days ago" },
+          { "rating": 4, "text": "fine", "date": "3 months ago" },
+          { "rating": 3, "text": "ok", "date": "2024-01-01" }
+        ] } }
+      </script>
+    `);
+    const rules: RulesDocument = {
+      version: 1,
+      site: "amazon",
+      locales: ["com"],
+      fields: { reviews: { strategy: "embedded-json", path: "$.reviewsData.reviews[*]" } },
+    };
+    const read = Date.UTC(2026, 2, 18, 11, 0);
+    expect(extractReviews(root, rules, "com", newPageIndex(), read)).toEqual([
+      {
+        rating: 5,
+        text: "great",
+        date: "2026-03-16",
+        datePrecision: "day",
+        verified: null,
+        reviewerId: null,
+      },
+      {
+        rating: 4,
+        text: "fine",
+        date: "2025-12-18",
+        datePrecision: "month",
+        verified: null,
+        reviewerId: null,
+      },
+      // an absolute date is the absent case, so nothing is written on it
+      { rating: 3, text: "ok", date: "2024-01-01", verified: null, reviewerId: null },
     ]);
   });
 
