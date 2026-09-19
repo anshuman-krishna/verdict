@@ -1,8 +1,10 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import status from "../../data/status.json";
+import ledger from "../../data/corrections.json";
 
 const { rows, generatedAt } = status;
+const { corrections } = ledger;
 
 const HEALTH_LABELS: Record<string, string> = {
   healthy: "reading correctly",
@@ -63,6 +65,45 @@ function formatDate(seconds: number): string {
                 <td class={row.medianReviewsExtracted === null ? undefined : "data"}>
                   {row.medianReviewsExtracted ?? "none read"}
                 </td>
+              </tr>
+            ))
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Corrections</h2>
+  <p>
+    Verdict is wrong sometimes. When a seller disputes a reading and the rerun shows the
+    reading was wrong, it is recorded here with what was wrong and what changed because of it.
+    An empty table means no dispute has been upheld yet, not that none was received.
+  </p>
+  <div class="table-scroll">
+    <table class="register">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Serial</th>
+          <th>Reading</th>
+          <th>What the rerun showed</th>
+          <th>What changed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          corrections.length === 0 ? (
+            <tr>
+              <td colspan="5">No dispute has been upheld yet.</td>
+            </tr>
+          ) : (
+            corrections.map((row) => (
+              <tr>
+                <td class="data">{row.date}</td>
+                <td class="data">{row.serial}</td>
+                <td>{row.reading}</td>
+                <td>{row.finding}</td>
+                <td>{row.changed}</td>
               </tr>
             ))
           )

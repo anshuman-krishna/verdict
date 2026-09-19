@@ -25,6 +25,7 @@ export const ENGLISH = {
   "signal.verificationConcentration": "verification pattern",
   "signal.textNearDuplication": "duplicate text",
   "signal.listingDrift": "different product",
+  "signal.listingDrift.place": "different business",
   "signal.reviewerGraph": "reviewer network",
 
   "strength.none": "none",
@@ -58,6 +59,7 @@ export const ENGLISH = {
   "confidence.point": "The estimate sits between {percent} percent of reviews.",
   "confidence.range": "The estimate sits between {low} to {high} percent of reviews.",
   "confidence.unavailable": "{signals} could not be read on this page, which widens it.",
+  "confidence.absent": "This platform does not record {signals}, which widens it.",
   "pending.line": "Still reading the {signals}, so this may still move.",
 
   "when.earlierToday": "earlier today",
@@ -88,9 +90,13 @@ export const ENGLISH = {
     other: "{count} clusters of near duplicate text, about {percent} percent of reviews with text.",
   },
   "evidence.differentProduct.none": "No review text to compare against the product.",
+  "evidence.differentProduct.none.place": "No review text to compare against the business.",
   "evidence.differentProduct.noTitle": "No product title to compare the reviews against.",
+  "evidence.differentProduct.noTitle.place": "No business name to compare the reviews against.",
   "evidence.differentProduct.share":
     "{count} of {embedded} reviews with text share no wording with the current product title and category.",
+  "evidence.differentProduct.share.place":
+    "{count} of {embedded} reviews with text share no wording with the current business name and category.",
   "evidence.differentProduct.shift": "The wording of reviews shifts around {day}.",
   "evidence.reviewerNetwork.none": "No reviewer identifiers to check against the network.",
   "evidence.reviewerNetwork.share":
@@ -103,6 +109,8 @@ export const ENGLISH = {
   "notice.noModel": "This build of Verdict carries no scoring model, so it cannot judge a page.",
   "notice.notEnoughReviews": "Not enough reviews to judge this one. {reviews} found.",
   "notice.everyPageRead": "Not enough reviews to judge this one. {reviews} across {pages}, {reach}.",
+  "notice.pageOnly":
+    "Not enough reviews to judge this one. {reviews} found, and this platform has no further pages to read.",
   "notice.reachOwnCeiling": "which is as deep as Verdict reads",
   "notice.reachEveryPage": "which is every page this listing has",
   "notice.checkMoreDeeply": "check more deeply",
@@ -118,6 +126,7 @@ export const ENGLISH = {
   "detail.intervalPoint": "Estimated {percent} percent of reviews.",
   "detail.intervalRange": "Estimated between {low} and {high} percent of reviews.",
   "detail.unavailable": "{signals} could not be read on this page, which widens the estimate.",
+  "detail.absent": "This platform does not record {signals}, which widens the estimate.",
   "detail.rescored": "Scored again with the current model, this reads as {band}.",
   "detail.unreadable":
     "This check was saved by an older version, so only its heading is readable.",
@@ -138,6 +147,24 @@ export const ENGLISH = {
   "popup.exportCsv": "export csv",
   "popup.deleteAll": "delete everything",
   "popup.confirmDelete": "confirm delete",
+
+  "watch.add": "Keep an eye on this",
+  "watch.remove": "Stop watching",
+  "watch.added": "Saved. The next check of this listing is compared against this one.",
+  "watch.since": "Since you saved it {when}:",
+  "watch.nothing": "Nothing has moved since you saved it {when}.",
+  "watch.change.band": "It read {from} then, and reads {to} now.",
+  "watch.change.rating": "The adjusted rating moved from {from} to {to}.",
+  "watch.change.reviews": "It has gone from {from} to {to} reviews.",
+  "watch.change.burst": "More of its reviews now arrive in unusual windows, {from} to {to} percent.",
+  "watch.change.drift": "Its reviews have moved away from what the listing says it sells.",
+
+  "watchlist.heading": "Watching",
+  "watchlist.empty": "Nothing watched yet.",
+  "watchlist.moved": { one: "{count} thing moved", other: "{count} things moved" },
+  "watchlist.steady": "nothing moved",
+  "watchlist.remove": "Stop watching this listing",
+  "watchlist.lastSeen": "last read {when}",
 } as const satisfies Record<string, Message>;
 
 export type MessageId = keyof typeof ENGLISH;

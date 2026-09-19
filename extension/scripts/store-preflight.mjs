@@ -2,7 +2,9 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { modelProblems, preflightProblems } from "./storePreflight.mjs";
+import { lexiconProblems, modelProblems, preflightProblems } from "./storePreflight.mjs";
+
+const REGISTRY = resolve(import.meta.dirname, "..", "..", "schema", "sites.json");
 
 const DEFAULT_OUTPUT = resolve(import.meta.dirname, "..", ".output");
 const SCANNED_EXTENSIONS = [".js", ".mjs", ".html", ".css", ".json"];
@@ -62,7 +64,22 @@ function main() {
     return;
   }
 
-  const problems = [...preflightProblems(manifest, files), ...modelProblems(artifact)];
+  const lexiconPath = resolve(import.meta.dirname, "..", "src", "score", "lexicon.json");
+  let lexicon;
+  try {
+    lexicon = JSON.parse(readFileSync(lexiconPath, "utf8"));
+  } catch {
+    console.error(`no lexicon artifact at ${lexiconPath}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const sites = JSON.parse(readFileSync(REGISTRY, "utf8")).sites;
+  const problems = [
+    ...preflightProblems(manifest, files, sites),
+    ...modelProblems(artifact),
+    ...lexiconProblems(lexicon),
+  ];
   if (problems.length > 0) {
     console.error(`${target} is not shippable:`);
     for (const problem of problems) {

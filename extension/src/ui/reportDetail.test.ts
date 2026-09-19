@@ -14,6 +14,7 @@ function report(overrides: Partial<Report> = {}): Report {
   return {
     serial: "7QK2-M4P9",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 120,
@@ -29,6 +30,7 @@ function report(overrides: Partial<Report> = {}): Report {
       },
     ],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: Date.parse("2026-01-15T12:00:00Z"),
     ...overrides,
   };
@@ -136,6 +138,12 @@ describe("the lines the detail view puts under the figures", () => {
   it("names one signal that could not be read", () => {
     expect(unavailableLine(report({ unavailableSignals: ["reviewer network"] }))).toBe(
       "reviewer network could not be read on this page, which widens the estimate.",
+    );
+  });
+
+  it("names a signal the platform never records as absent, not as unread", () => {
+    expect(unavailableLine(report({ absentSignals: ["verification pattern"] }))).toBe(
+      "This platform does not record verification pattern, which widens the estimate.",
     );
   });
 

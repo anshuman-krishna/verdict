@@ -39,3 +39,7 @@
 {"signal": "categoryKeys", "input": {"category": null}, "expected": {"keys": []}}
 {"signal": "categoryPriors", "input": {"category": "Home & Kitchen > Kettles"}, "expected": {"key": null, "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2], "injectionKernel": [0.0, 0.0, 0.0, 0.35, 0.65]}}
 {"signal": "categoryPriors", "input": {"category": null}, "expected": {"key": null, "organicPrior": [0.2, 0.2, 0.2, 0.2, 0.2], "injectionKernel": [0.0, 0.0, 0.0, 0.35, 0.65]}}
+{"signal": "lexiconEmbedding", "input": {"lexicon": "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A", "text": "kettle stove"}, "expected": {"dimensions": 4, "vector": [0.7071067811865476, 0.7071067811865476, 0.0, 0.0]}}
+{"signal": "lexiconEmbedding", "input": {"lexicon": "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A", "text": "kettle kettle stove"}, "expected": {"dimensions": 4, "vector": [0.8944271909999159, 0.4472135954999579, 0.0, 0.0]}}
+{"signal": "lexiconEmbedding", "input": {"lexicon": "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A", "text": "filter"}, "expected": {"dimensions": 4, "vector": [0.0, 0.0, 1.0, 0.0]}}
+{"signal": "lexiconEmbedding", "input": {"lexicon": "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A", "text": "sprocket"}, "expected": {"dimensions": 4, "vector": null}}

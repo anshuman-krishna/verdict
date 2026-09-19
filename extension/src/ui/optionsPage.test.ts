@@ -12,6 +12,7 @@ function callbacks() {
     onExportCsv: vi.fn(),
     onDeleteAll: vi.fn(),
     onClearCache: vi.fn(),
+    onClearWatchlist: vi.fn(),
     onClearQueue: vi.fn(),
     onAcknowledgePolicy: vi.fn(),
     onImport: vi.fn(),
@@ -20,6 +21,7 @@ function callbacks() {
 
 const NOTHING_HELD: Holdings = {
   checks: 0,
+  watched: 0,
   cachedProducts: 0,
   oldestCachedAt: null,
   queuedContributions: 0,
@@ -357,5 +359,26 @@ describe("importing history", () => {
     const container = document.createElement("div");
     renderOptions(container, state({ importMessage: "<img src=x onerror=alert(1)>" }), callbacks());
     expect(container.querySelector(".import-result img")).toBeNull();
+  });
+});
+
+describe("the watchlist on the options page", () => {
+  it("says what watching means while nothing is watched", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state(), callbacks());
+    const holdings = container.querySelector(".holdings")?.textContent ?? "";
+    expect(holdings).toContain("Nothing watched.");
+    expect(container.querySelector<HTMLButtonElement>(".clear-watchlist")?.disabled).toBe(true);
+  });
+
+  it("counts what is watched, and offers to let go of all of it", () => {
+    const container = document.createElement("div");
+    const cbs = callbacks();
+    renderOptions(container, state({ holdings: { ...NOTHING_HELD, watched: 3 } }), cbs);
+    expect(container.querySelector(".holdings")?.textContent).toContain("3 listings watched.");
+
+    container.querySelector<HTMLButtonElement>(".clear-watchlist")?.click();
+
+    expect(cbs.onClearWatchlist).toHaveBeenCalledOnce();
   });
 });

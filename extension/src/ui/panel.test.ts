@@ -2,13 +2,22 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { newTranslator } from "../i18n/translator";
 import type { Report } from "../score/report";
-import { getPanelShadowRootForTesting, previouslyLine, VerdictPanelElement } from "./panel";
+import {
+  getPanelShadowRootForTesting,
+  previouslyLine,
+  VerdictPanelElement,
+  watchLines,
+  type WatchDetail,
+} from "./panel";
+import type { WatchStatus } from "../storage/watchlist";
+import type { WatchChange } from "../watchlist/drift";
 import type { RosetteInput } from "./rosette";
 
 function sampleReport(overrides: Partial<Report> = {}): Report {
   return {
     serial: "7F2A-0091",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 8431,
@@ -20,6 +29,7 @@ function sampleReport(overrides: Partial<Report> = {}): Report {
       { signal: "arrival timing", strength: "moderate", detail: "reviews arrived in unusual bursts", value: 0.2 },
     ],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: Date.now(),
     ...overrides,
   };
@@ -213,6 +223,25 @@ describe("the confidence interval and what could not be read", () => {
     );
   });
 
+  it("says a platform does not record a signal rather than that it could not be read", () => {
+    const root = render(sampleReport({ absentSignals: ["verification pattern"] }));
+    const note = root.querySelector(".interval-note")?.textContent ?? "";
+    expect(note).toContain("This platform does not record verification pattern");
+    expect(note).not.toContain("could not be read");
+  });
+
+  it("keeps the two apart when a page hid one signal and the platform lacks another", () => {
+    const root = render(
+      sampleReport({
+        absentSignals: ["verification pattern"],
+        unavailableSignals: ["different product"],
+      }),
+    );
+    const note = root.querySelector(".interval-note")?.textContent ?? "";
+    expect(note).toContain("This platform does not record verification pattern");
+    expect(note).toContain("different product could not be read on this page");
+  });
+
   it("says nothing about unreadable signals when every signal was read", () => {
     const root = render(sampleReport());
     expect(root.querySelector(".interval-note")?.textContent).not.toContain("could not be read");
@@ -404,5 +433,120 @@ describe("the panel in another locale", () => {
     expect(getPanelShadowRootForTesting(panel).querySelector(".detail")?.textContent).toBe(
       "the rating histogram does not look organic",
     );
+  });
+});
+
+describe("the watchlist on the panel", () => {
+  const SAVED = Date.parse("2026-03-01T12:00:00Z");
+  const NOW = SAVED + 86_400_000 * 3;
+
+  function watching(changes: WatchChange[] = []): WatchStatus {
+    return {
+      watching: true,
+      entry: {
+        productKey: "key-1",
+        site: "amazon",
+        title: "a stovetop kettle",
+        thumbnailUrl: null,
+        savedAt: SAVED,
+        lastSeenAt: NOW,
+        checkCount: 2,
+        baseline: {
+          at: SAVED,
+          band: "mostly-clean",
+          probability: 0.2,
+          claimedRating: 4.6,
+          adjustedRating: 4.4,
+          totalReviewCount: 400,
+          features: null,
+        },
+        latest: {
+          at: NOW,
+          band: "doubtful",
+          probability: 0.6,
+          claimedRating: 4.6,
+          adjustedRating: 3.9,
+          totalReviewCount: 400,
+          features: null,
+        },
+      },
+      changes,
+    };
+  }
+
+  function mounted(watch?: WatchStatus): VerdictPanelElement {
+    const panel = new VerdictPanelElement();
+    document.body.appendChild(panel);
+    panel.render(sampleReport(), rosetteInput, NOW, { watch });
+    return panel;
+  }
+
+  it("offers to keep an eye on a listing nobody saved", () => {
+    const toggle = getPanelShadowRootForTesting(mounted()).querySelector(".watch-toggle");
+
+    expect(toggle?.textContent).toBe("Keep an eye on this");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("offers to let go of one that is saved", () => {
+    const toggle = getPanelShadowRootForTesting(mounted(watching())).querySelector(".watch-toggle");
+
+    expect(toggle?.textContent).toBe("Stop watching");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("says plainly when nothing has moved since it was saved", () => {
+    const root = getPanelShadowRootForTesting(mounted(watching()));
+
+    expect(root.querySelector(".watch")?.textContent).toContain(
+      "Nothing has moved since you saved it 3 days ago.",
+    );
+  });
+
+  it("leads with what moved when something did", () => {
+    const root = getPanelShadowRootForTesting(
+      mounted(watching([{ kind: "band", from: "mostly-clean", to: "doubtful" }])),
+    );
+
+    const lines = [...root.querySelectorAll(".watch p")].map((line) => line.textContent);
+    expect(lines).toEqual([
+      "Since you saved it 3 days ago:",
+      "It read mostly clean then, and reads doubtful now.",
+    ]);
+  });
+
+  it("shows nothing at all about watching when the listing is not watched", () => {
+    expect(getPanelShadowRootForTesting(mounted()).querySelector(".watch")).toBeNull();
+  });
+
+  it("asks for the state the reader pressed for, not the one it was in", () => {
+    const panel = mounted();
+    const asked: boolean[] = [];
+    panel.addEventListener("verdict:watch", (event) => {
+      asked.push((event as CustomEvent<WatchDetail>).detail.watching);
+    });
+
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".watch-toggle")?.click();
+
+    expect(asked).toEqual([true]);
+  });
+
+  it("asks to stop when it is already watching", () => {
+    const panel = mounted(watching());
+    const asked: boolean[] = [];
+    panel.addEventListener("verdict:watch", (event) => {
+      asked.push((event as CustomEvent<WatchDetail>).detail.watching);
+    });
+
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".watch-toggle")?.click();
+
+    expect(asked).toEqual([false]);
+  });
+});
+
+describe("watchLines", () => {
+  it("says nothing about a listing nobody saved", () => {
+    expect(watchLines(undefined, Date.now())).toEqual([]);
+    expect(watchLines({ watching: false, entry: null, changes: [] }, Date.now())).toEqual([]);
   });
 });

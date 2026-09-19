@@ -7,7 +7,10 @@ import {
   type HistoryDraft,
   type StorageRequest,
   type StorageResponse,
+  type WatchDraft,
 } from "./messages";
+import { NOT_WATCHED, type WatchStatus } from "./watchlist";
+import type { WatchReading } from "../watchlist/reading";
 import {
   hydrateCacheRecord,
   toStored,
@@ -75,6 +78,32 @@ export function queueContributionEdges(
     send,
     { type: STORAGE_MESSAGE_TYPE, op: "contribution-enqueue", edges: [...edges] },
     null,
+  );
+}
+
+export function watchListingVia(
+  listing: WatchDraft,
+  send: SendToBackground = realSend,
+): Promise<WatchStatus> {
+  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "watch-add", listing }, NOT_WATCHED);
+}
+
+export function unwatchListingVia(
+  productKey: string,
+  send: SendToBackground = realSend,
+): Promise<WatchStatus> {
+  return ask(send, { type: STORAGE_MESSAGE_TYPE, op: "watch-remove", productKey }, NOT_WATCHED);
+}
+
+export function recordWatchedCheckVia(
+  productKey: string,
+  reading: WatchReading,
+  send: SendToBackground = realSend,
+): Promise<WatchStatus> {
+  return ask(
+    send,
+    { type: STORAGE_MESSAGE_TYPE, op: "watch-check", productKey, reading },
+    NOT_WATCHED,
   );
 }
 

@@ -141,7 +141,8 @@ const SHAPES: LocaleShape[] = [
 // a locale added to the registry without a shape here would ship unread
 describe("the locales this file covers", () => {
   it("covers every locale the registry serves", () => {
-    const registered = SITES.flatMap((site) => Object.keys(site.locales)).sort();
+    // one shape per locale, however many platforms serve that locale
+    const registered = [...new Set(SITES.flatMap((site) => Object.keys(site.locales)))].sort();
     expect(SHAPES.map((shape) => shape.locale).sort()).toEqual(registered);
   });
 

@@ -8,6 +8,8 @@ import {
   strengthLabel,
 } from "../score/reportText";
 import type { PreviousCheck } from "../storage/history";
+import type { WatchStatus } from "../storage/watchlist";
+import { changeLines } from "../watchlist/text";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
@@ -51,13 +53,16 @@ export function confidenceLine(report: Report, t: Translator = ENGLISH_TRANSLATO
   const estimate = low === high
     ? t.text("confidence.point", { percent: low })
     : t.text("confidence.range", { low, high });
-  if (report.unavailableSignals.length === 0) {
-    return estimate;
+  const lines = [estimate];
+  if (report.absentSignals.length > 0) {
+    lines.push(t.text("confidence.absent", { signals: joinSignals(report.absentSignals, t) }));
   }
-  const widened = t.text("confidence.unavailable", {
-    signals: joinSignals(report.unavailableSignals, t),
-  });
-  return `${estimate} ${widened}`;
+  if (report.unavailableSignals.length > 0) {
+    lines.push(
+      t.text("confidence.unavailable", { signals: joinSignals(report.unavailableSignals, t) }),
+    );
+  }
+  return lines.join(" ");
 }
 
 export interface FullReportDetail {
@@ -100,10 +105,32 @@ export function previouslyLine(
     : t.text("previously.changed", { when, band });
 }
 
+export interface WatchDetail {
+  // the state the reader asked for, not the one it was in
+  watching: boolean;
+}
+
+// what has moved since the reader saved it, which is the whole point of saving it
+export function watchLines(
+  status: WatchStatus | undefined,
+  now: number,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string[] {
+  if (status === undefined || !status.watching || status.entry === null) {
+    return [];
+  }
+  const when = daysAgo(status.entry.savedAt, now, t);
+  if (status.changes.length === 0) {
+    return [t.text("watch.nothing", { when })];
+  }
+  return [t.text("watch.since", { when }), ...changeLines(status.changes, t)];
+}
+
 export interface PanelRenderOptions {
   pending?: readonly string[];
   now?: number;
   previousChecks?: readonly PreviousCheck[];
+  watch?: WatchStatus;
   translator?: Translator;
 }
 
@@ -148,6 +175,8 @@ export class VerdictPanelElement extends HTMLElement {
     const t = options.translator ?? ENGLISH_TRANSLATOR;
     const pending = options.pending ?? [];
     const previously = previouslyLine(report, options.previousChecks?.[0], now, t);
+    const watching = options.watch?.watching === true;
+    const watch = watchLines(options.watch, now, t);
 
     const params = rosetteParams(rosetteInput);
     const path = rosettePath(params, 44);
@@ -233,6 +262,11 @@ export class VerdictPanelElement extends HTMLElement {
         <p class="interval-note">${confidenceLine(report, t)}</p>
         ${previously === null ? "" : `<p class="previously">${previously}</p>`}
         ${
+      watch.length === 0
+        ? ""
+        : `<div class="watch">${watch.map((line) => `<p>${line}</p>`).join("")}</div>`
+    }
+        ${
       pending.length === 0
         ? ""
         : `<p class="pending" role="status">${pendingLine(pending, t)}</p>`
@@ -267,6 +301,9 @@ export class VerdictPanelElement extends HTMLElement {
 
         <footer>
           <span class="checked">${relativeCheckedTime(report.generatedAt, now, t)}</span>
+          <button type="button" class="watch-toggle" aria-pressed="${watching}">${
+      t.text(watching ? "watch.remove" : "watch.add")
+    }</button>
           <button type="button" class="full-report">${t.text("panel.fullReport")}</button>
         </footer>
       </div>
@@ -275,6 +312,7 @@ export class VerdictPanelElement extends HTMLElement {
     this.wireEvidenceToggles(root);
     this.wireClose(root);
     this.wireFullReport(root);
+    this.wireWatchToggle(root, watching);
 
     if (!reducedMotion) {
       this.animateDraw(root);
@@ -311,6 +349,18 @@ export class VerdictPanelElement extends HTMLElement {
           bubbles: true,
           composed: true,
           detail: { serial: this.report?.serial ?? "" },
+        }),
+      );
+    });
+  }
+
+  private wireWatchToggle(root: ShadowRoot, watching: boolean): void {
+    root.querySelector(".watch-toggle")?.addEventListener("click", () => {
+      this.dispatchEvent(
+        new CustomEvent<WatchDetail>("verdict:watch", {
+          bubbles: true,
+          composed: true,
+          detail: { watching: !watching },
         }),
       );
     });
@@ -574,5 +624,32 @@ footer .full-report {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+footer .watch-toggle {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+footer .watch-toggle[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+.watch {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  font-size: 0.875rem;
+}
+
+.watch p {
+  margin: 0;
+}
+
+.watch p + p {
+  margin-top: 4px;
+  color: var(--ink-soft);
 }
 `;

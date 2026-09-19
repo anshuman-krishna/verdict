@@ -6,6 +6,7 @@ function sampleReport(overrides: Partial<Report> = {}): Report {
   return {
     serial: "AAAA-BBBB",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 100,
@@ -20,6 +21,7 @@ function sampleReport(overrides: Partial<Report> = {}): Report {
       { signal: "different product", strength: "none", value: null, detail: "" },
     ],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: 0,
     ...overrides,
   };

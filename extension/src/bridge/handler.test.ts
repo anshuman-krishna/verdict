@@ -447,6 +447,7 @@ describe("verdict:report:get", () => {
   const stored = {
     serial: "7QK2-M4P9",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 120,
@@ -455,6 +456,7 @@ describe("verdict:report:get", () => {
     confidence: { low: 0.18, high: 0.33 },
     evidence: [{ signal: "arrival timing", strength: "moderate", detail: "two bursts.", value: 0.12 }],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: 1_700_000_000_000,
   };
 
@@ -534,6 +536,7 @@ describe("verdict:report:export", () => {
   const stored = {
     serial: "7QK2-M4P9",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 120,
@@ -542,6 +545,7 @@ describe("verdict:report:export", () => {
     confidence: { low: 0.18, high: 0.33 },
     evidence: [],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: 1_700_000_000_000,
   };
 

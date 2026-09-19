@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { fromLexicon, hashedTerms } from "./embeddingBackend";
+import { parseLexicon, type Lexicon } from "./lexicon";
 import {
   centroidChangePoint,
   listingIdentityDrift,
@@ -141,5 +143,61 @@ describe("centroidChangePoint", () => {
     const embedding = embedText("one and the same") as number[];
     const dated = Array.from({ length: 11 }, (_, i) => ({ embedding, day: 20000 + i }));
     expect(centroidChangePoint(dated)).toEqual({ changePoint: null, driftStatistic: 0 });
+  });
+});
+
+describe("the embedding backend it is handed", () => {
+  const TABLE = "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A";
+
+  function threeAxes() {
+    const bytes = Uint8Array.from(atob(TABLE), (character) => character.charCodeAt(0));
+    return fromLexicon(parseLexicon(bytes) as Lexicon, "kettles-3d");
+  }
+
+  it("is what embeds the reviews and the listing alike", () => {
+    const reviews = [{ text: "kettle" }, { text: "kettle kettle" }];
+
+    const result = listingIdentityDrift(reviews, [1, 2], "kettle", {
+      backend: threeAxes(),
+    });
+
+    expect(result.embeddedCount).toBe(2);
+    expect(result.meanDistance).toBeCloseTo(0, 12);
+    expect(result.offTopicShare).toBe(0);
+  });
+
+  it("leaves a review it cannot embed out of the count", () => {
+    const reviews = [{ text: "kettle" }, { text: "sprocket flange" }];
+
+    expect(listingIdentityDrift(reviews, [1, 2], "kettle", { backend: threeAxes() })
+      .embeddedCount).toBe(1);
+  });
+
+  it("reads a listing it cannot embed as no distance at all, rather than a far one", () => {
+    const result = listingIdentityDrift([{ text: "kettle" }], [1], "sprocket", {
+      backend: threeAxes(),
+    });
+
+    expect(result.meanDistance).toBeNull();
+    expect(result.offTopicShare).toBeNull();
+  });
+
+  it("calls a review on another subject off topic", () => {
+    const reviews = [{ text: "kettle" }, { text: "stove" }];
+
+    const result = listingIdentityDrift(reviews, [1, 2], "kettle", {
+      backend: threeAxes(),
+      offTopicDistance: 0.5,
+    });
+
+    expect(result.offTopicShare).toBeCloseTo(0.5, 12);
+  });
+
+  it("hashes the terms when it is handed nothing, as it always has", () => {
+    const reviews = [knifeReview(1), knifeReview(2), cableReview(3)];
+
+    expect(listingIdentityDrift(reviews, days(3), KNIFE)).toEqual(
+      listingIdentityDrift(reviews, days(3), KNIFE, { backend: hashedTerms() }),
+    );
   });
 });

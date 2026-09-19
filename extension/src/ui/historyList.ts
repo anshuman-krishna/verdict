@@ -7,6 +7,8 @@ import { bandLabel } from "../score/reportText";
 import type { HistoryEntry } from "../storage/history";
 import { escapeHtml } from "./escape";
 import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
+import { bindWatchlist, watchlistMarkup } from "./watchlistView";
+import type { WatchEntry } from "../storage/watchlist";
 
 export interface PopupCallbacks {
   onExportJson: () => void;
@@ -15,6 +17,7 @@ export interface PopupCallbacks {
   onOpenSettings: () => void;
   onOpenEntry?: (id: number) => void;
   onAcknowledgePolicy?: () => void;
+  onUnwatch?: (productKey: string) => void;
 }
 
 export interface HistoryRow extends HistoryEntry {
@@ -54,6 +57,7 @@ export interface PopupOptions {
   pendingPolicyChanges?: readonly PolicyChange[];
   now?: number;
   translator?: Translator;
+  watchlist?: readonly WatchEntry[];
 }
 
 export function renderPopup(
@@ -73,6 +77,7 @@ export function renderPopup(
       }">&#9881;</button>
     </header>
     ${policyNoticeMarkup(options.pendingPolicyChanges ?? [], options.now ?? Date.now())}
+    ${watchlistMarkup(options.watchlist ?? [], t)}
     ${
       entries.length === 0
         ? ""
@@ -100,6 +105,7 @@ export function renderPopup(
   bindPolicyNotice(container, {
     onAcknowledge: () => callbacks.onAcknowledgePolicy?.(),
   });
+  bindWatchlist(container, { onUnwatch: callbacks.onUnwatch });
 
   container.querySelector(".open-settings")?.addEventListener("click", callbacks.onOpenSettings);
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);

@@ -1,0 +1,5 @@
+{
+  "ledgerVersion": 1,
+  "note": "SITE.md /sellers promises a wrong analysis is corrected publicly. this is where that happens. one row per dispute that was upheld, newest first, added by hand after `just dispute` has been run on the report the seller sent. serial is the serial on that report. reading is what verdict said. finding is what the rerun showed, in plain words. changed names what was changed because of it, or says nothing was.",
+  "corrections": []
+}

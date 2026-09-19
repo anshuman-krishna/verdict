@@ -1,9 +1,11 @@
 import { countQueuedContributions, nextContributionDueAt } from "../graph/queue";
 import { countHistory } from "./history";
+import { countWatchlist } from "./watchlist";
 import { countCachedProducts } from "./reviewsCache";
 
 export interface Holdings {
   checks: number;
+  watched: number;
   cachedProducts: number;
   oldestCachedAt: number | null;
   queuedContributions: number;
@@ -13,14 +15,16 @@ export interface Holdings {
 // PRIVACY.md is a promise about what stays here, so the options page can show it
 export async function readHoldings(): Promise<Holdings> {
   // counted, not listed, so opening the options page does not read every report
-  const [checks, cached, queuedContributions, nextContributionAt] = await Promise.all([
+  const [checks, watched, cached, queuedContributions, nextContributionAt] = await Promise.all([
     countHistory(),
+    countWatchlist(),
     countCachedProducts(),
     countQueuedContributions(),
     nextContributionDueAt(),
   ]);
   return {
     checks,
+    watched,
     cachedProducts: cached.count,
     oldestCachedAt: cached.oldestCachedAt,
     queuedContributions,
@@ -57,6 +61,12 @@ export function checksLine(holdings: Holdings): string {
   return holdings.checks === 0
     ? "No checks saved."
     : `${plural(holdings.checks, "check", "checks")} saved.`;
+}
+
+export function watchedLine(holdings: Holdings): string {
+  return holdings.watched === 0
+    ? "Nothing watched. A listing you keep an eye on is compared against the day you saved it."
+    : `${plural(holdings.watched, "listing", "listings")} watched.`;
 }
 
 export function cacheLine(holdings: Holdings, now: number): string {

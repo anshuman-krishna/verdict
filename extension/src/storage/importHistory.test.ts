@@ -17,6 +17,7 @@ function report(overrides: Partial<Report> = {}): Report {
   return {
     serial: "ABCD-1234",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.4,
     adjustedRating: 3.9,
     totalReviewCount: 820,
@@ -25,6 +26,7 @@ function report(overrides: Partial<Report> = {}): Report {
     confidence: { low: 0.3, high: 0.5 },
     evidence: [],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: NOW - DAY_MS,
     ...overrides,
   };

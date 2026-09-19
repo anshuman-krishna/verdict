@@ -159,7 +159,7 @@ async function handleRequest(
       return request.format === "json"
         ? {
           filename: reportFilename(report, "json"),
-          content: reportDocumentJson(report, entry.title, exportedAt),
+          content: reportDocumentJson(report, entry.title, exportedAt, entry.featureVector),
         }
         : {
           filename: reportFilename(report, "txt"),

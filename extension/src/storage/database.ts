@@ -1,11 +1,12 @@
 const DATABASE_NAME = "verdict";
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 export const STORE_NAMES = {
   reviewsCache: "reviews_cache",
   history: "history",
   prefs: "prefs",
   graphContributionQueue: "graph_contribution_queue",
+  watchlist: "watchlist",
 } as const;
 
 export function openDatabase(): Promise<IDBDatabase> {
@@ -28,6 +29,10 @@ export function openDatabase(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.prefs)) {
         db.createObjectStore(STORE_NAMES.prefs, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(STORE_NAMES.watchlist)) {
+        const watchlist = db.createObjectStore(STORE_NAMES.watchlist, { keyPath: "productKey" });
+        watchlist.createIndex("savedAt", "savedAt");
       }
       if (!db.objectStoreNames.contains(STORE_NAMES.graphContributionQueue)) {
         const queue = db.createObjectStore(STORE_NAMES.graphContributionQueue, {

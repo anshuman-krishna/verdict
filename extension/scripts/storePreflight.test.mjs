@@ -3,6 +3,8 @@ import {
   PERMISSION_REASONS,
   breadthProblems,
   declaredHosts,
+  draftPlatformProblems,
+  lexiconProblems,
   hostProblems,
   hostsIn,
   modelProblems,
@@ -241,5 +243,84 @@ describe("pageStorageProblems", () => {
     expect(
       pageStorageProblems(file("browser.runtime.sendMessage(x)", "content-scripts/storefront.js")),
     ).toEqual([]);
+  });
+});
+
+describe("draftPlatformProblems", () => {
+  const registry = [
+    {
+      id: "atlas",
+      status: "draft",
+      pathPrefix: "/places",
+      locales: { us: { host: "maps.example.com", domain: "example.com" } },
+    },
+    {
+      id: "amazon",
+      locales: { com: { host: "www.amazon.com", domain: "amazon.com" } },
+    },
+  ];
+
+  it("says nothing about a bundle that matches only finished platforms", () => {
+    expect(draftPlatformProblems(MANIFEST, registry)).toEqual([]);
+  });
+
+  it("catches a draft platform that reached the manifest", () => {
+    const manifest = {
+      content_scripts: [{ matches: ["https://maps.example.com/places/*"] }],
+    };
+    expect(draftPlatformProblems(manifest, registry)).toEqual([
+      expect.stringContaining("maps.example.com/places/*"),
+    ]);
+  });
+
+  it("says nothing when the registry carries no draft at all", () => {
+    expect(draftPlatformProblems(MANIFEST, [])).toEqual([]);
+  });
+});
+
+describe("lexiconProblems", () => {
+  const TABLE = "VkxFWAEABAADAAAABAIBPBMAAABrZXR0bGUKc3RvdmUKZmlsdGVyfwAAAAB/AAAAAH8A";
+
+  const bundled = (overrides = {}) => ({
+    artifactVersion: 1,
+    present: true,
+    identity: "kettles-3d",
+    bytes: TABLE,
+    ...overrides,
+  });
+
+  it("says nothing about a build that bundles no table", () => {
+    expect(lexiconProblems({ artifactVersion: 1, present: false, reason: "none built" })).toEqual([]);
+  });
+
+  it("says nothing about a table that reads back the way it says it does", () => {
+    expect(lexiconProblems(bundled())).toEqual([]);
+  });
+
+  it("catches a lexicon.json that is not an artifact at all", () => {
+    expect(lexiconProblems("a lexicon")).toEqual([expect.stringContaining("not an artifact")]);
+  });
+
+  it("catches a bundled table with no identity to name in a report", () => {
+    expect(lexiconProblems(bundled({ identity: "" }))).toEqual([
+      expect.stringContaining("names no identity"),
+    ]);
+  });
+
+  it("catches bytes that are not a table", () => {
+    expect(lexiconProblems(bundled({ bytes: "bm90IGEgdGFibGU=" }))).toEqual([
+      expect.stringContaining("not a table"),
+    ]);
+  });
+
+  it("catches a table truncated somewhere between the builder and the bundle", () => {
+    const short = Buffer.from(TABLE, "base64").subarray(0, 40).toString("base64");
+    expect(lexiconProblems(bundled({ bytes: short }))).toEqual([
+      expect.stringContaining("bytes and is"),
+    ]);
+  });
+
+  it("catches a table that would take more of the bundle than it may", () => {
+    expect(lexiconProblems(bundled(), 32)).toEqual([expect.stringContaining("bytes of the 32")]);
   });
 });

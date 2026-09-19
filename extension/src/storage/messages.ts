@@ -3,6 +3,8 @@ import type { ContributionEdge } from "../graph/edge";
 import type { FeatureVector } from "../score/featureVector";
 import type { PreviousCheck } from "./history";
 import type { ReviewsCacheRecord, StoredReview } from "./reviewsCodec";
+import type { WatchStatus } from "./watchlist";
+import type { WatchReading } from "../watchlist/reading";
 
 export const STORAGE_MESSAGE_TYPE = "verdict:storage";
 
@@ -20,12 +22,28 @@ export interface HistoryDraft {
   productKey: string | null;
 }
 
+export interface WatchDraft {
+  productKey: string;
+  site: string;
+  title: string;
+  thumbnailUrl: string | null;
+  reading: WatchReading;
+}
+
 export type StorageRequest =
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "settings" }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "rules"; site: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-add"; entry: HistoryDraft }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "history-of-product"; productKey: string }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "contribution-enqueue"; edges: ContributionEdge[] }
+  | { type: typeof STORAGE_MESSAGE_TYPE; op: "watch-add"; listing: WatchDraft }
+  | { type: typeof STORAGE_MESSAGE_TYPE; op: "watch-remove"; productKey: string }
+  | {
+      type: typeof STORAGE_MESSAGE_TYPE;
+      op: "watch-check";
+      productKey: string;
+      reading: WatchReading;
+    }
   | { type: typeof STORAGE_MESSAGE_TYPE; op: "reviews-get"; productId: string; site: string }
   | {
       type: typeof STORAGE_MESSAGE_TYPE;
@@ -42,6 +60,9 @@ export interface StorageResults {
   "history-add": null;
   "history-of-product": PreviousCheck[];
   "contribution-enqueue": null;
+  "watch-add": WatchStatus;
+  "watch-remove": WatchStatus;
+  "watch-check": WatchStatus;
   "reviews-get": ReviewsCacheRecord | null;
   "reviews-put": null;
 }

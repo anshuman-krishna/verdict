@@ -1,4 +1,6 @@
 import { ENGLISH_TRANSLATOR } from "../i18n/translator";
+import { flattenFeatureVector, type FlatFeatures } from "./combine";
+import type { FeatureVector } from "./featureVector";
 import type { Report, ReportProvenance } from "./report";
 import { bandLabel } from "./reportText";
 
@@ -6,21 +8,40 @@ import { bandLabel } from "./reportText";
 // dispute has to read the same to both of them, whatever their browsers are set to
 const FIXED = ENGLISH_TRANSLATOR;
 
-export const REPORT_DOCUMENT_VERSION = 1;
+export const REPORT_DOCUMENT_VERSION = 2;
 
 export interface ReportDocument {
   documentVersion: number;
   exportedAt: number;
   title: string;
   report: Report;
+  // the numbers the model was handed. SITE.md /sellers promises a disputed report will be run
+  // again, and without these a dispute is an argument about a sentence rather than a rerun
+  features?: FlatFeatures;
 }
 
-export function reportDocument(report: Report, title: string, exportedAt: number): ReportDocument {
-  return { documentVersion: REPORT_DOCUMENT_VERSION, exportedAt, title, report };
+export function reportDocument(
+  report: Report,
+  title: string,
+  exportedAt: number,
+  featureVector?: FeatureVector,
+): ReportDocument {
+  return {
+    documentVersion: REPORT_DOCUMENT_VERSION,
+    exportedAt,
+    title,
+    report,
+    ...(featureVector === undefined ? {} : { features: flattenFeatureVector(featureVector) }),
+  };
 }
 
-export function reportDocumentJson(report: Report, title: string, exportedAt: number): string {
-  return JSON.stringify(reportDocument(report, title, exportedAt), null, 2);
+export function reportDocumentJson(
+  report: Report,
+  title: string,
+  exportedAt: number,
+  featureVector?: FeatureVector,
+): string {
+  return JSON.stringify(reportDocument(report, title, exportedAt, featureVector), null, 2);
 }
 
 // a serial with nothing to hang it on is not a filename anyone can find again
@@ -60,6 +81,9 @@ export function provenanceLines(provenance: ReportProvenance | undefined): strin
 const DISPUTE_LINE =
   "If you believe this is wrong, send this document to verdict.tools/sellers and it will be run again, signal by signal.";
 
+const JSON_LINE =
+  "Export this report as JSON as well. That file carries the numbers the model was given, which is what makes the reading reproducible rather than arguable.";
+
 // DESIGN.md section 10: statistical, never accusatory, and every number carries a sentence
 export function reportAsText(report: Report, title: string, exportedAt: number): string {
   const kept = report.totalReviewCount - report.excludedReviewCount;
@@ -91,12 +115,16 @@ export function reportAsText(report: Report, title: string, exportedAt: number):
     lines.push(`  measured: ${row.value === null ? "not available" : row.value}`);
   }
 
+  if (report.absentSignals.length > 0) {
+    lines.push("", "NOT RECORDED BY THIS PLATFORM", ...report.absentSignals);
+  }
+
   if (report.unavailableSignals.length > 0) {
-    lines.push("", "COULD NOT BE READ", ...report.unavailableSignals.map((signal) => `${signal}`));
+    lines.push("", "COULD NOT BE READ", ...report.unavailableSignals);
   }
 
   lines.push("", "HOW THIS WAS PRODUCED", ...provenanceLines(report.provenance));
-  lines.push("", DISPUTE_LINE);
+  lines.push("", DISPUTE_LINE, JSON_LINE);
 
   return `${lines.filter((line, index) => line !== "" || index > 0).join("\n")}\n`;
 }

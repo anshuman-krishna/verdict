@@ -1,4 +1,5 @@
-import { cosineSimilarity, EMBEDDING_DIMENSIONS, embedText } from "./textEmbedding";
+import { hashedTerms, type EmbeddingBackend } from "./embeddingBackend";
+import { cosineSimilarity, EMBEDDING_DIMENSIONS } from "./textEmbedding";
 
 
 export interface ReviewForDrift {
@@ -7,6 +8,7 @@ export interface ReviewForDrift {
 
 export interface ListingDriftOptions {
   dimensions?: number;
+  backend?: EmbeddingBackend;
   offTopicDistance?: number;
   embeddingCache?: WeakMap<ReviewForDrift, number[]>;
 }
@@ -43,17 +45,17 @@ const ABSENT: ListingDriftResult = {
 
 function embeddingFor(
   review: ReviewForDrift,
-  dimensions: number,
+  backend: EmbeddingBackend,
   cache: WeakMap<ReviewForDrift, number[]> | undefined,
 ): number[] | null {
   const cached = cache?.get(review);
-  if (cached !== undefined && cached.length === dimensions) {
+  if (cached !== undefined && cached.length === backend.dimensions) {
     return cached;
   }
   if (review.text === null || review.text.length === 0) {
     return null;
   }
-  const embedding = embedText(review.text, dimensions);
+  const embedding = backend.embed(review.text);
   if (embedding !== null) {
     cache?.set(review, embedding);
   }
@@ -66,12 +68,12 @@ export function listingIdentityDrift(
   productText: string,
   options: ListingDriftOptions = {},
 ): ListingDriftResult {
-  const dimensions = options.dimensions ?? EMBEDDING_DIMENSIONS;
+  const backend = options.backend ?? hashedTerms(options.dimensions ?? EMBEDDING_DIMENSIONS);
   const offTopicDistance = options.offTopicDistance ?? DEFAULT_OFF_TOPIC_DISTANCE;
 
   const embedded: { embedding: number[]; day: number | null }[] = [];
   for (const [index, review] of reviews.entries()) {
-    const embedding = embeddingFor(review, dimensions, options.embeddingCache);
+    const embedding = embeddingFor(review, backend, options.embeddingCache);
     if (embedding !== null) {
       embedded.push({ embedding, day: days[index] ?? null });
     }
@@ -80,7 +82,7 @@ export function listingIdentityDrift(
     return ABSENT;
   }
 
-  const product = embedText(productText, dimensions);
+  const product = backend.embed(productText);
   let offTopicCount = 0;
   let meanDistance: number | null = null;
   if (product !== null) {

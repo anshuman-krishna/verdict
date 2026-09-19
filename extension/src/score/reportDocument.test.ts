@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { FeatureVector } from "./featureVector";
 import type { Report, ReportProvenance } from "./report";
 import {
   provenanceLines,
@@ -20,6 +21,7 @@ const PROVENANCE: ReportProvenance = {
   modelTrainedAt: TRAINED,
   modelDigest: "7KQ2M4XZ",
   priorsKey: null,
+  embedding: "hashed-terms/256",
   signals: ["rating shape", "arrival timing"],
 };
 
@@ -27,6 +29,7 @@ function report(overrides: Partial<Report> = {}): Report {
   return {
     serial: "ABCD-1234",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.4,
     adjustedRating: 3.9,
     totalReviewCount: 820,
@@ -42,11 +45,22 @@ function report(overrides: Partial<Report> = {}): Report {
       },
     ],
     unavailableSignals: [],
+    absentSignals: [],
     generatedAt: CHECKED,
     provenance: PROVENANCE,
     ...overrides,
   };
 }
+
+const VECTOR = {
+  meetsMinimumData: true,
+  ratingDeconvolution: { injectedShare: 0.15, residualError: 0.01 },
+  temporalBurst: null,
+  verificationConcentration: null,
+  textNearDuplication: { duplicateReviewShare: 0.2, clusterCount: 3, largestClusterShare: 0.1 },
+  listingDrift: { offTopicShare: 0.05, meanDistance: 0.4, driftStatistic: 0.2 },
+  reviewerGraph: null,
+} as unknown as FeatureVector;
 
 describe("reportFilename", () => {
   it("names the file after the serial, so a dispute can be matched to a report", () => {
@@ -71,6 +85,21 @@ describe("reportDocument", () => {
     const json = JSON.parse(reportDocumentJson(report(), "a product", EXPORTED));
     expect(json.report.provenance).toEqual(PROVENANCE);
     expect(json.report.evidence).toHaveLength(1);
+  });
+
+  it("carries the numbers the model was handed, flat, under their model keys", () => {
+    const json = JSON.parse(reportDocumentJson(report(), "a product", EXPORTED, VECTOR));
+    expect(json.features["ratingDeconvolution.injectedShare"]).toBe(0.15);
+    expect(json.features["verificationConcentration.lift"]).toBeNull();
+  });
+
+  it("says so by omission when the check was saved without one", () => {
+    expect(reportDocument(report(), "a product", EXPORTED).features).toBeUndefined();
+  });
+
+  it("records the probability the band came from, since a band alone cannot be checked", () => {
+    const json = JSON.parse(reportDocumentJson(report(), "a product", EXPORTED, VECTOR));
+    expect(json.report.probability).toBe(0.5);
   });
 });
 

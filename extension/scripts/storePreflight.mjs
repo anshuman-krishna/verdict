@@ -1,3 +1,5 @@
+import { BUNDLE_BUDGET_BYTES } from "./releaseManifest.mjs";
+
 export const PERMISSION_REASONS = {
   alarms:
     "background.ts checks the graph contribution queue periodically, and an mv3 " +
@@ -184,12 +186,86 @@ export function modelProblems(artifact) {
   return problems;
 }
 
-export function preflightProblems(manifest, files) {
+// a platform whose rules are still being written reads nothing, so a bundle that matches one
+// is asking a reviewer for a host it cannot justify
+export function draftPlatformProblems(manifest, sites) {
+  const matched = new Set(
+    (manifest.content_scripts ?? []).flatMap((script) => script.matches ?? []),
+  );
+  const problems = [];
+  for (const site of sites) {
+    if (site.status !== "draft") {
+      continue;
+    }
+    const prefix = site.pathPrefix ?? "";
+    for (const locale of Object.values(site.locales)) {
+      const pattern = `https://${locale.host}${prefix}/*`;
+      if (matched.has(pattern)) {
+        problems.push(
+          `the manifest matches ${pattern} for ${site.id}, which the registry still calls a ` +
+            "draft. A build that reads a platform it has no rules for shows a reader nothing",
+        );
+      }
+    }
+  }
+  return problems;
+}
+
+// half of SPEC.md section 14's bundle budget, so a word vector table can never be the reason
+// an install is refused. the share itself is a shipping decision, not a build one
+export const LEXICON_BUDGET_BYTES = BUNDLE_BUDGET_BYTES / 2;
+
+const LEXICON_MAGIC = "VLEX";
+const LEXICON_HEADER_BYTES = 20;
+
+export function lexiconProblems(artifact, budgetBytes = LEXICON_BUDGET_BYTES) {
+  if (artifact === null || typeof artifact !== "object" || Array.isArray(artifact)) {
+    return ["lexicon.json is not an artifact, so the build cannot say what embeds its text"];
+  }
+  if (artifact.present !== true) {
+    return [];
+  }
+  if (typeof artifact.identity !== "string" || artifact.identity.length === 0) {
+    return ["the bundled word vector table names no identity, so no report can say what read it"];
+  }
+  if (typeof artifact.bytes !== "string") {
+    return ["the bundled word vector table carries no bytes"];
+  }
+
+  const problems = [];
+  const encoded = JSON.stringify(artifact).length;
+  if (encoded > budgetBytes) {
+    problems.push(
+      `the bundled word vector table is ${encoded} bytes of the ${budgetBytes} it may take, ` +
+        "and a bundle that large is one a reviewer opens slowly and a reader downloads twice",
+    );
+  }
+
+  const bytes = Buffer.from(artifact.bytes, "base64");
+  if (bytes.length < LEXICON_HEADER_BYTES || bytes.subarray(0, 4).toString() !== LEXICON_MAGIC) {
+    problems.push("the bundled word vector table is not a table, so text would score unembedded");
+    return problems;
+  }
+  const dimensions = bytes.readUInt16LE(6);
+  const tokenCount = bytes.readUInt32LE(8);
+  const tokenBytes = bytes.readUInt32LE(16);
+  const expected = LEXICON_HEADER_BYTES + tokenBytes + tokenCount * dimensions;
+  if (bytes.length !== expected) {
+    problems.push(
+      `the bundled word vector table says it is ${expected} bytes and is ${bytes.length}, ` +
+        "so it would be dropped at run time and every listing would read as undrifted",
+    );
+  }
+  return problems;
+}
+
+export function preflightProblems(manifest, files, sites = []) {
   return [
     ...permissionProblems(manifest),
     ...breadthProblems(manifest),
     ...remoteCodeProblems(files),
     ...pageStorageProblems(files),
     ...hostProblems(manifest, files),
+    ...draftPlatformProblems(manifest, sites),
   ];
 }

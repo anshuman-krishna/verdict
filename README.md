@@ -79,20 +79,35 @@ schema/      constants both languages read, so neither can drift from the other
 tests/       contract and parity fixtures both sides check themselves against
 ```
 
-### storefronts are data, not code
+### platforms are data, not code
 
-`schema/sites.json` holds each storefront's hosts, product url shape and review page template.
-the extension derives three things from that one file:
+`schema/sites.json` holds each platform's hosts, page url shape and review page template.
+the extension derives everything that knows a platform exists from that one file:
 
 ```
   schema/sites.json
-     ├──► url parsing          (is this a product page?)
+     ├──► url parsing          (is this a page verdict reads?)
      ├──► manifest matches     (where the content script runs)
-     └──► bridge allowlist     (which links the website may ask it to check)
+     ├──► bridge allowlist     (which links the website may ask it to check)
+     ├──► the words in the ui  (a business is not a product)
+     └──► which signals exist  (not every platform records a verified purchase)
 ```
 
-adding a storefront means adding an entry there plus a rules file in
+adding a platform means adding an entry there plus a rules file in
 `extension/src/extract/rules/`.
+
+a platform does not have to be a storefront, so an entry can also say:
+
+| field | what it changes |
+|---|---|
+| `subject` | `place` makes the panel say business where it would say product |
+| `status` | `draft` keeps it out of a store build while its rules are written |
+| `pathPrefix` | the content script matches that path, not the whole host |
+| `reviewSource` | `page-only` means no deeper read is offered, because there is none |
+| `absentSignals` | signals the platform never records, named as absent rather than unread |
+
+`google-maps` is registered as a draft. a development build reads it, a store build does not
+match it at all, and `just preflight` fails if one ever does.
 
 ### a missing signal still gets a report
 
@@ -105,7 +120,30 @@ feature it fits on. when a feature is missing, it fills the gap from that sketch
   what is unknown
 - the panel names the signal it could not read
 
+a signal the platform never records is a different sentence from one this page happened to
+hide, so the panel says "this platform does not record verification pattern" rather than
+"verification pattern could not be read on this page". the registry decides which is which.
+
 a model whose sketch does not cover its own coefficients fails `just preflight`.
+
+### a saved listing is compared against the day you saved it
+
+a listing you keep an eye on is stored under the same local hash everything else is keyed by,
+with the reading it had when you saved it. every later visit to that page is compared against
+that baseline, and the panel leads with what moved: the band, the adjusted rating, a run of
+new reviews, a growing arrival burst, or reviews that have wandered from what the listing
+says it sells.
+
+```
+  save it ──► baseline reading ─┐
+                                ├──► what moved, on the next visit
+  visit it again ──► reading ───┘
+```
+
+nothing is fetched on a schedule and nothing is polled. a watched listing is read when you
+open it, the way an unwatched one is, because a browser quietly fetching pages nobody asked
+for is traffic the reader did not choose. the watchlist is capped, lives in indexeddb beside
+the history, and is counted on the options page next to everything else this browser holds.
 
 ### the panel never waits on the network
 
@@ -161,6 +199,47 @@ a parity test runs both against shared vectors in `tests/parity/`.
                                └──► typescript scorer ─┴──► same numbers, or just check fails
 ```
 
+### what embeds the review text is swappable
+
+signal 5.4 asks whether the reviews on a listing are still about the thing being sold. that
+needs review text as a vector. by default it is hashed terms, which needs no table and ships
+in nothing: every unigram and bigram folded into 256 signed buckets.
+
+a build can bundle a word vector table instead. `just lexicon` quantises a plain text vector
+file to one byte per dimension and writes `extension/src/score/lexicon.json`, which the
+scorer reads at startup. nothing is fetched at run time, so the no network gate stays intact.
+
+```
+  vectors.txt ──► just lexicon --max-bytes N ──► extension/src/score/lexicon.json
+                                                          │
+                     hashed terms ◄── no table, or a table that does not parse
+```
+
+the artifact is absent in this repository, the way `model.json` is: the source vectors and
+the licence that comes with them are a shipping decision, not a build one. every report
+records what embedded it, so two builds are never confused for each other, and `just
+preflight` refuses a table that is corrupt or larger than its share of the bundle.
+
+### a report can be run again
+
+a seller who thinks a reading is wrong exports it as json. that file carries the report, the
+provenance, and the numbers the model was handed, so the reading is reproducible rather than
+arguable.
+
+```
+  export as json ──► just dispute report.json ──► does this number still follow
+                                                  from these features?
+```
+
+the tool prints every feature, its coefficient and what it contributed, largest mover first,
+and exits non zero when the reading does not reproduce. a dispute that is upheld is written
+into `site/src/data/corrections.json` and shows up on the status page, which is the public
+half of the promise on the sellers page.
+
+`tests/contract/reportDocument.json` is one real export. the extension asserts it writes
+exactly that, and the tool asserts it reads every field of it, so neither side can change
+the shape alone.
+
 ---
 
 ## commands
@@ -186,6 +265,8 @@ just featurise   build the training corpus from labelled fixtures
 just train       fit, calibrate, evaluate, and export the model
 just audit       score the exported model against a corpus it never saw
 just canary      check live extraction health against the canary targets
+just dispute     run a report a seller sent back, signal by signal
+just lexicon     quantise a word vector file into the table the extension bundles
 just preflight   check the built bundle against what gets extensions removed
 just release     build the zips and write the release manifest
 ```

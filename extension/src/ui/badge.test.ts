@@ -10,6 +10,7 @@ function okOutcome(overrides: Partial<Report> = {}): ReportOutcome {
     report: {
       serial: "7QK2-M4P9",
       band: "mixed",
+      probability: 0.5,
       claimedRating: 4.6,
       adjustedRating: 3.9,
       totalReviewCount: 120,
@@ -18,6 +19,7 @@ function okOutcome(overrides: Partial<Report> = {}): ReportOutcome {
       confidence: { low: 0.18, high: 0.33 },
       evidence: [],
       unavailableSignals: [],
+      absentSignals: [],
       generatedAt: 0,
       ...overrides,
     },

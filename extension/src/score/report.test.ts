@@ -36,6 +36,7 @@ describe("summarizeReport", () => {
     expect(
       summarizeReport({
         band: "mixed",
+        probability: 0.5,
         claimedRating: 4.6,
         adjustedRating: 3.9,
         estimatedInorganicShare: 0.14,
@@ -74,6 +75,7 @@ describe("parseStoredReport", () => {
   const stored = {
     serial: "7QK2-M4P9",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 120,
@@ -84,11 +86,18 @@ describe("parseStoredReport", () => {
       { signal: "arrival timing", strength: "moderate", detail: "two bursts.", value: 0.12 },
     ],
     unavailableSignals: ["reviewer network"],
+    absentSignals: ["verification pattern"],
     generatedAt: 1_700_000_000_000,
   };
 
   it("round trips a report the extension wrote", () => {
     expect(parseStoredReport(stored)).toEqual(stored);
+  });
+
+  // a check saved before this build recorded them named nothing as structurally absent
+  it("reads a report written before absent signals existed", () => {
+    const { absentSignals: _absent, ...older } = stored;
+    expect(parseStoredReport(older)?.absentSignals).toEqual([]);
   });
 
   it("refuses anything that is not an object", () => {
@@ -159,6 +168,7 @@ describe("provenance on a stored report", () => {
   const STORED = {
     serial: "7QK2-M4P9",
     band: "mixed",
+    probability: 0.5,
     claimedRating: 4.6,
     adjustedRating: 3.9,
     totalReviewCount: 120,
@@ -177,6 +187,7 @@ describe("provenance on a stored report", () => {
     modelTrainedAt: 1_700_000_000_000,
     modelDigest: "7KQ2M4XZ",
     priorsKey: "home-kitchen",
+    embedding: "hashed-terms/256",
     signals: ["rating shape"],
   };
 
@@ -190,6 +201,13 @@ describe("provenance on a stored report", () => {
     expect(priorsKey).toBe("home-kitchen");
     const stored = { ...STORED, provenance: older };
     expect(parseStoredReport(stored)?.provenance?.priorsKey).toBeNull();
+  });
+
+  it("reads a report written before it recorded what embedded the text", () => {
+    const { embedding, ...older } = PROVENANCE;
+    expect(embedding).toBe("hashed-terms/256");
+    const stored = { ...STORED, provenance: older };
+    expect(parseStoredReport(stored)?.provenance?.embedding).toBeNull();
   });
 
   it("is simply absent on a report written before it existed", () => {

@@ -6,6 +6,14 @@ import { addHistoryEntry, listChecksOfProduct } from "./history";
 import { isStorageRequest, type StorageRequest, type StorageResponse } from "./messages";
 import { putStoredReviews, readCacheRecord } from "./reviewsCache";
 import {
+  NOT_WATCHED,
+  readWatch,
+  recordWatchedCheck,
+  statusOf,
+  unwatchListing,
+  watchListing,
+} from "./watchlist";
+import {
   getGraphContributionEnabled,
   getHistoryEnabled,
   getReputationLookupEnabled,
@@ -84,6 +92,15 @@ async function run(request: StorageRequest, deps: ServeStorageDeps) {
       }
       await enqueueContributionEdges(request.edges);
       return null;
+    case "watch-add":
+      // watching is something the reader asked for, so it is not gated on history
+      await watchListing(request.listing);
+      return statusOf(await readWatch(request.listing.productKey));
+    case "watch-remove":
+      await unwatchListing(request.productKey);
+      return NOT_WATCHED;
+    case "watch-check":
+      return await recordWatchedCheck(request.productKey, request.reading);
     case "reviews-get":
       return await readCacheRecord(request.productId, request.site);
     case "reviews-put":

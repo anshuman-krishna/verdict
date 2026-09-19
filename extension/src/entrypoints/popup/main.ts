@@ -16,6 +16,7 @@ import {
   listHistory,
   type HistoryEntry,
 } from "../../storage/history";
+import { listWatchlist, unwatchListing } from "../../storage/watchlist";
 import { renderPopup } from "../../ui/historyList";
 import { renderReportDetail } from "../../ui/reportDetail";
 import { reportAsText, reportDocumentJson, reportFilename } from "../../score/reportDocument";
@@ -74,7 +75,7 @@ async function refresh(openId: number | null = null): Promise<void> {
         onExportJson: (report) =>
           download(
             reportFilename(report, "json"),
-            reportDocumentJson(report, open.title, Date.now()),
+            reportDocumentJson(report, open.title, Date.now(), open.featureVector),
             "application/json",
           ),
       },
@@ -85,6 +86,7 @@ async function refresh(openId: number | null = null): Promise<void> {
   }
 
   const policyChanges = pendingPolicyChanges(await getAcknowledgedPolicyVersion());
+  const watchlist = await listWatchlist();
   renderPopup(
     app,
     entries.map((entry) => ({ ...entry, rescored: rescore(entry, BUNDLED_MODEL) })),
@@ -103,9 +105,13 @@ async function refresh(openId: number | null = null): Promise<void> {
         await setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION);
         await refresh();
       },
+      onUnwatch: async (productKey) => {
+        await unwatchListing(productKey);
+        await refresh();
+      },
     },
     "",
-    { pendingPolicyChanges: policyChanges, translator },
+    { pendingPolicyChanges: policyChanges, translator, watchlist },
   );
 }
 

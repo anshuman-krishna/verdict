@@ -5,6 +5,7 @@ import { STORAGE_MESSAGE_TYPE, type StorageRequest } from "./messages";
 import { deleteAllHistory, listHistory } from "./history";
 import { countQueuedContributions, deleteContributions, listDueContributions } from "../graph/queue";
 import { isOurContentScript, serveStorageRequest } from "./serveStorage";
+import { deleteAllWatchlist, listWatchlist } from "./watchlist";
 import {
   setGraphContributionEnabled,
   setHistoryEnabled,
@@ -275,5 +276,100 @@ describe("the earlier checks of one listing", () => {
         DEPS,
       ),
     ).resolves.toEqual({ ok: false });
+  });
+});
+
+describe("the watchlist over the message port", () => {
+  const READING = {
+    at: Date.parse("2026-03-01T12:00:00Z"),
+    band: "mostly-clean" as const,
+    probability: 0.2,
+    claimedRating: 4.6,
+    adjustedRating: 4.4,
+    totalReviewCount: 400,
+    features: null,
+  };
+
+  const LISTING = {
+    productKey: "key-1",
+    site: "amazon",
+    title: "a stovetop kettle",
+    thumbnailUrl: null,
+    reading: READING,
+  };
+
+  beforeEach(async () => {
+    await deleteAllWatchlist();
+  });
+
+  it("saves a listing the reader asked to watch", async () => {
+    const response = await serveStorageRequest(
+      request("watch-add", { listing: LISTING }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    expect(response).toMatchObject({ ok: true, value: { watching: true } });
+    expect((await listWatchlist()).map((watched) => watched.title)).toEqual(["a stovetop kettle"]);
+  });
+
+  it("saves it whether or not history is on, because watching was asked for", async () => {
+    await setHistoryEnabled(false);
+
+    await serveStorageRequest(request("watch-add", { listing: LISTING }), STOREFRONT, DEPS);
+
+    await expect(listWatchlist()).resolves.toHaveLength(1);
+  });
+
+  it("lets go of one the reader is done with", async () => {
+    await serveStorageRequest(request("watch-add", { listing: LISTING }), STOREFRONT, DEPS);
+
+    const response = await serveStorageRequest(
+      request("watch-remove", { productKey: "key-1" }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    expect(response).toEqual({ ok: true, value: { watching: false, entry: null, changes: [] } });
+    await expect(listWatchlist()).resolves.toEqual([]);
+  });
+
+  it("answers a check of a watched listing with what has moved", async () => {
+    await serveStorageRequest(request("watch-add", { listing: LISTING }), STOREFRONT, DEPS);
+
+    const response = await serveStorageRequest(
+      request("watch-check", {
+        productKey: "key-1",
+        reading: { ...READING, band: "doubtful" },
+      }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      value: { watching: true, changes: [{ kind: "band", from: "mostly-clean", to: "doubtful" }] },
+    });
+  });
+
+  it("answers a check of a listing nobody watches with nothing", async () => {
+    const response = await serveStorageRequest(
+      request("watch-check", { productKey: "key-1", reading: READING }),
+      STOREFRONT,
+      DEPS,
+    );
+
+    expect(response).toEqual({ ok: true, value: { watching: false, entry: null, changes: [] } });
+  });
+
+  it("refuses a page that is not one of ours", async () => {
+    const response = await serveStorageRequest(
+      request("watch-add", { listing: LISTING }),
+      { tab: { id: 7 }, url: "https://example.invalid/dp/B0ABCDEF12" },
+      DEPS,
+    );
+
+    expect(response).toEqual({ ok: false });
+    await expect(listWatchlist()).resolves.toEqual([]);
   });
 });

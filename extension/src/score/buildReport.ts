@@ -1,6 +1,14 @@
 import type { Review } from "../extract/types";
 import { bandFromProbability } from "./band";
-import { applyModel, MEDIAN_FRACTION, selectModel, signalsFor, type ModelSet } from "./combine";
+import {
+  applyModel,
+  MEDIAN_FRACTION,
+  partitionImputed,
+  selectModel,
+  signalsFor,
+  type ModelSet,
+} from "./combine";
+import { bundledEmbeddingBackend, type EmbeddingBackend } from "./embeddingBackend";
 import { buildEvidence } from "./evidence";
 import { buildFeatureVector, type FeatureVector, type FeatureVectorInputs } from "./featureVector";
 import { bootstrap, interquartileRange } from "./bootstrap";
@@ -26,7 +34,10 @@ export interface BuildReportOptions {
   productText?: string;
   signatureCache?: WeakMap<Review, bigint[]>;
   embeddingCache?: WeakMap<Review, number[]>;
+  embeddingBackend?: EmbeddingBackend;
   flaggedReviewerIds?: ReadonlySet<string>;
+  // feature groups the platform never records, from the registry
+  absentSignals?: readonly string[];
   provenance?: ProvenanceInputs;
 }
 
@@ -40,8 +51,12 @@ export interface ProvenanceInputs {
 }
 
 // what the model actually weighs, so a dispute can be answered signal by signal
-function provenanceOf(inputs: ProvenanceInputs, model: { coefficients: Record<string, number> }): ReportProvenance {
-  return { ...inputs, signals: signalsFor(Object.keys(model.coefficients)) };
+function provenanceOf(
+  inputs: ProvenanceInputs,
+  model: { coefficients: Record<string, number> },
+  embedding: string,
+): ReportProvenance {
+  return { ...inputs, embedding, signals: signalsFor(Object.keys(model.coefficients)) };
 }
 
 function estimatedInorganicShare(vector: FeatureVector): number {
@@ -63,11 +78,13 @@ function adjustedRating(reviews: readonly Review[], claimedRating: number, exclu
 
 export function buildReport(options: BuildReportOptions): ReportOutcome {
   const now = options.now ?? Date.now;
+  const backend = options.embeddingBackend ?? bundledEmbeddingBackend();
   const priors: FeatureVectorInputs = {
     ...options.priors,
     textNearDuplicationSignatureCache: options.signatureCache ?? new WeakMap(),
     textNearDuplicationLinkCache: new WeakMap(),
     listingDriftEmbeddingCache: options.embeddingCache ?? new WeakMap(),
+    embeddingBackend: backend,
     productText: options.productText ?? "",
     flaggedReviewerIds: options.flaggedReviewerIds,
   };
@@ -111,10 +128,12 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     Math.round(inorganicShare * options.reviews.length),
   );
   const generatedAt = now();
+  const imputed = partitionImputed(result.imputed, options.absentSignals ?? []);
 
   const report: Report = {
     serial: generateSerial(options.seed, generatedAt),
     band: bandFromProbability(result.probability),
+    probability: result.probability,
     claimedRating: options.claimedRating,
     adjustedRating: adjustedRating(options.reviews, options.claimedRating, excludedReviewCount),
     totalReviewCount: options.reviews.length,
@@ -122,11 +141,12 @@ export function buildReport(options: BuildReportOptions): ReportOutcome {
     estimatedInorganicShare: inorganicShare,
     confidence,
     evidence: buildEvidence(vector),
-    unavailableSignals: signalsFor(result.imputed),
+    unavailableSignals: imputed.unavailable,
+    absentSignals: imputed.absent,
     generatedAt,
     ...(options.provenance === undefined
       ? {}
-      : { provenance: provenanceOf(options.provenance, model) }),
+      : { provenance: provenanceOf(options.provenance, model, backend.identity) }),
   };
 
   return { status: "ok", report, featureVector: vector };

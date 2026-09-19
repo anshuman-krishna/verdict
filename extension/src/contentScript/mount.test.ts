@@ -12,6 +12,7 @@ import {
   everyPageReadMessage,
   mountResult,
   nextReadDepth,
+  pageOnlyMessage,
   notEnoughReviewsMessage,
   removeMountedElements,
 } from "./mount";
@@ -73,6 +74,7 @@ describe("mountResult", () => {
         report: {
           serial: "AAAA-BBBB",
           band: "mixed",
+          probability: 0.5,
           claimedRating: 4.6,
           adjustedRating: 3.9,
           totalReviewCount: 100,
@@ -81,6 +83,7 @@ describe("mountResult", () => {
           confidence: { low: 0.05, high: 0.15 },
           evidence: [],
           unavailableSignals: [],
+          absentSignals: [],
           generatedAt: 0,
         },
         featureVector: {} as never,
@@ -101,6 +104,7 @@ describe("mountResult", () => {
         report: {
           serial: "AAAA-BBBB",
           band: "mixed",
+          probability: 0.5,
           claimedRating: 4.6,
           adjustedRating: 3.9,
           totalReviewCount: 100,
@@ -109,6 +113,7 @@ describe("mountResult", () => {
           confidence: { low: 0.05, high: 0.15 },
           evidence: [],
           unavailableSignals: [],
+          absentSignals: [],
           generatedAt: 0,
         },
         featureVector: {} as never,
@@ -309,6 +314,7 @@ function okResult(band: "mixed" | "clean" = "mixed"): AnalysisResult {
       report: {
         serial: "AAAA-BBBB",
         band,
+        probability: 0.5,
         claimedRating: 4.6,
         adjustedRating: 3.9,
         totalReviewCount: 100,
@@ -317,6 +323,7 @@ function okResult(band: "mixed" | "clean" = "mixed"): AnalysisResult {
         confidence: { low: 0.05, high: 0.15 },
         evidence: [],
         unavailableSignals: [],
+        absentSignals: [],
         generatedAt: 0,
       },
       featureVector: {} as never,
@@ -419,6 +426,7 @@ describe("createProgressiveMount, settling after a failure", () => {
 const REPORT = {
   serial: "AAAA-BBBB",
   band: "mixed" as const,
+  probability: 0.5,
   claimedRating: 4.6,
   adjustedRating: 3.9,
   totalReviewCount: 100,
@@ -427,6 +435,7 @@ const REPORT = {
   confidence: { low: 0.05, high: 0.15 },
   evidence: [],
   unavailableSignals: [],
+  absentSignals: [],
   generatedAt: 0,
 };
 
@@ -466,6 +475,18 @@ describe("what the not enough reviews notice says", () => {
   it("groups a large count the way the rest of the panel does", () => {
     expect(notEnoughReviewsMessage(8431)).toContain("8,431 reviews");
   });
+
+  it("says a page only platform has nothing further, rather than counting pages it never read", () => {
+    const result: AnalysisResult = {
+      page: { site: "google-maps", locale: "com", productId: "0xab12cd" },
+      product: PRODUCT,
+      reviews: [],
+      outcome: { status: "not-enough-data" },
+    };
+    const message = pageOnlyMessage(result);
+    expect(message).toContain("no further pages");
+    expect(message).not.toContain("0 pages");
+  });
 });
 
 describe("what a second check more deeply is allowed to do, SPEC.md section 9", () => {
@@ -488,6 +509,11 @@ describe("what a second check more deeply is allowed to do, SPEC.md section 9", 
     );
     expect(depth).toBe(reviewPageCap(PAGE.site));
     expect(depth).toBeGreaterThan(DEFAULT_MAX_PAGES);
+  });
+
+  it("offers nothing deeper on a platform with no review page url", () => {
+    const placePage = { site: "google-maps", locale: "com", productId: "0xab12cd" };
+    expect(nextReadDepth({ ...thin(), page: placePage }, { cache: directReviewsCache })).toBeNull();
   });
 
   it("offers nothing deeper once the listing ran out of pages", () => {
@@ -567,5 +593,118 @@ describe("removeMountedElements", () => {
     document.body.innerHTML = "<div>just the page</div>";
     expect(() => removeMountedElements(document)).not.toThrow();
     expect(document.body.children).toHaveLength(1);
+  });
+});
+
+describe("saving a listing from the panel", () => {
+  const VECTOR = {
+    meetsMinimumData: true,
+    ratingDeconvolution: { injectedShare: 0.1, residualError: 0.01 },
+    temporalBurst: { bursts: [], burstFraction: 0, burstCount: 0, largestBurstShare: 0 },
+    verificationConcentration: null,
+    textNearDuplication: { duplicateReviewShare: 0, clusterCount: 0, largestClusterShare: 0 },
+    listingDrift: {
+      offTopicShare: null,
+      offTopicCount: 0,
+      meanDistance: null,
+      changePoint: null,
+      driftStatistic: 0,
+      embeddedCount: 0,
+    },
+    reviewerGraph: null,
+  } as never;
+
+  function okResult(): AnalysisResult {
+    return {
+      page: PAGE,
+      product: PRODUCT,
+      productKey: "key-1",
+      reviews: [],
+      outcome: {
+        status: "ok",
+        report: {
+          serial: "AAAA-BBBB",
+          band: "mixed",
+          probability: 0.5,
+          claimedRating: 4.6,
+          adjustedRating: 3.9,
+          totalReviewCount: 100,
+          excludedReviewCount: 10,
+          estimatedInorganicShare: 0.1,
+          confidence: { low: 0.05, high: 0.15 },
+          evidence: [],
+          unavailableSignals: [],
+          absentSignals: [],
+          generatedAt: 0,
+        },
+        featureVector: VECTOR,
+      },
+    };
+  }
+
+  function pressWatch(): void {
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".watch-toggle")?.click();
+  }
+
+  it("asks the port to save it, with the local key and never the url", () => {
+    const watchToggle = vi.fn().mockResolvedValue({ watching: true, entry: null, changes: [] });
+
+    mountResult(document, okResult(), { ...deps(), watchToggle });
+    pressWatch();
+
+    expect(watchToggle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        watching: true,
+        productKey: "key-1",
+        site: "amazon",
+        title: "A very good widget",
+      }),
+    );
+    expect(JSON.stringify(watchToggle.mock.calls[0])).not.toContain("amazon.com/dp");
+  });
+
+  it("redraws the panel with what the port answered", async () => {
+    const watchToggle = vi.fn().mockResolvedValue({
+      watching: true,
+      entry: {
+        productKey: "key-1",
+        site: "amazon",
+        title: "A very good widget",
+        thumbnailUrl: null,
+        savedAt: Date.now(),
+        lastSeenAt: Date.now(),
+        checkCount: 1,
+        baseline: { at: 0, band: null, probability: null, claimedRating: null, adjustedRating: null, totalReviewCount: null, features: null },
+        latest: { at: 0, band: null, probability: null, claimedRating: null, adjustedRating: null, totalReviewCount: null, features: null },
+      },
+      changes: [],
+    });
+
+    mountResult(document, okResult(), { ...deps(), watchToggle });
+    pressWatch();
+    await vi.waitFor(() => {
+      const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+      const toggle = getPanelShadowRootForTesting(panel).querySelector(".watch-toggle");
+      expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    });
+  });
+
+  it("leaves the panel alone when the port refuses", async () => {
+    const watchToggle = vi.fn().mockRejectedValue(new Error("no room"));
+
+    mountResult(document, okResult(), { ...deps(), watchToggle });
+    pressWatch();
+    await Promise.resolve();
+
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
+    const toggle = getPanelShadowRootForTesting(panel).querySelector(".watch-toggle");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("does nothing at all on a build with no watchlist port", () => {
+    mountResult(document, okResult(), deps());
+
+    expect(() => pressWatch()).not.toThrow();
   });
 });

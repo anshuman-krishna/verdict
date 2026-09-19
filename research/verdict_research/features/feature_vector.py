@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from verdict_research.features.embedding_backend import EmbeddingBackend, hashed_terms
 from verdict_research.features.listing_drift import (
     ListingDriftResult,
     ReviewForDrift,
@@ -116,6 +117,7 @@ class FeatureVectorInputs:
     percentile: float = 0.99
     product_text: str = ""
     flagged_reviewer_ids: set[str] | None = None
+    embedding_backend: EmbeddingBackend | None = None
 
 
 @dataclass
@@ -166,6 +168,7 @@ def build_feature_vector(reviews: list[Review], inputs: FeatureVectorInputs) -> 
         [ReviewForDrift(text=review.text) for review in reviews],
         derive_day_indices(reviews),
         inputs.product_text,
+        backend=inputs.embedding_backend or hashed_terms(),
     )
 
     reviewer_graph_result = (

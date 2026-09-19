@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   SITES,
+  absentSignalsFor,
   allowedDomains,
+  canFetchReviewPages,
   contentScriptMatches,
+  isDraftSite,
   localeForHost,
   parseProductUrl,
   reviewPageCap,
   reviewPageUrl,
+  reviewSourceOf,
   siteForHost,
+  siteIdsMatchedBy,
+  subjectOf,
+  supportedContentScriptMatches,
+  withoutDraftPlatforms,
   type SiteDefinition,
 } from "./sites";
 
@@ -174,5 +182,117 @@ describe("siteForHost", () => {
       const hostname = new URL(match.replace("/*", "/")).hostname;
       expect(siteForHost(hostname), hostname).not.toBeNull();
     }
+  });
+});
+
+// the registry carries platforms that are not storefronts, so these are the properties the
+// rest of the extension reads off one rather than assuming
+const PLATFORMS: SiteDefinition[] = [
+  ...SITES,
+  {
+    id: "atlas",
+    subject: "place",
+    status: "draft",
+    pathPrefix: "/places",
+    locales: { us: { host: "maps.example.com", domain: "example.com" } },
+    productPath: "/places/venue/(0x[0-9a-f]+)(?:[/?]|$)",
+    productId: "^0x[0-9a-f]+$",
+    idCase: "preserve",
+    reviewSource: "page-only",
+    absentSignals: ["verificationConcentration"],
+  },
+];
+
+describe("a platform that is not a storefront", () => {
+  it("keeps an id whose case carries meaning", () => {
+    expect(parseProductUrl("https://maps.example.com/places/venue/0xab12cd", PLATFORMS)).toEqual({
+      site: "atlas",
+      locale: "us",
+      productId: "0xab12cd",
+    });
+  });
+
+  it("still upper cases an id for a platform that did not ask to keep it", () => {
+    expect(parseProductUrl("https://www.amazon.com/dp/b0bxyz1234", PLATFORMS)?.productId)
+      .toBe("B0BXYZ1234");
+  });
+
+  it("names what it reviews, and a storefront reviews products", () => {
+    expect(subjectOf("atlas", PLATFORMS)).toBe("place");
+    expect(subjectOf("amazon", PLATFORMS)).toBe("product");
+    expect(subjectOf("nowhere", PLATFORMS)).toBe("product");
+  });
+
+  it("names the signals it structurally does not record", () => {
+    expect(absentSignalsFor("atlas", PLATFORMS)).toEqual(["verificationConcentration"]);
+    expect(absentSignalsFor("amazon", PLATFORMS)).toEqual([]);
+  });
+
+  it("says no deeper read is available when it has no review page url", () => {
+    expect(reviewSourceOf("atlas", PLATFORMS)).toBe("page-only");
+    expect(canFetchReviewPages("atlas", PLATFORMS)).toBe(false);
+    expect(canFetchReviewPages("amazon", PLATFORMS)).toBe(true);
+  });
+
+  it("refuses to invent a review page url it was never given", () => {
+    const page = { site: "atlas", locale: "us", productId: "0xab12cd" };
+    expect(() => reviewPageUrl(page, 2, PLATFORMS)).toThrow(/no review page url/);
+  });
+
+  it("is matched under its own path, so the rest of the host is not read", () => {
+    expect(contentScriptMatches(PLATFORMS)).toContain("https://maps.example.com/places/*");
+    expect(contentScriptMatches(PLATFORMS)).not.toContain("https://maps.example.com/*");
+  });
+
+  it("does not claim a page on its host outside its own path", () => {
+    expect(parseProductUrl("https://maps.example.com/search?q=widgets", PLATFORMS)).toBeNull();
+  });
+});
+
+describe("a draft platform", () => {
+  it("is matched in a development build and not in a production one", () => {
+    expect(isDraftSite("atlas", PLATFORMS)).toBe(true);
+    expect(contentScriptMatches(PLATFORMS)).toContain("https://maps.example.com/places/*");
+    expect(supportedContentScriptMatches(PLATFORMS))
+      .not.toContain("https://maps.example.com/places/*");
+  });
+
+  it("is the registry's own state, not a guess", () => {
+    expect(isDraftSite("amazon")).toBe(false);
+    expect(isDraftSite("google-maps")).toBe(true);
+  });
+
+  it("is stripped from a production manifest", () => {
+    const manifest = {
+      content_scripts: [
+        { matches: [...contentScriptMatches()] },
+        { matches: ["https://verdict.tools/*"] },
+      ],
+    };
+    withoutDraftPlatforms(manifest);
+    expect(manifest.content_scripts[0]?.matches).toEqual([...supportedContentScriptMatches()]);
+    expect(manifest.content_scripts[1]?.matches).toEqual(["https://verdict.tools/*"]);
+  });
+
+  it("drops a content script left with nothing to match", () => {
+    const draftOnly = SITES.filter((site) => site.status === "draft");
+    const manifest = { content_scripts: [{ matches: draftOnly.flatMap((site) =>
+      Object.values(site.locales).map((entry) => `https://${entry.host}${site.pathPrefix ?? ""}/*`)
+    ) }] };
+    withoutDraftPlatforms(manifest);
+    expect(manifest.content_scripts).toEqual([]);
+  });
+});
+
+// the bridge answers for what the content script runs on, so a stripped platform is
+// unreachable from the website as well as from a tab
+describe("siteIdsMatchedBy", () => {
+  it("names the platforms a manifest actually runs on", () => {
+    expect(siteIdsMatchedBy(supportedContentScriptMatches())).toEqual(["amazon"]);
+    expect(siteIdsMatchedBy(contentScriptMatches())).toEqual(["amazon", "google-maps"]);
+  });
+
+  it("names nothing for a manifest that matches no platform", () => {
+    expect(siteIdsMatchedBy(["https://verdict.tools/*"])).toEqual([]);
   });
 });

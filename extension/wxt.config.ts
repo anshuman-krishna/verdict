@@ -1,5 +1,6 @@
 import { defineConfig } from "wxt";
 import { SITE_MATCHES, withoutDevelopmentOrigins } from "./src/bridge/origins";
+import { withoutDraftPlatforms } from "./src/extract/sites";
 
 export default defineConfig({
   srcDir: "src",
@@ -48,6 +49,7 @@ export default defineConfig({
     "build:manifestGenerated": (wxt, manifest) => {
       if (wxt.config.mode === "production") {
         withoutDevelopmentOrigins(manifest);
+        withoutDraftPlatforms(manifest);
       }
     },
   },

@@ -4,6 +4,7 @@ import {
   cacheLine,
   checksLine,
   contributionLine,
+  watchedLine,
   type Holdings,
 } from "../storage/holdings";
 import { bindPolicyNotice, policyNoticeMarkup } from "./policyNotice";
@@ -27,6 +28,7 @@ export interface OptionsCallbacks {
   onDeleteAll: () => void;
   onImport: (file: File) => void;
   onClearCache: () => void;
+  onClearWatchlist: () => void;
   onClearQueue: () => void;
   onAcknowledgePolicy: () => void;
 }
@@ -105,6 +107,15 @@ export function renderOptions(
         <div>
           <dt>Checks</dt>
           <dd>${checksLine(state.holdings)}</dd>
+        </div>
+        <div>
+          <dt>Watching</dt>
+          <dd>${watchedLine(state.holdings)}</dd>
+          <dd class="actions">
+            <button type="button" class="clear-watchlist" ${state.holdings.watched === 0 ? "disabled" : ""}>
+              Stop watching everything
+            </button>
+          </dd>
         </div>
         <div>
           <dt>Review pages</dt>
@@ -197,6 +208,10 @@ export function renderOptions(
   });
 
   container.querySelector(".clear-cache")?.addEventListener("click", callbacks.onClearCache);
+  container.querySelector(".clear-watchlist")?.addEventListener(
+    "click",
+    callbacks.onClearWatchlist,
+  );
   container.querySelector(".clear-queue")?.addEventListener("click", callbacks.onClearQueue);
 
   const fileInput = container.querySelector<HTMLInputElement>(".import-file");

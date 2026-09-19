@@ -55,13 +55,61 @@ describe("put", () => {
   });
 });
 
+function wipe(): Promise<void> {
+  return new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase("verdict");
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+function openAt(version: number, upgrade: (db: IDBDatabase) => void): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("verdict", version);
+    request.onupgradeneeded = () => upgrade(request.result);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 describe("openDatabase", () => {
-  it("creates all four stores on first open", async () => {
+  it("creates every store on first open", async () => {
     const db = await openDatabase();
-    expect(db.objectStoreNames.contains(STORE_NAMES.reviewsCache)).toBe(true);
-    expect(db.objectStoreNames.contains(STORE_NAMES.history)).toBe(true);
-    expect(db.objectStoreNames.contains(STORE_NAMES.prefs)).toBe(true);
-    expect(db.objectStoreNames.contains(STORE_NAMES.graphContributionQueue)).toBe(true);
+    for (const name of Object.values(STORE_NAMES)) {
+      expect(db.objectStoreNames.contains(name), name).toBe(true);
+    }
+    db.close();
+  });
+
+  it("adds the watchlist to a database that predates it, keeping the checks in it", async () => {
+    await wipe();
+    const older = await openAt(3, (db) => {
+      db.createObjectStore(STORE_NAMES.reviewsCache, { keyPath: "key" });
+      db.createObjectStore(STORE_NAMES.history, { keyPath: "id" }).createIndex(
+        "timestamp",
+        "timestamp",
+      );
+      db.createObjectStore(STORE_NAMES.prefs, { keyPath: "key" });
+      db.createObjectStore(STORE_NAMES.graphContributionQueue, { keyPath: "id" });
+    });
+    older
+      .transaction(STORE_NAMES.history, "readwrite")
+      .objectStore(STORE_NAMES.history)
+      .put({ id: 1, title: "checked before the watchlist existed", timestamp: 1 });
+    older.close();
+
+    const db = await openDatabase();
+
+    expect(db.objectStoreNames.contains(STORE_NAMES.watchlist)).toBe(true);
+    const kept = await new Promise<{ title: string }>((resolve) => {
+      const request = db
+        .transaction(STORE_NAMES.history, "readonly")
+        .objectStore(STORE_NAMES.history)
+        .get(1);
+      request.onsuccess = () => resolve(request.result as { title: string });
+    });
+    expect(kept.title).toBe("checked before the watchlist existed");
     db.close();
   });
 });

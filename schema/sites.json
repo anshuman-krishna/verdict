@@ -1,5 +1,5 @@
 {
-  "note": "one declarative source for every storefront verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a storefront is an entry here plus a rules file in extension/src/extract/rules and its line in extension/src/extract/bundledRules.ts, and bundledRules.test.ts checks all three against each other so a missing one fails the build rather than shipping a storefront nothing can read. the id becomes a path segment in the signed rules url, so it stays lowercase letters, digits and hyphens. imageHosts names the cdn hosts a thumbnail may point at beyond the storefront hosts themselves, and anything else is dropped rather than rendered. a locale is an entry here plus a number and date format in extension/src/extract/normalise.ts, and sites.test.ts checks every locale has one so a storefront is never read with nobody's number format.",
+  "note": "one declarative source for every platform verdict supports. read by extension/src/extract/sites.ts, which derives url parsing, review page urls, the content script matches, the bridge allowlist, and the thumbnail host allowlist from it. adding a platform is an entry here plus a rules file in extension/src/extract/rules and its line in extension/src/extract/bundledRules.ts, and bundledRules.test.ts checks all three against each other so a missing one fails the build rather than shipping a platform nothing can read. the id becomes a path segment in the signed rules url, so it stays lowercase letters, digits and hyphens. imageHosts names the cdn hosts a thumbnail may point at beyond the platform hosts themselves, and anything else is dropped rather than rendered. a locale is an entry here plus a number and date format in extension/src/extract/normalise.ts, and sites.test.ts checks every locale has one so a platform is never read with nobody's number format.",
   "sites": [
     {
       "id": "amazon",
@@ -69,7 +69,50 @@
       "productId": "^[A-Z0-9]{10}$",
       "reviewPath": "/product-reviews/{productId}/?pageNumber={pageNumber}",
       "maxReviewPages": 10,
-      "imageHosts": []
+      "imageHosts": [],
+      "subject": "product"
+    },
+    {
+      "id": "google-maps",
+      "subject": "place",
+      "status": "draft",
+      "pathPrefix": "/maps",
+      "locales": {
+        "com": {
+          "host": "www.google.com",
+          "domain": "google.com"
+        },
+        "co.uk": {
+          "host": "www.google.co.uk",
+          "domain": "google.co.uk"
+        },
+        "de": {
+          "host": "www.google.de",
+          "domain": "google.de"
+        },
+        "fr": {
+          "host": "www.google.fr",
+          "domain": "google.fr"
+        }
+      },
+      "productPath": "/maps/place/[^/]+/(?:@[^/]+/)?data=[^/]*?!1s(0x[0-9a-f]+:0x[0-9a-f]+)",
+      "productId": "^0x[0-9a-f]+:0x[0-9a-f]+$",
+      "idCase": "preserve",
+      "reviewSource": "page-only",
+      "absentSignals": [
+        "verificationConcentration"
+      ],
+      "imageHosts": [
+        "googleusercontent.com"
+      ]
     }
-  ]
+  ],
+  "fields": {
+    "subject": "what the platform reviews, product by default. the interface says business where a platform reviews one, since a review describing something else is a different sentence about a shop than about a kettle.",
+    "status": "supported by default. a draft platform is registered, tested and readable in a development build, and is stripped from the production manifest, so a platform whose rules are not finished yet never shows a reader a panel that cannot read the page.",
+    "pathPrefix": "the path the platform lives under, when it does not own its whole host. the content script is matched to that prefix rather than to the host, so a host serving other things is not read.",
+    "idCase": "upper by default, since an asin is written either way and means the same listing. preserve leaves an id whose case carries meaning alone.",
+    "reviewSource": "paged-url by default, meaning reviewPath builds a url per page. page-only says the platform has no such url, so verdict reads what the page carries and offers no deeper read.",
+    "absentSignals": "signals the platform structurally does not record, named so a report says the signal does not exist here rather than that it could not be read. SPEC.md section 6."
+  }
 }

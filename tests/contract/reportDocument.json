@@ -1,0 +1,62 @@
+{
+  "documentVersion": 2,
+  "exportedAt": 1772366400000,
+  "title": "Stovetop Kettle, 1.7 Litre",
+  "report": {
+    "serial": "7F2A-0091",
+    "band": "mixed",
+    "probability": 0.4212,
+    "claimedRating": 4.6,
+    "adjustedRating": 3.9,
+    "totalReviewCount": 8431,
+    "excludedReviewCount": 1208,
+    "estimatedInorganicShare": 0.1433,
+    "confidence": {
+      "low": 0.11,
+      "high": 0.24
+    },
+    "evidence": [
+      {
+        "signal": "rating shape",
+        "strength": "moderate",
+        "detail": "The rating distribution is consistent with about 14 percent of reviews being added outside the organic pattern.",
+        "value": 0.1433
+      }
+    ],
+    "unavailableSignals": [
+      "reviewer network"
+    ],
+    "absentSignals": [
+      "verification pattern"
+    ],
+    "generatedAt": 1771059600000,
+    "provenance": {
+      "extensionVersion": "0.1.0",
+      "rulesVersion": 41,
+      "rulesSite": "amazon",
+      "modelTrainedAt": 1767571200000,
+      "modelDigest": "7KQ2M4XZ",
+      "priorsKey": "home-kitchen",
+      "embedding": "hashed-terms/256",
+      "signals": [
+        "rating shape",
+        "arrival timing"
+      ]
+    }
+  },
+  "features": {
+    "ratingDeconvolution.injectedShare": 0.1433,
+    "ratingDeconvolution.residualError": 0.0121,
+    "temporalBurst.burstFraction": 0.31,
+    "temporalBurst.burstCount": 2,
+    "temporalBurst.largestBurstShare": 0.19,
+    "verificationConcentration.lift": null,
+    "textNearDuplication.duplicateReviewShare": 0.07,
+    "textNearDuplication.clusterCount": 3,
+    "textNearDuplication.largestClusterShare": 0.04,
+    "listingDrift.offTopicShare": 0.02,
+    "listingDrift.meanDistance": 0.61,
+    "listingDrift.driftStatistic": 0.33,
+    "reviewerGraph.flaggedReviewShare": null
+  }
+}

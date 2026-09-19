@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 import { DEFAULT_MAX_PAGES, NO_REVIEWS_CACHE, type FetchProgress } from "../extract/fetchReviewPages";
-import { reviewPageCap } from "../extract/sites";
+import { canFetchReviewPages, reviewPageCap } from "../extract/sites";
 import type { ProductSnapshot } from "../extract/types";
 import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
 import { signalLabel } from "../score/reportText";
@@ -8,7 +8,9 @@ import type { Report } from "../score/report";
 import { STATUS_URL } from "../siteLinks";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
 import type { NoticeState, VerdictNoticeElement } from "../ui/notice";
-import type { FullReportDetail, VerdictPanelElement } from "../ui/panel";
+import type { FullReportDetail, VerdictPanelElement, WatchDetail } from "../ui/panel";
+import type { WatchStatus } from "../storage/watchlist";
+import { readingFromReport } from "../watchlist/reading";
 import {
   checkMoreDeeply,
   type AnalysisResult,
@@ -31,6 +33,7 @@ function createPanel(
   document: Document,
   openTab: (url: string) => void,
   onClose: () => void,
+  onWatch: (watching: boolean) => void = () => {},
 ): VerdictPanelElement {
   const panel = document.createElement("verdict-panel") as VerdictPanelElement;
   pinToCorner(panel);
@@ -38,6 +41,10 @@ function createPanel(
   panel.addEventListener("verdict:close", () => {
     panel.remove();
     onClose();
+  });
+  panel.addEventListener("verdict:watch", (event) => {
+    const { watching } = (event as CustomEvent<WatchDetail>).detail ?? { watching: false };
+    onWatch(watching);
   });
   panel.addEventListener("verdict:full-report", (event) => {
     const { serial } = (event as CustomEvent<FullReportDetail>).detail ?? { serial: "" };
@@ -47,18 +54,56 @@ function createPanel(
   return panel;
 }
 
+// the panel asked to save or let go of this listing, so the port answers and the panel redraws
+function watchToggler(
+  result: AnalysisResult,
+  report: Report,
+  deps: OrchestratorDeps,
+  redraw: (status: WatchStatus) => void,
+): (watching: boolean) => void {
+  return (watching) => {
+    const toggle = deps.watchToggle;
+    if (toggle === undefined || result.product === null || result.productKey === undefined) {
+      return;
+    }
+    const featureVector = result.outcome.status === "ok" ? result.outcome.featureVector : undefined;
+    void toggle({
+      watching,
+      productKey: result.productKey,
+      site: result.page.site,
+      title: result.product.title,
+      thumbnailUrl: result.product.thumbnailUrl,
+      reading: readingFromReport(report, featureVector),
+    }).then(redraw, () => {});
+  };
+}
+
 function mountPanel(
   document: Document,
   result: AnalysisResult,
   report: Report,
   openTab: (url: string) => void,
   translator: Translator,
+  deps?: OrchestratorDeps,
 ): void {
-  const panel = createPanel(document, openTab, () => {});
-  panel.render(report, rosetteInputFromReport(report), Date.now(), {
-    previousChecks: result.previousChecks,
-    translator,
-  });
+  let status = result.watch;
+  const draw = (): void => {
+    panel.render(report, rosetteInputFromReport(report), Date.now(), {
+      previousChecks: result.previousChecks,
+      watch: status,
+      translator,
+    });
+  };
+  const panel = createPanel(
+    document,
+    openTab,
+    () => {},
+    deps === undefined ? undefined : watchToggler(result, report, deps, (updated) => {
+      status = updated;
+      draw();
+    }),
+  );
+  draw();
 }
 
 function createNotice(document: Document): VerdictNoticeElement {
@@ -99,6 +144,16 @@ export function notEnoughReviewsMessage(
   return t.text("notice.notEnoughReviews", { reviews: t.count("count.reviews", reviewCount) });
 }
 
+// a platform whose reviews only ever arrive with the page has no deeper read to offer
+export function pageOnlyMessage(
+  result: AnalysisResult,
+  t: Translator = ENGLISH_TRANSLATOR,
+): string {
+  return t.text("notice.pageOnly", {
+    reviews: t.count("count.reviews", result.reviews.length),
+  });
+}
+
 // SPEC.md section 13 would rather say there is nothing more than offer a button that reads nothing
 export function everyPageReadMessage(
   result: AnalysisResult,
@@ -120,6 +175,9 @@ export function nextReadDepth(
   result: AnalysisResult,
   checkOptions: CheckMoreDeeplyOptions,
 ): number | null {
+  if (!canFetchReviewPages(result.page.site)) {
+    return null;
+  }
   const cap = Math.max(reviewPageCap(result.page.site), DEFAULT_MAX_PAGES);
   const read = result.fetch;
   if (read === undefined) {
@@ -151,7 +209,10 @@ function mountNotEnoughDataNotice(
 ): void {
   const maxPages = nextReadDepth(result, checkOptions);
   if (maxPages === null) {
-    mountPlainNotice(document, { message: everyPageReadMessage(result, t) }, t);
+    const message = canFetchReviewPages(result.page.site)
+      ? everyPageReadMessage(result, t)
+      : pageOnlyMessage(result, t);
+    mountPlainNotice(document, { message }, t);
     return;
   }
 
@@ -218,7 +279,7 @@ export function mountResult(
 ): void {
   const outcome = result.outcome;
   if (outcome.status === "ok") {
-    mountPanel(document, result, outcome.report, openTab, t);
+    mountPanel(document, result, outcome.report, openTab, t, deps);
     return;
   }
   if (outcome.status === "unreadable") {
@@ -259,6 +320,7 @@ export function createProgressiveMount(
   t: Translator = ENGLISH_TRANSLATOR,
 ): ProgressiveMount {
   let panel: VerdictPanelElement | null = null;
+  let watching: WatchStatus | undefined;
   let waitingNotice: VerdictNoticeElement | null = null;
   let dismissed = false;
   let shown: AnalysisResult | null = null;
@@ -299,15 +361,29 @@ export function createProgressiveMount(
       shown = result;
       if (result.outcome.status === "ok") {
         clearWaiting();
-        panel ??= createPanel(document, openTab, () => {
-          dismissed = true;
-          panel = null;
-        });
-        panel.render(result.outcome.report, rosetteInputFromReport(result.outcome.report), Date.now(), {
-          pending,
-          previousChecks: result.previousChecks,
-          translator: t,
-        });
+        const report = result.outcome.report;
+        const draw = (): void => {
+          panel?.render(report, rosetteInputFromReport(report), Date.now(), {
+            pending,
+            previousChecks: result.previousChecks,
+            watch: watching,
+            translator: t,
+          });
+        };
+        watching = result.watch ?? watching;
+        panel ??= createPanel(
+          document,
+          openTab,
+          () => {
+            dismissed = true;
+            panel = null;
+          },
+          watchToggler(result, report, deps, (updated) => {
+            watching = updated;
+            draw();
+          }),
+        );
+        draw();
         return;
       }
       if (pending.length > 0) {

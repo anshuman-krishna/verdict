@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verdict_research.corpus.dataset import LabeledExample
+from verdict_research.features.embedding_backend import bundled_embedding_backend
 from verdict_research.features.feature_vector import build_feature_vector
 from verdict_research.features.priors import ResolvedPriors, priors_digest
 from verdict_research.model.combine import flatten_feature_vector
@@ -108,6 +109,8 @@ def featurise_extraction(
         return Skipped(labeled.fixture, "extraction found no product")
     resolved = priors(extraction.product.category, product_text(extraction.product))
     inputs = resolved.inputs
+    # the table the extension bundles, or a row means nothing where it is scored
+    inputs.embedding_backend = bundled_embedding_backend()
     vector = build_feature_vector(extraction.reviews, inputs)
     if not vector.meets_minimum_data:
         return Skipped(labeled.fixture, "below the minimum data thresholds")
@@ -119,6 +122,7 @@ def featurise_extraction(
         "rulesVersion": str(extraction.rules_version),
         "priors": priors_digest(inputs),
         "priorsKey": resolved.key or "",
+        "embedding": inputs.embedding_backend.identity,
     }
     if labeled.source is not None:
         metadata["source"] = labeled.source

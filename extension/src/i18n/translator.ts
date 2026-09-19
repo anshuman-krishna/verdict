@@ -1,5 +1,6 @@
 import {
   ENGLISH,
+  isMessageId,
   isPlural,
   type Catalogue,
   type Message,
@@ -117,6 +118,25 @@ export function newTranslator(
       const last = items[items.length - 1] as string;
       return `${items.slice(0, -1).join(", ")} ${render("list.and", null, {})} ${last}`;
     },
+  };
+}
+
+// what a platform reviews changes the words, not the numbers. a line with a variant for this
+// subject is read from it, and every other line is the one line there is
+export const DEFAULT_SUBJECT = "product";
+
+export function forSubject(base: Translator, subject: string): Translator {
+  if (subject === DEFAULT_SUBJECT) {
+    return base;
+  }
+  const variant = (id: MessageId): MessageId => {
+    const candidate = `${id}.${subject}`;
+    return isMessageId(candidate) ? candidate : id;
+  };
+  return {
+    ...base,
+    text: (id, params) => base.text(variant(id), params),
+    count: (id, value, params) => base.count(variant(id), value, params),
   };
 }
 

@@ -68,6 +68,20 @@ export function signalsFor(featureKeys: readonly string[]): string[] {
   return names;
 }
 
+// a signal the platform never records reads differently from one this page happened to hide,
+// so the two are counted apart before either is named
+export function partitionImputed(
+  imputed: readonly string[],
+  absentSignals: readonly string[],
+): { absent: string[]; unavailable: string[] } {
+  const structural = new Set(absentSignals);
+  const isAbsent = (key: string): boolean => structural.has(key.split(".")[0] as string);
+  return {
+    absent: signalsFor(imputed.filter(isAbsent)),
+    unavailable: signalsFor(imputed.filter((key) => !isAbsent(key))),
+  };
+}
+
 export interface ModelSet {
   local: CombinerModel;
   reviewerGraph: CombinerModel | null;

@@ -4,6 +4,7 @@ import {
   applyModel,
   flattenFeatureVector,
   localModelSet,
+  partitionImputed,
   quantileValue,
   selectModel,
   signalsFor,
@@ -321,5 +322,32 @@ describe("imputing an unavailable signal", () => {
   it("reports nothing imputed when every feature is present", () => {
     const result = applyModel(featureVector(), imputingModel(), { impute: 0.5 });
     expect(result.status === "ok" && result.imputed).toEqual([]);
+  });
+});
+
+describe("partitionImputed", () => {
+  it("names a signal the platform never records apart from one this page hid", () => {
+    expect(
+      partitionImputed(
+        ["verificationConcentration.lift", "temporalBurst.burstFraction"],
+        ["verificationConcentration"],
+      ),
+    ).toEqual({ absent: ["verification pattern"], unavailable: ["arrival timing"] });
+  });
+
+  it("counts every feature of one signal once", () => {
+    expect(
+      partitionImputed(
+        ["temporalBurst.burstFraction", "temporalBurst.burstCount"],
+        ["temporalBurst"],
+      ).absent,
+    ).toEqual(["arrival timing"]);
+  });
+
+  it("calls everything unavailable when the platform declared nothing absent", () => {
+    expect(partitionImputed(["listingDrift.offTopicShare"], [])).toEqual({
+      absent: [],
+      unavailable: ["different product"],
+    });
   });
 });

@@ -1,5 +1,6 @@
 import { safeThumbnailUrl } from "../extract/sites";
-import { ENGLISH_TRANSLATOR, type Translator } from "../i18n/translator";
+import { ENGLISH_TRANSLATOR, forSubject, type Translator } from "../i18n/translator";
+import { subjectOf } from "../extract/sites";
 import type { Rescored } from "../score/rescore";
 import { BAND_COLORS, parseStoredReport, type Report } from "../score/report";
 import { bandLabel, evidenceDetail, signalLabel, strengthLabel } from "../score/reportText";
@@ -29,11 +30,16 @@ export function unavailableLine(
   report: Report,
   t: Translator = ENGLISH_TRANSLATOR,
 ): string | null {
-  if (report.unavailableSignals.length === 0) {
-    return null;
+  const named = (signals: readonly string[]): string =>
+    t.join(signals.map((signal) => signalLabel(signal, t)));
+  const lines: string[] = [];
+  if (report.absentSignals.length > 0) {
+    lines.push(t.text("detail.absent", { signals: named(report.absentSignals) }));
   }
-  const named = report.unavailableSignals.map((signal) => signalLabel(signal, t));
-  return t.text("detail.unavailable", { signals: t.join(named) });
+  if (report.unavailableSignals.length > 0) {
+    lines.push(t.text("detail.unavailable", { signals: named(report.unavailableSignals) }));
+  }
+  return lines.length === 0 ? null : lines.join(" ");
 }
 
 // the stored band came from the model that was current when the check ran
@@ -72,9 +78,11 @@ export function renderReportDetail(
   rescored: Rescored | null,
   callbacks: ReportDetailCallbacks,
   earlierChecks: readonly PreviousCheck[] = [],
-  t: Translator = ENGLISH_TRANSLATOR,
+  base: Translator = ENGLISH_TRANSLATOR,
 ): void {
   const report = parseStoredReport(entry.report);
+  // a stored report names the platform that read it, and a business is not a product
+  const t = forSubject(base, subjectOf(report?.provenance?.rulesSite ?? ""));
   const thumbnail = safeThumbnailUrl(entry.thumbnailUrl);
 
   container.innerHTML = `

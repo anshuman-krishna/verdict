@@ -6,8 +6,9 @@ import { browserUrlWatcher } from "../contentScript/navigation";
 import { createSession } from "../contentScript/session";
 import type { AnalysisResultMessage } from "../contentScript/internalMessages";
 import { startingRules } from "../extract/bundledRules";
-import { contentScriptMatches, localeForHost, siteForHost } from "../extract/sites";
+import { contentScriptMatches, localeForHost, siteForHost, subjectOf } from "../extract/sites";
 import { translatorForBrowser } from "../i18n/locale";
+import { forSubject } from "../i18n/translator";
 import { DEFAULT_REPUTATION_ENDPOINT } from "../reputation/endpoint";
 import { REPUTATION_SALT } from "../reputation/salt";
 import { BUNDLED_MODEL, BUNDLED_MODEL_IDENTITY } from "../score/model";
@@ -17,8 +18,11 @@ import {
   readChecksOfProduct,
   readRules,
   readSettings,
+  recordWatchedCheckVia,
   reviewsCacheVia,
   saveHistoryEntry,
+  unwatchListingVia,
+  watchListingVia,
 } from "../storage/viaBackground";
 import "../ui/panel";
 import "../ui/notice";
@@ -36,8 +40,11 @@ export default defineContentScript({
     }
     // everything stored lives in the extension, never in the storefront's own origin
     const rules = await readRules(site.id, startingRules(site.id));
-    // the reader's own language where we have one, and the storefront's as the last guess
-    const translator = translatorForBrowser(localeForHost(location.hostname));
+    // the reader's own language where we have one, and the platform's as the last guess
+    const translator = forSubject(
+      translatorForBrowser(localeForHost(location.hostname)),
+      subjectOf(site.id),
+    );
 
     const deps: OrchestratorDeps = {
       rules,
@@ -51,6 +58,9 @@ export default defineContentScript({
       isHistoryEnabled: async () => (await readSettings()).historyEnabled,
       saveHistory: (entry) => saveHistoryEntry(entry),
       previousChecks: (productKey) => readChecksOfProduct(productKey),
+      recordWatchedCheck: (productKey, reading) => recordWatchedCheckVia(productKey, reading),
+      watchToggle: ({ watching, ...listing }) =>
+        watching ? watchListingVia(listing) : unwatchListingVia(listing.productKey),
       reputation: {
         isEnabled: async () => (await readSettings()).reputationLookupEnabled,
         endpoint: DEFAULT_REPUTATION_ENDPOINT,

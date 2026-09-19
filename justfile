@@ -69,12 +69,45 @@ train corpus *args:
     # --directory keeps relative paths relative
     uv --directory research run python -m verdict_research.model.cli "{{corpus}}" {{args}}
 
+#   just dispute verdict-report-7f2a-0091.json
+# a report arrives from wherever the seller sent it, so paths stay yours
+# run a report a seller sent back, signal by signal
+dispute report *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --project research python -m verdict_research.dispute.cli "{{report}}" {{args}}
+
 # reads model.json, never writes it
 # score the exported model.json against a corpus
 audit corpus *args:
     #!/usr/bin/env bash
     set -euo pipefail
     uv --directory research run python -m verdict_research.model.audit_cli "{{corpus}}" {{args}}
+
+#   just lexicon vectors/glove.6B.100d.txt --max-tokens 40000 --write
+# the source vectors and the licence that comes with them are yours
+# quantise a word vector file into the table the extension bundles
+lexicon vectors *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --project research python -m verdict_research.lexicon.cli "{{vectors}}" {{args}}
+
+# say what table this build bundles, if any
+lexicon-show *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --project research python -c \
+      "import sys; from verdict_research.lexicon.cli import show; raise SystemExit(show(sys.argv[1:]))" \
+      {{args}}
+
+# *args would be split into words
+# restore lexicon.json to its stated absent form
+clear-lexicon reason="no word vector table has been built, so the hashed terms are what scores text":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run --project research python -c \
+      "import sys; from verdict_research.lexicon.cli import clear; raise SystemExit(clear(sys.argv[1:]))" \
+      --reason "{{reason}}"
 
 # *args would be split into words
 # restore model.json to its stated absent form

@@ -8,13 +8,20 @@ import {
 } from "../extract/fetchReviewPages";
 import { extractProductSnapshot, extractReviews } from "../extract/reviewExtraction";
 import { mergeReviews } from "../extract/reviewIdentity";
-import { parseProductUrl, reviewPageUrl, type ParsedProductPage } from "../extract/sites";
+import {
+  absentSignalsFor,
+  parseProductUrl,
+  reviewPageUrl,
+  type ParsedProductPage,
+} from "../extract/sites";
 import { newPageIndex } from "../extract/structuredData";
 import type { RulesDocument } from "../extract/rules";
 import type { ProductSnapshot, Review } from "../extract/types";
 import { buildContributionEdge, type ContributionEdge } from "../graph/edge";
 import { cacheKey } from "../storage/reviewsCodec";
 import type { PreviousCheck } from "../storage/history";
+import { NOT_WATCHED, type WatchStatus } from "../storage/watchlist";
+import { readingFromReport, type WatchReading } from "../watchlist/reading";
 import { lookupFlaggedReviewers } from "../reputation/client";
 import { buildReport, type ReportOutcome } from "../score/buildReport";
 import type { FeatureVector } from "../score/featureVector";
@@ -47,6 +54,10 @@ export interface OrchestratorDeps {
     },
   ) => Promise<unknown>;
   previousChecks?: (productKey: string) => Promise<PreviousCheck[]>;
+  // a listing nobody saved records nothing, which the port answers for itself
+  recordWatchedCheck?: (productKey: string, reading: WatchReading) => Promise<WatchStatus>;
+  // used by the panel, which is where a listing is saved and let go of
+  watchToggle?: (request: WatchToggleRequest) => Promise<WatchStatus>;
   now?: () => number;
   random?: () => number;
   bootstrapResamples?: number;
@@ -54,6 +65,16 @@ export interface OrchestratorDeps {
   graphContribution?: GraphContributionDeps;
   // what this build is, so a report can say what produced it
   provenance?: BuildProvenance;
+}
+
+export interface WatchToggleRequest {
+  // the state the reader asked for
+  watching: boolean;
+  productKey: string;
+  site: string;
+  title: string;
+  thumbnailUrl: string | null;
+  reading: WatchReading;
 }
 
 export interface BuildProvenance {
@@ -77,11 +98,14 @@ export interface FetchSummary {
 
 export interface AnalysisResult {
   page: ParsedProductPage;
+  // the local hash of this listing, which is what the watchlist is keyed by
+  productKey?: string;
   // null when the url named a product and the page itself could not be read
   product: ProductSnapshot | null;
   reviews: Review[];
   outcome: ReportOutcome;
   previousChecks?: PreviousCheck[];
+  watch?: WatchStatus;
   // absent until a read went past the page the user is on
   fetch?: FetchSummary;
 }
@@ -130,7 +154,8 @@ export async function analyzePage(
   const productKey = await cacheKey(page.productId, page.site);
   const previousChecks = await earlierChecks(productKey, deps);
   const outcome = await scoreAndMaybeSave(page, product, reviews, deps, options, productKey);
-  const result = { page, product, reviews, outcome, previousChecks };
+  const watch = await watchedStatus(productKey, outcome, deps);
+  const result = { page, product, reviews, outcome, previousChecks, watch, productKey };
   options.onStage?.({ result, pending: [] });
   return result;
 }
@@ -147,6 +172,25 @@ async function earlierChecks(
   } catch {
     // a listing nobody can look up still gets a report
     return [];
+  }
+}
+
+async function watchedStatus(
+  productKey: string,
+  outcome: ReportOutcome,
+  deps: OrchestratorDeps,
+): Promise<WatchStatus> {
+  if (deps.recordWatchedCheck === undefined || outcome.status !== "ok") {
+    return NOT_WATCHED;
+  }
+  try {
+    return await deps.recordWatchedCheck(
+      productKey,
+      readingFromReport(outcome.report, outcome.featureVector),
+    );
+  } catch {
+    // a watchlist that cannot be written still leaves a report on the screen
+    return NOT_WATCHED;
   }
 }
 
@@ -195,6 +239,8 @@ async function scoreAndMaybeSave(
       signatureCache: signatures,
       embeddingCache: embeddings,
       flaggedReviewerIds,
+      // SPEC.md section 6: a platform that never recorded a signal did not hide it
+      absentSignals: absentSignalsFor(page.site),
       provenance: deps.provenance === undefined ? undefined : {
         ...deps.provenance,
         rulesVersion: deps.rules.version,
@@ -327,7 +373,9 @@ export async function checkMoreDeeply(
     product,
     reviews,
     outcome,
+    productKey,
     previousChecks: await earlierChecks(productKey, deps),
+    watch: await watchedStatus(productKey, outcome, deps),
     fetch: {
       pagesFetched: fetched.pagesFetched,
       maxPages: options.maxPages ?? DEFAULT_MAX_PAGES,

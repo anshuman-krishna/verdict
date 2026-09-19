@@ -3,13 +3,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { enqueueContributionEdges, clearContributionQueue } from "../graph/queue";
 import type { Review } from "../extract/types";
 import { addHistoryEntry, deleteAllHistory } from "./history";
-import { cacheLine, checksLine, contributionLine, readHoldings, type Holdings } from "./holdings";
+import {
+  cacheLine,
+  checksLine,
+  contributionLine,
+  readHoldings,
+  watchedLine,
+  type Holdings,
+} from "./holdings";
+import { deleteAllWatchlist, watchListing } from "./watchlist";
 import { clearReviewsCache, setCachedReviews } from "./reviewsCache";
 
 const NOW = Date.parse("2026-03-01T12:00:00Z");
 
 const NOTHING: Holdings = {
   checks: 0,
+  watched: 0,
   cachedProducts: 0,
   oldestCachedAt: null,
   queuedContributions: 0,
@@ -37,6 +46,7 @@ beforeEach(async () => {
   await deleteAllHistory();
   await clearReviewsCache();
   await clearContributionQueue();
+  await deleteAllWatchlist();
 });
 
 describe("readHoldings", () => {
@@ -130,5 +140,36 @@ describe("the lines the options page reads", () => {
         NOW,
       ),
     ).toContain("on the next send");
+  });
+});
+
+describe("watchedLine", () => {
+  it("says what watching is for while nothing is watched", () => {
+    expect(watchedLine(NOTHING)).toContain("Nothing watched.");
+  });
+
+  it("counts what is watched", () => {
+    expect(watchedLine({ ...NOTHING, watched: 1 })).toBe("1 listing watched.");
+    expect(watchedLine({ ...NOTHING, watched: 4 })).toBe("4 listings watched.");
+  });
+
+  it("counts what the browser is actually holding", async () => {
+    await watchListing({
+      productKey: "key-1",
+      site: "amazon",
+      title: "a stovetop kettle",
+      thumbnailUrl: null,
+      reading: {
+        at: NOW,
+        band: "clean",
+        probability: 0.1,
+        claimedRating: 4.6,
+        adjustedRating: 4.5,
+        totalReviewCount: 40,
+        features: null,
+      },
+    });
+
+    expect((await readHoldings()).watched).toBe(1);
   });
 });

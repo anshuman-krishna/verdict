@@ -1,11 +1,14 @@
+import base64
 import json
 from pathlib import Path
 
+from verdict_research.features.embedding_backend import from_lexicon, hashed_terms
 from verdict_research.features.feature_vector import (
     FeatureVector,
     FeatureVectorInputs,
     build_feature_vector,
 )
+from verdict_research.features.lexicon import parse_lexicon
 from verdict_research.features.listing_drift import (
     ListingDriftResult,
     ReviewForDrift,
@@ -173,6 +176,13 @@ def run(vector: dict):
             "aWithB": cosine_similarity(a, b),
         }
 
+    if signal == "lexiconEmbedding":
+        table = parse_lexicon(base64.b64decode(data["lexicon"]))
+        if table is None:
+            return {"dimensions": None, "vector": None}
+        backend = from_lexicon(table, "parity")
+        return {"dimensions": backend.dimensions, "vector": backend.embed(data["text"])}
+
     if signal == "listingDrift":
         result = listing_identity_drift(
             [ReviewForDrift(text=r["text"]) for r in data["reviews"]],
@@ -211,6 +221,8 @@ def run(vector: dict):
                 organic_prior=data["organicPrior"],
                 injection_kernel=data["injectionKernel"],
                 product_text=data.get("productText", ""),
+                # these vectors pin the arithmetic, not whatever table a build happens to bundle
+                embedding_backend=hashed_terms(),
                 flagged_reviewer_ids=(
                     None
                     if data.get("flaggedReviewerIds") is None

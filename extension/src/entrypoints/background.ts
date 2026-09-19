@@ -11,6 +11,7 @@ import {
   trustedRulesForEverySite,
   trustedRulesForSite,
 } from "../extract/rulesLoader";
+import { siteIdsMatchedBy } from "../extract/sites";
 import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
@@ -64,12 +65,19 @@ function analyzeUrl(url: string) {
   });
 }
 
+// a platform this build does not run a content script on cannot be read, so the bridge and
+// the rules refresh both follow the manifest rather than the registry
+function readablePlatformIds(): string[] {
+  const declared = browser.runtime.getManifest().content_scripts ?? [];
+  return siteIdsMatchedBy(declared.flatMap((script) => script.matches ?? []));
+}
+
 const trustOrigin = (origin: string | undefined) =>
   isTrustedSiteOrigin(origin, import.meta.env.MODE !== "production");
 
 function answerBridge(message: unknown, origin: string | undefined) {
   // what this build can read right now, not only what it shipped with
-  return trustedRulesForEverySite().catch(() => BUNDLED_RULES).then((rules) =>
+  return trustedRulesForEverySite(readablePlatformIds()).catch(() => BUNDLED_RULES).then((rules) =>
     handleBridgeMessage(message, {
       bundledRules: rules,
       analyzeUrl,
@@ -127,14 +135,14 @@ export default defineBackground(() => {
       return;
     }
     if (alarm.name === RULES_ALARM_NAME) {
-      loadRulesForEverySite().catch(() => {});
+      loadRulesForEverySite(readablePlatformIds()).catch(() => {});
     }
   });
 
   // a browser that was closed for a week sweeps on the way back up
   pruneExpiredReviewsCache().catch(() => {});
   // a service worker wakes far more often than rules change, so the ttl decides
-  loadRulesForEverySite().catch(() => {});
+  loadRulesForEverySite(readablePlatformIds()).catch(() => {});
 
   // one glance at the toolbar, no need to open the popup
   addResultListener((tabId, outcome) => {

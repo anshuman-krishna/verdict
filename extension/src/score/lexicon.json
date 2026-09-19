@@ -1,0 +1,5 @@
+{
+  "artifactVersion": 1,
+  "present": false,
+  "reason": "no word vector table has been built, so the hashed terms are what scores text"
+}

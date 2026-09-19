@@ -5,14 +5,31 @@ export interface SiteLocale {
   domain: string;
 }
 
+// what a platform reviews. the interface says business where a platform reviews one, since
+// "these reviews describe a different product" is the wrong sentence about a restaurant
+export type SiteSubject = "product" | "place";
+
+// a draft platform is registered and tested, and is stripped from a production manifest, so
+// rules that are not finished yet never reach a reader
+export type SiteStatus = "supported" | "draft";
+
+// paged-url builds a url per page of reviews. page-only says the platform has no such url
+export type ReviewSource = "paged-url" | "page-only";
+
 export interface SiteDefinition {
   id: string;
   locales: Record<string, SiteLocale>;
   productPath: string;
   productId: string;
-  reviewPath: string;
+  reviewPath?: string;
   maxReviewPages?: number;
   imageHosts?: string[];
+  subject?: SiteSubject;
+  status?: SiteStatus;
+  pathPrefix?: string;
+  idCase?: "upper" | "preserve";
+  reviewSource?: ReviewSource;
+  absentSignals?: string[];
 }
 
 export interface ParsedProductPage {
@@ -21,7 +38,51 @@ export interface ParsedProductPage {
   productId: string;
 }
 
-export const SITES: readonly SiteDefinition[] = registry.sites;
+export const SITES: readonly SiteDefinition[] = registry.sites as SiteDefinition[];
+
+export const DEFAULT_SUBJECT: SiteSubject = "product";
+
+export function subjectOf(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): SiteSubject {
+  return siteById(siteId, sites)?.subject ?? DEFAULT_SUBJECT;
+}
+
+export function isDraftSite(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): boolean {
+  return siteById(siteId, sites)?.status === "draft";
+}
+
+// SPEC.md section 6 would rather widen an estimate than report a signal as unreadable when the
+// platform never recorded it in the first place
+export function absentSignalsFor(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): readonly string[] {
+  return siteById(siteId, sites)?.absentSignals ?? [];
+}
+
+export function reviewSourceOf(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): ReviewSource {
+  const site = siteById(siteId, sites);
+  if (site === null) {
+    return "paged-url";
+  }
+  return site.reviewSource ?? (site.reviewPath === undefined ? "page-only" : "paged-url");
+}
+
+// whether a deeper read is a thing this platform can offer at all
+export function canFetchReviewPages(
+  siteId: string,
+  sites: readonly SiteDefinition[] = SITES,
+): boolean {
+  return reviewSourceOf(siteId, sites) === "paged-url";
+}
 
 export function siteById(
   id: string,
@@ -49,11 +110,13 @@ export function parseProductUrl(
     }
     const match = new RegExp(site.productPath, "i").exec(parsed.pathname);
     if (match === null) {
-      return null;
+      // another platform may live on the same host under a different path
+      continue;
     }
-    const productId = (match[1] as string).toUpperCase();
+    const matched = match[1] as string;
+    const productId = site.idCase === "preserve" ? matched : matched.toUpperCase();
     if (!new RegExp(site.productId).test(productId)) {
-      return null;
+      continue;
     }
     return { site: site.id, locale, productId };
   }
@@ -104,17 +167,63 @@ export function reviewPageUrl(
   if (site === null || entry === undefined) {
     throw new Error(`no host for ${page.site} ${page.locale}`);
   }
+  if (site.reviewPath === undefined) {
+    throw new Error(`${page.site} has no review page url`);
+  }
   const path = site.reviewPath
     .replaceAll("{productId}", page.productId)
     .replaceAll("{pageNumber}", String(pageNumber));
   return `https://${entry.host}${path}`;
 }
 
-// the manifest is built from this
+// the manifest is built from this. a platform under a path prefix is matched to that prefix,
+// so a host that also serves other things is not read where verdict has nothing to say
+export function matchesFor(site: SiteDefinition): string[] {
+  const prefix = site.pathPrefix === undefined ? "" : site.pathPrefix;
+  return Object.values(site.locales).map((entry) => `https://${entry.host}${prefix}/*`);
+}
+
 export function contentScriptMatches(sites: readonly SiteDefinition[] = SITES): string[] {
-  return sites.flatMap((site) =>
-    Object.values(site.locales).map((entry) => `https://${entry.host}/*`)
-  );
+  return sites.flatMap(matchesFor);
+}
+
+// what a production build matches. a draft platform is readable in development only
+export function supportedContentScriptMatches(
+  sites: readonly SiteDefinition[] = SITES,
+): string[] {
+  return sites.filter((site) => site.status !== "draft").flatMap(matchesFor);
+}
+
+interface ContentScriptManifest {
+  content_scripts?: { matches?: string[] }[];
+}
+
+// store builds never carry a platform whose rules are still being written
+export function withoutDraftPlatforms<T extends ContentScriptManifest>(manifest: T): T {
+  if (manifest.content_scripts === undefined) {
+    return manifest;
+  }
+  const supported = new Set(supportedContentScriptMatches());
+  const draft = new Set(contentScriptMatches().filter((match) => !supported.has(match)));
+  manifest.content_scripts = manifest.content_scripts
+    .map((script) => ({
+      ...script,
+      matches: script.matches?.filter((match) => !draft.has(match)),
+    }))
+    .filter((script) => script.matches === undefined || script.matches.length > 0);
+  return manifest;
+}
+
+// the bridge can only check a page the content script runs on, so both follow the manifest
+// and a platform stripped from a store build is unreachable from the website too
+export function siteIdsMatchedBy(
+  matches: readonly string[],
+  sites: readonly SiteDefinition[] = SITES,
+): string[] {
+  const declared = new Set(matches);
+  return sites
+    .filter((site) => matchesFor(site).some((match) => declared.has(match)))
+    .map((site) => site.id);
 }
 
 export function allowedDomains(

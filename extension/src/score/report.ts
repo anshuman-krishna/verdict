@@ -55,12 +55,17 @@ export interface ReportProvenance {
   modelDigest: string | null;
   // which category prior scored it, null when the default one did
   priorsKey: string | null;
+  // what embedded the review text, null on reports written before this build recorded it
+  embedding: string | null;
   signals: string[];
 }
 
 export interface Report {
   serial: string;
   band: Band;
+  // SPEC.md section 6: the output is a probability, because a probability can be checked.
+  // null on reports written before this build recorded it
+  probability: number | null;
   claimedRating: number;
   adjustedRating: number;
   totalReviewCount: number;
@@ -69,6 +74,8 @@ export interface Report {
   confidence: ConfidenceInterval;
   evidence: EvidenceRow[];
   unavailableSignals: string[];
+  // signals the platform structurally does not record, which is not the same as unread
+  absentSignals: string[];
   generatedAt: number;
   // absent on reports written before this build recorded it
   provenance?: ReportProvenance;
@@ -172,6 +179,7 @@ export function parseProvenance(value: unknown): ReportProvenance | null {
     modelTrainedAt: numberAt(record, "modelTrainedAt"),
     modelDigest: typeof record.modelDigest === "string" ? record.modelDigest : null,
     priorsKey: typeof record.priorsKey === "string" ? record.priorsKey : null,
+    embedding: typeof record.embedding === "string" ? record.embedding : null,
     signals: stringList(record.signals),
   };
 }
@@ -205,10 +213,13 @@ export function parseStoredReport(value: unknown): Report | null {
   }
   const evidence = stored.evidence.map(evidenceRow).filter((row): row is EvidenceRow => row !== null);
   const unavailable = stringList(stored.unavailableSignals);
+  const probability = numberAt(stored, "probability");
+  const absent = stringList(stored.absentSignals);
   const provenance = parseProvenance(stored.provenance);
   return {
     serial: typeof stored.serial === "string" ? stored.serial : "",
     band: summary.band,
+    probability,
     claimedRating: summary.claimedRating,
     adjustedRating: summary.adjustedRating,
     totalReviewCount: total,
@@ -217,6 +228,7 @@ export function parseStoredReport(value: unknown): Report | null {
     confidence: { low, high },
     evidence,
     unavailableSignals: unavailable,
+    absentSignals: absent,
     generatedAt,
     ...(provenance === null ? {} : { provenance }),
   };

@@ -1,0 +1,6 @@
+{
+  "version": 0,
+  "site": "google-maps",
+  "locales": ["com", "co.uk", "de", "fr"],
+  "fields": {}
+}

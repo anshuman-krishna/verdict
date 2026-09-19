@@ -1,10 +1,10 @@
 import math
 from dataclasses import dataclass
 
+from verdict_research.features.embedding_backend import EmbeddingBackend, hashed_terms
 from verdict_research.features.text_embedding import (
     EMBEDDING_DIMENSIONS,
     cosine_similarity,
-    embed_text,
 )
 
 DEFAULT_OFF_TOPIC_DISTANCE = 1.0
@@ -52,18 +52,20 @@ def listing_identity_drift(
     product_text: str,
     dimensions: int = EMBEDDING_DIMENSIONS,
     off_topic_distance: float = DEFAULT_OFF_TOPIC_DISTANCE,
+    backend: EmbeddingBackend | None = None,
 ) -> ListingDriftResult:
+    resolved = hashed_terms(dimensions) if backend is None else backend
     embedded: list[tuple[list[float], int | None]] = []
     for index, review in enumerate(reviews):
         if review.text is None or review.text == "":
             continue
-        embedding = embed_text(review.text, dimensions)
+        embedding = resolved.embed(review.text)
         if embedding is not None:
             embedded.append((embedding, days[index]))
     if not embedded:
         return _ABSENT
 
-    product = embed_text(product_text, dimensions)
+    product = resolved.embed(product_text)
     off_topic_count = 0
     mean_distance = None
     if product is not None:

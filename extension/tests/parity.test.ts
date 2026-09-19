@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { applyModel, quantileValue, type CombinerModel } from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
+import { fromLexicon, hashedTerms } from "../src/score/embeddingBackend";
+import { lexiconBytes, parseLexicon } from "../src/score/lexicon";
 import { listingIdentityDrift } from "../src/score/listingDrift";
 import { DEFAULT_INJECTION_KERNEL, DEFAULT_ORGANIC_PRIOR, priorsFor } from "../src/score/priors";
 import { categoryKeys } from "../src/score/categoryKey";
@@ -147,6 +149,15 @@ function run(vector: Vector): unknown {
         aWithB: cosineSimilarity(a, b),
       };
     }
+    case "lexiconEmbedding": {
+      const { lexicon, text } = vector.input as { lexicon: string; text: string };
+      const parsed = parseLexicon(lexiconBytes(lexicon) as Uint8Array);
+      if (parsed === null) {
+        return { dimensions: null, vector: null };
+      }
+      const backend = fromLexicon(parsed, "parity");
+      return { dimensions: backend.dimensions, vector: backend.embed(text) };
+    }
     case "listingDrift": {
       const { reviews, days, productText } = vector.input as {
         reviews: { text: string | null }[];
@@ -183,6 +194,8 @@ function run(vector: Vector): unknown {
         organicPrior,
         injectionKernel,
         productText,
+        // these vectors pin the arithmetic, not whatever table a build happens to bundle
+        embeddingBackend: hashedTerms(),
         flaggedReviewerIds: flaggedReviewerIds === undefined
           ? undefined
           : new Set(flaggedReviewerIds),

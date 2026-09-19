@@ -634,3 +634,63 @@ describe("a build that carries no rules for the site", () => {
     expect(result?.outcome).toEqual({ status: "unreadable" });
   });
 });
+
+describe("a listing on the watchlist", () => {
+  const WATCHED = {
+    watching: true,
+    entry: null,
+    changes: [{ kind: "band" as const, from: "clean", to: "mixed" }],
+  };
+
+  it("is checked against what it read when it was saved", async () => {
+    const recordWatchedCheck = vi.fn().mockResolvedValue(WATCHED);
+
+    const result = await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ recordWatchedCheck }),
+    );
+
+    expect(result?.watch).toEqual(WATCHED);
+    const [productKey, reading] = recordWatchedCheck.mock.calls[0] ?? [];
+    expect(productKey).toBe(result?.productKey);
+    expect(productKey).not.toContain("B0BXYZ1234");
+    expect(reading).toMatchObject({ band: expect.any(String), totalReviewCount: expect.any(Number) });
+  });
+
+  it("records nothing for a page that produced no report", async () => {
+    const recordWatchedCheck = vi.fn();
+
+    const result = await analyzePage(
+      parse("<div></div>"),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ recordWatchedCheck }),
+    );
+
+    expect(recordWatchedCheck).not.toHaveBeenCalled();
+    expect(result?.watch).toBeUndefined();
+  });
+
+  it("still shows the report when the watchlist cannot be written", async () => {
+    const recordWatchedCheck = vi.fn().mockRejectedValue(new Error("no room"));
+
+    const result = await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps({ recordWatchedCheck }),
+    );
+
+    expect(result?.outcome.status).toBe("ok");
+    expect(result?.watch).toEqual({ watching: false, entry: null, changes: [] });
+  });
+
+  it("is not consulted at all by a build with no watchlist port", async () => {
+    const result = await analyzePage(
+      parse(pageHtml(30)),
+      "https://www.amazon.com/dp/B0BXYZ1234",
+      deps(),
+    );
+
+    expect(result?.watch).toEqual({ watching: false, entry: null, changes: [] });
+  });
+});

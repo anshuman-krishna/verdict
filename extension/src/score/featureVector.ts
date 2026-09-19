@@ -1,4 +1,5 @@
 import type { Review } from "../extract/types";
+import { hashedTerms, type EmbeddingBackend } from "./embeddingBackend";
 import {
   listingIdentityDrift,
   type ListingDriftOptions,
@@ -113,6 +114,7 @@ export interface FeatureVectorInputs {
   textNearDuplicationLinkCache?: TextNearDuplicationOptions["linkCache"];
   productText?: string;
   listingDriftEmbeddingCache?: ListingDriftOptions["embeddingCache"];
+  embeddingBackend?: EmbeddingBackend;
   flaggedReviewerIds?: ReadonlySet<string>;
 }
 
@@ -163,7 +165,10 @@ export function buildFeatureVector(
     reviews,
     deriveDayIndices(reviews),
     inputs.productText ?? "",
-    { embeddingCache: inputs.listingDriftEmbeddingCache },
+    {
+      embeddingCache: inputs.listingDriftEmbeddingCache,
+      backend: inputs.embeddingBackend ?? hashedTerms(),
+    },
   );
 
   const reviewerGraphResult = inputs.flaggedReviewerIds !== undefined
