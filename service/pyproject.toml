@@ -14,7 +14,7 @@ dependencies = [
 
 [dependency-groups]
 # httpx is fastapi's TestClient, dev only, never imported by the service itself
-dev = ["pytest==9.1.1", "ruff==0.16.6", "httpx==0.28.1"]
+dev = ["pytest==9.1.1", "ruff==0.16.8", "httpx==0.28.1"]
 
 [tool.ruff]
 line-length = 100
