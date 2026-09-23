@@ -240,7 +240,12 @@ function mountNotEnoughDataNotice(
         ...checkOptions,
         maxPages,
         onProgress: (progress) => notice.updateProgress(progressLine(progress, t)),
+        // gone from the page means the reader navigated away or closed it
+        stillWanted: () => notice.isConnected,
       });
+      if (!notice.isConnected) {
+        return;
+      }
       notice.remove();
       mountResult(document, next, deps, { ...checkOptions, maxPages }, openTab, t);
     } catch {

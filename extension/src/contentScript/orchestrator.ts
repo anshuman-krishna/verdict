@@ -363,6 +363,8 @@ async function fetchReviewPageHtml(
 
 export interface CheckMoreDeeplyOptions {
   maxPages?: number;
+  // asked before each page, so a read nobody is waiting for stops asking the storefront
+  stillWanted?: () => boolean;
   pageTimeoutMs?: number;
   fetchImpl?: typeof fetch;
   delay?: (ms: number) => Promise<void>;
@@ -388,6 +390,9 @@ export async function checkMoreDeeply(
     onProgress: options.onProgress,
     cache: options.cache ?? NO_REVIEWS_CACHE,
     fetchPage: async (pageNumber) => {
+      if (options.stillWanted?.() === false) {
+        throw new Error("nobody is waiting for this read any more");
+      }
       const html = await fetchReviewPageHtml(
         fetchImpl,
         reviewPageUrl(page, pageNumber),

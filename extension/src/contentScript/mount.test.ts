@@ -302,6 +302,48 @@ describe("mountResult", () => {
     });
     expect(document.body.querySelector("verdict-notice")).toBeNull();
   });
+
+  it("draws nothing, and stops asking the storefront, once the reader has left", async () => {
+    let answerFirstPage = (): void => {};
+    const firstPage = new Promise<void>((resolve) => {
+      answerFirstPage = resolve;
+    });
+    const reviews = Array.from({ length: 30 }, (_, i) => ({
+      rating: i < 25 ? 5 : 1,
+      text: `body number ${i} has enough distinguishing words to avoid near duplication`,
+      date: `2024-01-${String((i % 25) + 1).padStart(2, "0")}`,
+      verified: i % 2 === 0,
+      reviewerId: `reviewer-${i}`,
+    }));
+    const page = `<script type="application/ld+json">${JSON.stringify({ reviewsData: { reviews } })}</script>`;
+    const fetchImpl = vi.fn(async () => {
+      await firstPage;
+      return { ok: true, status: 200, text: () => Promise.resolve(page) };
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const result: AnalysisResult = {
+      page: PAGE,
+      product: PRODUCT,
+      reviews: [],
+      outcome: { status: "not-enough-data" },
+    };
+    mountResult(document, result, deps(), { maxPages: 5, delay: () => Promise.resolve(), cache: directReviewsCache });
+
+    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice") as InstanceType<typeof VerdictNoticeElement>;
+    getNoticeShadowRootForTesting(notice).querySelector<HTMLButtonElement>(".action")?.click();
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledOnce());
+
+    // what a soft navigation does to everything verdict drew
+    removeMountedElements(document);
+    answerFirstPage();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(document.body.querySelector("verdict-panel")).toBeNull();
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+  });
 });
 
 function okResult(band: "mixed" | "clean" = "mixed"): AnalysisResult {

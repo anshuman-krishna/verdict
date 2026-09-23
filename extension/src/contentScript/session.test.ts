@@ -151,3 +151,66 @@ describe("createSession", () => {
     expect(report).toHaveBeenCalledWith(null);
   });
 });
+
+describe("an analysis still running when the reader moves on", () => {
+  it("draws nothing for the listing that was left, not even a late stage", async () => {
+    const mounts: ProgressiveMount[] = [];
+    let releaseFirst = (): void => {};
+    const firstMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const session = createSession({
+      analyse: async (href, drawOn) => {
+        if (href === A) {
+          await firstMayFinish;
+          drawOn.waiting();
+          drawOn.show(OK, ["reviewer network"]);
+          drawOn.settle();
+        }
+        return OK;
+      },
+      createMount: () => {
+        const made = mount();
+        mounts.push(made);
+        return made;
+      },
+      teardown: vi.fn(),
+      report: vi.fn(),
+      delay: async () => {},
+      settleMs: 0,
+      retryDelaysMs: [],
+    });
+
+    const leaving = session.visit(A);
+    await session.visit(B);
+    releaseFirst();
+    await leaving;
+
+    const [left] = mounts;
+    expect(left?.waiting).not.toHaveBeenCalled();
+    expect(left?.show).not.toHaveBeenCalled();
+    expect(left?.settle).not.toHaveBeenCalled();
+  });
+
+  it("still draws every stage for the listing the reader is on", async () => {
+    const drawn = mount();
+    const session = createSession({
+      analyse: async (_href, drawOn) => {
+        drawOn.show(OK, ["reviewer network"]);
+        drawOn.show(OK, []);
+        return OK;
+      },
+      createMount: () => drawn,
+      teardown: vi.fn(),
+      report: vi.fn(),
+      delay: async () => {},
+      settleMs: 0,
+      retryDelaysMs: [],
+    });
+
+    await session.visit(A);
+
+    expect(drawn.show).toHaveBeenCalledTimes(2);
+    expect(drawn.settle).toHaveBeenCalledOnce();
+  });
+});

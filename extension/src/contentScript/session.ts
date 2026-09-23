@@ -36,6 +36,27 @@ function worthRetrying(result: AnalysisResult | null): boolean {
   return result === null || result.outcome.status === "unreadable";
 }
 
+// an analysis keeps drawing stages after the reader has moved on, so a superseded one draws nothing
+function whileCurrent(mount: ProgressiveMount, current: () => boolean): ProgressiveMount {
+  return {
+    waiting: () => {
+      if (current()) {
+        mount.waiting();
+      }
+    },
+    show: (result, pending) => {
+      if (current()) {
+        mount.show(result, pending);
+      }
+    },
+    settle: () => {
+      if (current()) {
+        mount.settle();
+      }
+    },
+  };
+}
+
 export function createSession(deps: SessionDeps): Session {
   const delay = deps.delay ?? realDelay;
   const settleMs = deps.settleMs ?? SETTLE_MS;
@@ -67,7 +88,7 @@ export function createSession(deps: SessionDeps): Session {
       if (!current()) {
         return;
       }
-      const mount = deps.createMount();
+      const mount = whileCurrent(deps.createMount(), current);
       let result: AnalysisResult | null = null;
       try {
         result = await deps.analyse(href, mount);
