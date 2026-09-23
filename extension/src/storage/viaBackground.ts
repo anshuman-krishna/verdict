@@ -130,6 +130,7 @@ export function reviewsCacheVia(send: SendToBackground = realSend) {
       site: string,
       reviews: readonly Review[],
       pagesFetched: number,
+      exhausted = false,
     ): Promise<void> => {
       // signatures are computed here, so no review text crosses
       await ask(
@@ -141,6 +142,7 @@ export function reviewsCacheVia(send: SendToBackground = realSend) {
           site,
           reviews: reviews.map(toStored),
           pagesFetched,
+          exhausted,
         },
         null,
       );

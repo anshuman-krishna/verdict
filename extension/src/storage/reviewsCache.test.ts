@@ -146,6 +146,7 @@ describe("what the cache is allowed to persist", () => {
     expect(Object.keys(record).sort()).toEqual([
       "cachedAt",
       "embeddingDimensions",
+      "exhausted",
       "key",
       "numPermutations",
       "pagesFetched",

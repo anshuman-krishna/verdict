@@ -99,3 +99,79 @@ describe("BridgeRateLimiter", () => {
     expect(limiter.allow("https://verdict.tools", "verdict:analyze")).toBe(false);
   });
 });
+
+describe("a limit that outlives the worker", () => {
+  const SITE = "https://verdict.tools";
+
+  it("carries a spent budget across a restart", () => {
+    const time = clock();
+    const before = new BridgeRateLimiter(time.now);
+    const { limit } = RATE_LIMITS["verdict:analyze"];
+    for (let index = 0; index < limit; index += 1) {
+      before.allow(SITE, "verdict:analyze");
+    }
+
+    const after = BridgeRateLimiter.restore(JSON.parse(JSON.stringify(before.snapshot())), time.now);
+
+    expect(after.allow(SITE, "verdict:analyze")).toBe(false);
+  });
+
+  it("lets the budget come back once the window has passed", () => {
+    const time = clock();
+    const before = new BridgeRateLimiter(time.now);
+    const { limit, windowMs } = RATE_LIMITS["verdict:analyze"];
+    for (let index = 0; index < limit; index += 1) {
+      before.allow(SITE, "verdict:analyze");
+    }
+    const saved = before.snapshot();
+    time.advance(windowMs + 1);
+
+    expect(BridgeRateLimiter.restore(saved, time.now).allow(SITE, "verdict:analyze")).toBe(true);
+  });
+
+  it("keeps nothing that no longer counts", () => {
+    const time = clock();
+    const limiter = new BridgeRateLimiter(time.now);
+    limiter.allow(SITE, "verdict:analyze");
+    time.advance(RATE_LIMITS["verdict:analyze"].windowMs + 1);
+
+    expect(limiter.snapshot()).toEqual({});
+  });
+
+  it("starts empty from anything that is not a snapshot", () => {
+    for (const value of [undefined, null, 7, "x", [], { [SITE]: [] }, { [SITE]: { "verdict:analyze": "x" } }]) {
+      const limiter = BridgeRateLimiter.restore(value, clock().now);
+      expect(limiter.snapshot()).toEqual({});
+    }
+  });
+
+  it("ignores message types this build does not have, and stamps that are not times", () => {
+    const time = clock();
+    const limiter = BridgeRateLimiter.restore(
+      { [SITE]: { "verdict:unknown": [time.now()], "verdict:analyze": ["soon", Number.NaN, time.now()] } },
+      time.now,
+    );
+
+    expect(limiter.snapshot()).toEqual({ [SITE]: { "verdict:analyze": [time.now()] } });
+  });
+
+  it("does not let a stamp far in the future lock the site out", () => {
+    const time = clock();
+    const { limit } = RATE_LIMITS["verdict:analyze"];
+    const future = Array.from({ length: limit }, () => time.now() + 365 * 86_400_000);
+
+    const limiter = BridgeRateLimiter.restore({ [SITE]: { "verdict:analyze": future } }, time.now);
+
+    expect(limiter.allow(SITE, "verdict:analyze")).toBe(true);
+  });
+
+  it("never restores more hits than the limit allows", () => {
+    const time = clock();
+    const { limit } = RATE_LIMITS["verdict:analyze"];
+    const many = Array.from({ length: limit * 10 }, () => time.now());
+
+    const limiter = BridgeRateLimiter.restore({ [SITE]: { "verdict:analyze": many } }, time.now);
+
+    expect(limiter.snapshot()[SITE]?.["verdict:analyze"]).toHaveLength(limit);
+  });
+});

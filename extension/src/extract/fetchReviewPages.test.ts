@@ -387,7 +387,7 @@ describe("where the pages it read are kept", () => {
     });
 
     expect(read).toHaveBeenCalledWith("p-1", "amazon");
-    expect(write).toHaveBeenCalledWith("p-1", "amazon", expect.any(Array), 2);
+    expect(write).toHaveBeenCalledWith("p-1", "amazon", expect.any(Array), 2, false);
   });
 
   it("answers from the cache it was given when that run went deep enough", async () => {
@@ -397,6 +397,7 @@ describe("where the pages it read are kept", () => {
       embeddings: new WeakMap<Review, number[]>(),
       cachedAt: Date.now(),
       pagesFetched: 5,
+      exhausted: false,
     };
     const fetchPage = vi.fn();
 
@@ -410,5 +411,87 @@ describe("where the pages it read are kept", () => {
 
     expect(fetchPage).not.toHaveBeenCalled();
     expect(result.stoppedBecause).toBe("complete");
+  });
+
+  it("records that a run ran out of pages, so the cache can say so later", async () => {
+    const write = vi.fn(async () => undefined);
+
+    await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 5,
+      delay: async () => {},
+      fetchPage: async (page) => (page === 1 ? reviewsOn(1) : []),
+      cache: { read: async () => null, write },
+    });
+
+    expect(write).toHaveBeenCalledWith("p-1", "amazon", expect.any(Array), 2, true);
+  });
+
+  it("does not record a failed run as having run out", async () => {
+    const write = vi.fn(async () => undefined);
+
+    await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 5,
+      delay: async () => {},
+      fetchPage: async (page) => {
+        if (page === 1) {
+          return reviewsOn(1);
+        }
+        throw new Error("throttled");
+      },
+      cache: { read: async () => null, write },
+    });
+
+    expect(write).toHaveBeenCalledWith("p-1", "amazon", expect.any(Array), 1, false);
+  });
+
+  it("answers a deeper ask from a shallow run that already ran out", async () => {
+    const cached = {
+      reviews: reviewsOn(1),
+      signatures: new WeakMap<Review, bigint[]>(),
+      embeddings: new WeakMap<Review, number[]>(),
+      cachedAt: Date.now(),
+      pagesFetched: 2,
+      exhausted: true,
+    };
+    const fetchPage = vi.fn();
+
+    const result = await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 10,
+      fetchPage,
+      cache: { read: async () => cached, write: async () => undefined },
+    });
+
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(result.stoppedBecause).toBe("exhausted");
+    expect(result.pagesFetched).toBe(2);
+  });
+
+  it("still reads deeper when a shallow run stopped for any other reason", async () => {
+    const cached = {
+      reviews: reviewsOn(1),
+      signatures: new WeakMap<Review, bigint[]>(),
+      embeddings: new WeakMap<Review, number[]>(),
+      cachedAt: Date.now(),
+      pagesFetched: 2,
+      exhausted: false,
+    };
+    const fetchPage = vi.fn(async () => []);
+
+    await fetchReviewPages({
+      productId: "p-1",
+      site: "amazon",
+      maxPages: 10,
+      delay: async () => {},
+      fetchPage,
+      cache: { read: async () => cached, write: async () => undefined },
+    });
+
+    expect(fetchPage).toHaveBeenCalled();
   });
 });

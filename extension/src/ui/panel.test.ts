@@ -285,6 +285,86 @@ describe("the provisional state while a signal is still arriving", () => {
   });
 });
 
+describe("a reader in the middle of the panel when the final report lands", () => {
+  function mounted(): { panel: VerdictPanelElement; root: ShadowRoot } {
+    const panel = new VerdictPanelElement();
+    document.body.append(panel);
+    panel.render(sampleReport(), rosetteInput, Date.now(), { pending: ["reviewer network"] });
+    return { panel, root: getPanelShadowRootForTesting(panel) };
+  }
+
+  function rerender(panel: VerdictPanelElement, report = sampleReport()): void {
+    panel.render(report, rosetteInput, Date.now(), { pending: [] });
+  }
+
+  function toggleFor(root: ShadowRoot, signal: string): HTMLButtonElement {
+    return root.querySelector(`.row-toggle[data-signal="${signal}"]`) as HTMLButtonElement;
+  }
+
+  it("keeps focus on the control it was on", () => {
+    const { panel, root } = mounted();
+    toggleFor(root, "arrival timing").focus();
+
+    rerender(panel);
+
+    expect(root.activeElement).toBe(toggleFor(root, "arrival timing"));
+    panel.remove();
+  });
+
+  it("keeps open the rows the reader opened, and only those", () => {
+    const { panel, root } = mounted();
+    toggleFor(root, "arrival timing").click();
+
+    rerender(panel);
+
+    expect(toggleFor(root, "arrival timing").getAttribute("aria-expanded")).toBe("true");
+    expect(toggleFor(root, "rating shape").getAttribute("aria-expanded")).toBe("false");
+    const detailId = toggleFor(root, "arrival timing").getAttribute("aria-controls") as string;
+    expect(root.getElementById(detailId)?.hidden).toBe(false);
+    panel.remove();
+  });
+
+  it("follows a row by its signal when the rows come back in another order", () => {
+    const { panel, root } = mounted();
+    toggleFor(root, "arrival timing").click();
+    const report = sampleReport();
+
+    rerender(panel, { ...report, evidence: [...report.evidence].reverse() });
+
+    expect(toggleFor(root, "arrival timing").getAttribute("aria-expanded")).toBe("true");
+    expect(toggleFor(root, "rating shape").getAttribute("aria-expanded")).toBe("false");
+    panel.remove();
+  });
+
+  it("keeps focus inside the panel when the row it was on is gone", () => {
+    const { panel, root } = mounted();
+    toggleFor(root, "arrival timing").focus();
+    const report = sampleReport();
+
+    rerender(panel, { ...report, evidence: report.evidence.slice(0, 1) });
+
+    expect(root.activeElement).toBe(root.querySelector("button.close"));
+    panel.remove();
+  });
+
+  it("takes no focus at all when the reader was elsewhere on the page", () => {
+    const { panel, root } = mounted();
+
+    rerender(panel);
+
+    expect(root.activeElement).toBeNull();
+    panel.remove();
+  });
+});
+
+describe("focus is visible on every control (DESIGN.md section 11)", () => {
+  it("draws the accent outline on any button, not a list that can miss one", () => {
+    const root = render(sampleReport());
+    const css = root.querySelector("style")?.textContent ?? "";
+    expect(css).toMatch(/(^|\n)button:focus-visible \{\s*outline: 2px solid var\(--accent\);\s*outline-offset: 2px;/);
+  });
+});
+
 describe("the full report button", () => {
   it("names the report it was showing, so the popup can open that one", () => {
     const panel = new VerdictPanelElement();

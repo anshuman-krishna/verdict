@@ -53,6 +53,7 @@ export type StorageRequest =
       site: string;
       reviews: StoredReview[];
       pagesFetched: number;
+      exhausted?: boolean;
     };
 
 export interface StorageResults {

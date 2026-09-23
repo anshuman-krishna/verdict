@@ -83,17 +83,19 @@ function readablePlatformIds(): string[] {
 const trustOrigin = (origin: string | undefined) =>
   isTrustedSiteOrigin(origin, import.meta.env.MODE !== "production");
 
-function answerBridge(message: unknown, origin: string | undefined) {
+async function answerBridge(message: unknown, origin: string | undefined) {
   // what this build can read right now, not only what it shipped with
-  return trustedRulesForEverySite(readablePlatformIds()).catch(() => BUNDLED_RULES).then((rules) =>
-    handleBridgeMessage(message, {
-      bundledRules: rules,
-      analyzeUrl,
-      rateLimiter,
-      origin,
-      trustOrigin,
-    })
-  );
+  const rules = await trustedRulesForEverySite(readablePlatformIds()).catch(() => BUNDLED_RULES);
+  const rateLimiter = await rateLimiterReady;
+  const response = await handleBridgeMessage(message, {
+    bundledRules: rules,
+    analyzeUrl,
+    rateLimiter,
+    origin,
+    trustOrigin,
+  });
+  browser.storage.session.set({ [RATE_LIMIT_KEY]: rateLimiter.snapshot() }).catch(() => {});
+  return response;
 }
 
 const CONTRIBUTION_ALARM_NAME = "verdict:flush-graph-contributions";
@@ -107,7 +109,19 @@ const RULES_ALARM_NAME = "verdict:refresh-rules";
 // ticks twice a day so an expired document is picked up promptly, fetches once
 const RULES_ALARM_PERIOD_MINUTES = 12 * 60;
 
-const rateLimiter = new BridgeRateLimiter();
+// session storage lives in memory and goes with the browser, so nothing here reaches disk
+const RATE_LIMIT_KEY = "verdict:bridge-rate-limit";
+
+async function restoreRateLimiter(): Promise<BridgeRateLimiter> {
+  try {
+    const stored = await browser.storage.session.get(RATE_LIMIT_KEY);
+    return BridgeRateLimiter.restore(stored[RATE_LIMIT_KEY]);
+  } catch {
+    return new BridgeRateLimiter();
+  }
+}
+
+const rateLimiterReady = restoreRateLimiter();
 
 export default defineBackground(() => {
   browser.runtime.setUninstallURL?.(UNINSTALL_URL);

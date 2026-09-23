@@ -25,6 +25,8 @@ export interface ReviewsCacheRecord {
   reviews: StoredReview[];
   cachedAt: number;
   pagesFetched: number;
+  // the storefront had nothing past the last page, so a deeper ask reads nothing more
+  exhausted?: boolean;
   shingleSize: number;
   numPermutations: number;
   embeddingDimensions: number;
@@ -36,6 +38,7 @@ export interface CachedReviews {
   embeddings: WeakMap<Review, number[]>;
   cachedAt: number;
   pagesFetched: number;
+  exhausted: boolean;
 }
 
 export function isExpired(cachedAt: number, now: number): boolean {
@@ -85,12 +88,14 @@ export function toRecord(
   reviews: readonly StoredReview[],
   pagesFetched: number,
   cachedAt: number,
+  exhausted = false,
 ): ReviewsCacheRecord {
   return {
     key,
     reviews: [...reviews],
     cachedAt,
     pagesFetched,
+    exhausted,
     shingleSize: DEFAULT_SHINGLE_SIZE,
     numPermutations: DEFAULT_NUM_PERMUTATIONS,
     embeddingDimensions: EMBEDDING_DIMENSIONS,
@@ -129,5 +134,6 @@ export function hydrateCacheRecord(record: ReviewsCacheRecord): CachedReviews {
     embeddings,
     cachedAt: record.cachedAt,
     pagesFetched: record.pagesFetched ?? 0,
+    exhausted: record.exhausted === true,
   };
 }

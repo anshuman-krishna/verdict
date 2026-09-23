@@ -61,6 +61,18 @@ describe("buildContributionEdge", () => {
     expect(await buildContributionEdge(review({ date: null }), "B0", salt)).toBeNull();
   });
 
+  it("returns null for a date the page only named roughly, since it names no week", async () => {
+    for (const datePrecision of ["week", "month", "year"] as const) {
+      expect(await buildContributionEdge(review({ datePrecision }), "B000EXAMPLE", salt)).toBeNull();
+    }
+  });
+
+  it("still builds an edge for a date named to the day", async () => {
+    for (const datePrecision of ["exact", "day"] as const) {
+      expect(await buildContributionEdge(review({ datePrecision }), "B000EXAMPLE", salt)).not.toBeNull();
+    }
+  });
+
   it("returns null when the review has no rating", async () => {
     expect(await buildContributionEdge(review({ rating: null }), "B0", salt)).toBeNull();
   });

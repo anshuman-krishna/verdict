@@ -214,6 +214,23 @@ describe("what a content script may ask for", () => {
     });
   });
 
+  it("keeps that a read ran out of pages, and reads anything else as not having", async () => {
+    const put = (productId: string, exhausted: unknown) =>
+      serveStorageRequest(
+        request("reviews-put", { productId, site: "amazon", reviews: [], pagesFetched: 2, exhausted }),
+        STOREFRONT,
+        DEPS,
+      );
+    const get = (productId: string) =>
+      serveStorageRequest(request("reviews-get", { productId, site: "amazon" }), STOREFRONT, DEPS);
+
+    await put("p-ran-out", true);
+    await put("p-said-yes", "yes");
+
+    expect(await get("p-ran-out")).toMatchObject({ value: { exhausted: true } });
+    expect(await get("p-said-yes")).toMatchObject({ value: { exhausted: false } });
+  });
+
   it("reports a refusal rather than throwing when a store is unreachable", async () => {
     const failing = { rules: () => Promise.reject(new Error("no")), hosts: ["www.amazon.com"] };
     await expect(

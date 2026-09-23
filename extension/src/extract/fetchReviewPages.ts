@@ -29,6 +29,7 @@ export interface ReviewsCachePort {
     site: string,
     reviews: readonly Review[],
     pagesFetched: number,
+    exhausted?: boolean,
   ) => Promise<unknown>;
 }
 
@@ -62,14 +63,14 @@ export async function fetchReviewPages(
   const random = options.random ?? Math.random;
 
   const cached = await options.cache.read(options.productId, options.site);
-  // a shallower cached run must not answer a deeper request
-  if (cached && cached.pagesFetched >= maxPages) {
+  // a shallower cached run must not answer a deeper request, unless it already ran out
+  if (cached && (cached.pagesFetched >= maxPages || cached.exhausted)) {
     return {
       reviews: cached.reviews,
       signatures: cached.signatures,
       embeddings: cached.embeddings,
       pagesFetched: cached.pagesFetched,
-      stoppedBecause: "complete",
+      stoppedBecause: cached.exhausted ? "exhausted" : "complete",
     };
   }
 
@@ -114,7 +115,8 @@ export async function fetchReviewPages(
   }
 
   if (reviews.length > 0) {
-    await options.cache.write(options.productId, options.site, reviews, pagesFetched);
+    const exhausted = stoppedBecause === "exhausted" || stoppedBecause === "repeated";
+    await options.cache.write(options.productId, options.site, reviews, pagesFetched, exhausted);
   }
   return {
     reviews,

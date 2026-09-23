@@ -121,6 +121,7 @@ async function run(request: StorageRequest, deps: ServeStorageDeps, sender: Stor
         request.site,
         request.reviews,
         request.pagesFetched,
+        request.exhausted === true,
       );
       return null;
     default:

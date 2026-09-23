@@ -1,5 +1,5 @@
 import { DEFAULT_NUM_PERMUTATIONS, DEFAULT_SHINGLE_SIZE, minhashSignature, shingle } from "../score/textNearDuplication";
-import type { Review } from "../extract/types";
+import { hasTimelineDate, type Review } from "../extract/types";
 
 export interface ContributionEdge {
   reviewerHash: string;
@@ -42,7 +42,8 @@ export async function buildContributionEdge(
   productId: string,
   salt: string,
 ): Promise<ContributionEdge | null> {
-  if (review.reviewerId === null || review.date === null || review.rating === null) {
+  // "2 months ago" names no week, and every such review sharing one would read as a cluster
+  if (review.reviewerId === null || !hasTimelineDate(review) || review.rating === null) {
     return null;
   }
   if (!isSendableRating(review.rating)) {

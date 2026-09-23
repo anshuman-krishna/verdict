@@ -10,6 +10,7 @@ import {
 import type { PreviousCheck } from "../storage/history";
 import type { WatchStatus } from "../storage/watchlist";
 import { changeLines } from "../watchlist/text";
+import { escapeHtml } from "./escape";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
@@ -141,6 +142,53 @@ export function pendingLine(
   return t.text("pending.line", { signals: joinSignals(pending, t) });
 }
 
+// what a reader was doing in the panel, so a staged re-render does not throw it away
+interface PanelInteraction {
+  expanded: Set<string>;
+  focused: string | null;
+}
+
+const PANEL_CONTROLS = ["close", "watch-toggle", "full-report"];
+
+function controlKey(element: Element): string | null {
+  if (element.classList.contains("row-toggle")) {
+    return `row:${element.getAttribute("data-signal") ?? ""}`;
+  }
+  return PANEL_CONTROLS.find((name) => element.classList.contains(name)) ?? null;
+}
+
+function rememberInteraction(root: ShadowRoot): PanelInteraction {
+  const expanded = new Set<string>();
+  for (const toggle of root.querySelectorAll(".row-toggle[aria-expanded=\"true\"]")) {
+    const key = controlKey(toggle);
+    if (key !== null) {
+      expanded.add(key);
+    }
+  }
+  const active = root.activeElement;
+  return { expanded, focused: active === null ? null : controlKey(active) ?? "close" };
+}
+
+function restoreInteraction(root: ShadowRoot, interaction: PanelInteraction): void {
+  for (const toggle of root.querySelectorAll<HTMLButtonElement>(".row-toggle")) {
+    const key = controlKey(toggle);
+    const detailId = toggle.getAttribute("aria-controls");
+    const detail = detailId === null ? null : root.getElementById(detailId);
+    if (key !== null && interaction.expanded.has(key) && detail !== null) {
+      toggle.setAttribute("aria-expanded", "true");
+      detail.hidden = false;
+    }
+  }
+  if (interaction.focused === null) {
+    return;
+  }
+  const controls = Array.from(root.querySelectorAll<HTMLElement>("button"));
+  // a control the new report no longer has hands focus to close, never back to the page
+  const target = controls.find((control) => controlKey(control) === interaction.focused) ??
+    root.querySelector<HTMLElement>("button.close");
+  target?.focus();
+}
+
 export class VerdictPanelElement extends HTMLElement {
   private report: Report | null = null;
   private focusableSelector =
@@ -183,6 +231,7 @@ export class VerdictPanelElement extends HTMLElement {
     const band = bandLabel(report.band, t);
     const kept = report.totalReviewCount - report.excludedReviewCount;
     const reducedMotion = prefersReducedMotion();
+    const interaction = rememberInteraction(root);
 
     root.innerHTML = `
       <style>${DESIGN_TOKENS_CSS}${PANEL_CSS}</style>
@@ -282,6 +331,7 @@ export class VerdictPanelElement extends HTMLElement {
                 <button
                   type="button"
                   class="row-toggle"
+                  data-signal="${escapeHtml(row.signal)}"
                   aria-expanded="false"
                   aria-controls="evidence-detail-${index}"
                 >
@@ -313,6 +363,7 @@ export class VerdictPanelElement extends HTMLElement {
     this.wireClose(root);
     this.wireFullReport(root);
     this.wireWatchToggle(root, watching);
+    restoreInteraction(root, interaction);
 
     if (!reducedMotion) {
       this.animateDraw(root);
@@ -458,9 +509,7 @@ button.close {
   line-height: 1;
 }
 
-button.close:focus-visible,
-button.row-toggle:focus-visible,
-button.full-report:focus-visible {
+button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

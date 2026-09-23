@@ -62,8 +62,9 @@ export async function setCachedReviews(
   site: string,
   reviews: readonly Review[],
   pagesFetched = 0,
+  exhausted = false,
 ): Promise<WriteResult> {
-  return putStoredReviews(productId, site, reviews.map(toStored), pagesFetched);
+  return putStoredReviews(productId, site, reviews.map(toStored), pagesFetched, exhausted);
 }
 
 export async function putStoredReviews(
@@ -71,13 +72,14 @@ export async function putStoredReviews(
   site: string,
   reviews: readonly StoredReview[],
   pagesFetched: number,
+  exhausted = false,
 ): Promise<WriteResult> {
   const key = await cacheKey(productId, site);
   const db = await openDatabase();
   const store = db.transaction(STORE_NAMES.reviewsCache, "readwrite").objectStore(
     STORE_NAMES.reviewsCache,
   );
-  return put(store, toRecord(key, reviews, pagesFetched, Date.now()));
+  return put(store, toRecord(key, reviews, pagesFetched, Date.now(), exhausted));
 }
 
 export async function deleteCachedReviews(productId: string, site: string): Promise<void> {
