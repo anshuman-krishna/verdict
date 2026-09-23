@@ -71,19 +71,27 @@ function reportProblems(options: RulesLoaderOptions, problems: readonly string[]
   report(problems);
 }
 
-async function cachedRecord(cacheKey: string): Promise<RulesCacheRecord | null> {
-  const cached = await getPref<RulesCacheRecord>(cacheKey);
+// one key signs every site, so a signature alone cannot say which site a document is for
+function isForThisSite(rules: RulesDocument, options: RulesLoaderOptions): boolean {
+  return rules.site === options.bundledDefault.site;
+}
+
+async function cachedRecord(options: RulesLoaderOptions): Promise<RulesCacheRecord | null> {
+  const cached = await getPref<RulesCacheRecord>(options.cacheKey);
   if (cached === null) {
     return null;
   }
   // revalidated on the way out, not only on the way in
   const sanitised = sanitiseRulesDocument(cached.rules);
-  return sanitised === null ? null : { rules: sanitised.rules, fetchedAt: cached.fetchedAt };
+  if (sanitised === null || !isForThisSite(sanitised.rules, options)) {
+    return null;
+  }
+  return { rules: sanitised.rules, fetchedAt: cached.fetchedAt };
 }
 
 // what this install already trusts, with no network on the path
 export async function trustedRules(options: RulesLoaderOptions): Promise<RulesDocument> {
-  const cached = await cachedRecord(options.cacheKey);
+  const cached = await cachedRecord(options);
   if (cached === null) {
     return options.bundledDefault;
   }
@@ -98,7 +106,7 @@ export async function refreshRules(options: RulesLoaderOptions): Promise<RulesDo
   const now = options.now ?? Date.now;
   const fetchTimeoutMs = options.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
 
-  const cached = await cachedRecord(options.cacheKey);
+  const cached = await cachedRecord(options);
   const trusted = await trustedRules(options);
 
   try {
@@ -115,6 +123,12 @@ export async function refreshRules(options: RulesLoaderOptions): Promise<RulesDo
     const sanitised = sanitiseRulesDocument(envelope.rules);
     if (sanitised === null) {
       reportProblems(options, ["the fetched document is not a rules document this build can use"]);
+      return trusted;
+    }
+    if (!isForThisSite(sanitised.rules, options)) {
+      reportProblems(options, [
+        `the fetched document is for ${sanitised.rules.site}, not ${options.bundledDefault.site}`,
+      ]);
       return trusted;
     }
     if (sanitised.problems.length > 0) {
@@ -137,7 +151,7 @@ export async function loadRules(options: RulesLoaderOptions): Promise<RulesDocum
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
   const now = options.now ?? Date.now;
 
-  const cached = await cachedRecord(options.cacheKey);
+  const cached = await cachedRecord(options);
   if (cached !== null && isFresh(cached.fetchedAt, now(), cacheTtlMs)) {
     return await trustedRules(options);
   }

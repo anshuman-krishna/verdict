@@ -12,6 +12,7 @@ import {
 } from "./rulesLoader";
 import type { RulesDocument } from "./rules";
 import { STANDARD_FIELDS, withStandardFallback } from "./standardRules";
+import { setPref } from "../storage/prefs";
 
 const FIELDS = { title: { strategy: "selector", value: "h1" } } as const;
 
@@ -237,6 +238,50 @@ describe("loadRules", () => {
 
     // a replayed older release must not cost this install what it already trusts
     expect(result).toEqual(newerRules);
+  });
+
+  it("refuses a validly signed document for another site served under this one", async () => {
+    const keyPair = await generateKeypair();
+    const publicKeyJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
+    const cacheKey = freshCacheKey();
+    const otherSite: RulesDocument = { version: 9, site: "elsewhere", locales: ["com"], fields: FIELDS };
+    const envelope: SignedRulesEnvelope = {
+      rules: otherSite,
+      signature: await sign(otherSite, keyPair.privateKey),
+    };
+    const problems: string[] = [];
+    const fallback = bundledDefault();
+
+    const result = await loadRules({
+      url: "https://verdict.tools/rules/example.json",
+      publicKeyJwk,
+      bundledDefault: fallback,
+      cacheKey,
+      fetchImpl: vi.fn().mockResolvedValue({ ok: true, json: async () => envelope }),
+      onProblems: (lines) => problems.push(...lines),
+    });
+
+    expect(result).toEqual(fallback);
+    expect(problems).toEqual(["the fetched document is for elsewhere, not example"]);
+    expect(await trustedRules({ url: "", publicKeyJwk, bundledDefault: fallback, cacheKey })).toEqual(
+      fallback,
+    );
+  });
+
+  it("does not serve a cached document for another site, whatever its version", async () => {
+    const cacheKey = freshCacheKey();
+    const otherSite: RulesDocument = { version: 99, site: "elsewhere", locales: ["com"], fields: FIELDS };
+    await setPref(cacheKey, { rules: otherSite, fetchedAt: Date.now() });
+    const fallback = bundledDefault();
+
+    const result = await trustedRules({
+      url: "",
+      publicKeyJwk: {},
+      bundledDefault: fallback,
+      cacheKey,
+    });
+
+    expect(result).toEqual(fallback);
   });
 });
 

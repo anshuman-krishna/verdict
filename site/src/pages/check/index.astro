@@ -62,6 +62,7 @@ import Layout from "../../layouts/Layout.astro";
       estimatedInorganicShare: number;
       confidence: { low: number; high: number };
       evidence: EvidenceRow[];
+      unavailableSignals?: string[];
     }
 
     interface AnalyzeResponse {
@@ -104,6 +105,15 @@ import Layout from "../../layouts/Layout.astro";
       const kept = report.totalReviewCount - report.excludedReviewCount;
       const params = rosetteParamsFromReport(report);
       const path = rosettePath(params, 60);
+      // SPEC.md section 6: a wide band is shown as wide, never hidden
+      const low = Math.round(report.confidence.low * 100);
+      const high = Math.round(report.confidence.high * 100);
+      const range = low === high ? `${low} percent` : `${low} to ${high} percent`;
+      const unavailable = report.unavailableSignals ?? [];
+      const unavailableNote =
+        unavailable.length === 0
+          ? ""
+          : `<p class="note">${escapeHtml(unavailable.join(", "))} could not be read on this page, which widens the estimate.</p>`;
 
       const evidenceRows = report.evidence
         .map(
@@ -133,6 +143,8 @@ import Layout from "../../layouts/Layout.astro";
             ${bandLabel}. ${report.excludedReviewCount.toLocaleString()} of
             ${report.totalReviewCount.toLocaleString()} reviews look inorganic.
           </p>
+          <p class="note">Estimated ${range} of reviews.</p>
+          ${unavailableNote}
           <div class="specimen-strip" role="img"
             aria-label="${kept.toLocaleString()} reviews kept, ${report.excludedReviewCount.toLocaleString()} reviews excluded">
             <div class="kept" style="flex-grow:${kept}"></div>
@@ -261,6 +273,13 @@ import Layout from "../../layouts/Layout.astro";
   .summary {
     text-align: center;
     margin: 16px 0 0;
+  }
+
+  .note {
+    text-align: center;
+    margin: 8px 0 0;
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
   }
 
   .specimen-strip {

@@ -342,8 +342,10 @@ describe("checkMoreDeeply", () => {
       cache: directReviewsCache,
     });
 
+    // SPEC.md section 9: the reader's own session, so nothing overrides the credentials
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://www.amazon.com/product-reviews/B0BXYZ1234/?pageNumber=1",
+      { signal: expect.any(AbortSignal) },
     );
     expect(result.reviews).toHaveLength(30);
     expect(result.outcome.status).toBe("ok");
@@ -371,6 +373,74 @@ describe("checkMoreDeeply", () => {
     });
 
     expect(result.fetch).toEqual({ pagesFetched: 1, maxPages: 4, stoppedBecause: "exhausted" });
+  });
+
+  describe("when the storefront does not hand the page over", () => {
+    const page = { site: "amazon" as const, locale: "com", productId: "B0DEPTH0002" };
+    const product = {
+      title: "A very good widget",
+      category: null,
+      claimedRating: 4.6,
+      reviewCount: null,
+      site: "amazon" as const,
+      locale: "com",
+      url: "https://www.amazon.com/dp/B0DEPTH0002",
+      thumbnailUrl: null,
+    };
+
+    function readWith(fetchImpl: unknown, pageTimeoutMs?: number) {
+      return checkMoreDeeply(page, product, [], deps(), {
+        maxPages: 4,
+        pageTimeoutMs,
+        fetchImpl: fetchImpl as typeof fetch,
+        delay: () => Promise.resolve(),
+        cache: directReviewsCache,
+      });
+    }
+
+    it("reads a throttled page as a failure worth retrying, not as the last page", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 503, text: () => Promise.resolve("") });
+
+      const result = await readWith(fetchImpl);
+
+      expect(result.fetch?.stoppedBecause).toBe("failed");
+    });
+
+    it("reads a page that is not there as having run out", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 404, text: () => Promise.resolve("") });
+
+      const result = await readWith(fetchImpl);
+
+      expect(result.fetch?.stoppedBecause).toBe("exhausted");
+    });
+
+    it("gives up on a page that never answers, and aborts the request", async () => {
+      let aborted = false;
+      const fetchImpl = vi.fn((_url: string, init?: RequestInit) =>
+        new Promise<Response>(() => {
+          init?.signal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+        })
+      );
+
+      const result = await readWith(fetchImpl, 10);
+
+      expect(result.fetch?.stoppedBecause).toBe("failed");
+      expect(aborted).toBe(true);
+    });
+
+    it("gives up on a body that trickles past the deadline", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => new Promise<string>(() => {}),
+      });
+
+      const result = await readWith(fetchImpl, 10);
+
+      expect(result.fetch?.stoppedBecause).toBe("failed");
+    });
   });
 });
 

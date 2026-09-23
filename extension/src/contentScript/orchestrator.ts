@@ -320,8 +320,50 @@ async function flaggedReviewers(
 
 export { mergeReviews };
 
+// a page that never answers must not hold the panel open forever
+export const REVIEW_PAGE_TIMEOUT_MS = 15_000;
+
+// a page that is not there has run out, any other refusal is a storefront saying not now
+function isOutOfPages(status: number): boolean {
+  return status === 404 || status === 410;
+}
+
+// headers and body under one deadline, so a trickled body cannot stall it either
+async function fetchReviewPageHtml(
+  fetchImpl: typeof fetch,
+  url: string,
+  pageNumber: number,
+  timeoutMs: number,
+): Promise<string | null> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`review page ${pageNumber} took longer than ${timeoutMs} ms`));
+    }, timeoutMs);
+  });
+  // the reader's own session, so no anonymous init here
+  const exchange = fetchImpl(url, { signal: controller.signal }).then(async (response) => {
+    if (response.ok) {
+      return await response.text();
+    }
+    if (isOutOfPages(response.status)) {
+      return null;
+    }
+    throw new Error(`review page ${pageNumber} answered ${response.status}`);
+  });
+  exchange.catch(() => undefined);
+  try {
+    return await Promise.race([exchange, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface CheckMoreDeeplyOptions {
   maxPages?: number;
+  pageTimeoutMs?: number;
   fetchImpl?: typeof fetch;
   delay?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -346,11 +388,15 @@ export async function checkMoreDeeply(
     onProgress: options.onProgress,
     cache: options.cache ?? NO_REVIEWS_CACHE,
     fetchPage: async (pageNumber) => {
-      const response = await fetchImpl(reviewPageUrl(page, pageNumber));
-      if (!response.ok) {
+      const html = await fetchReviewPageHtml(
+        fetchImpl,
+        reviewPageUrl(page, pageNumber),
+        pageNumber,
+        options.pageTimeoutMs ?? REVIEW_PAGE_TIMEOUT_MS,
+      );
+      if (html === null) {
         return [];
       }
-      const html = await response.text();
       const parsed = new DOMParser().parseFromString(html, "text/html");
       return extractReviews(parsed, deps.rules, page.locale, newPageIndex(), deps.now?.());
     },
