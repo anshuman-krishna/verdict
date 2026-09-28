@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v5
       - name: check python formatting and lint rules
         run: just py lint
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: check the shipped prose against CLAUDE.md
         run: just prose
       # just check runs this, so ci has to, or a broken placeholder merges green
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v5
       - name: install extension dependencies
         working-directory: extension
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v5
       - name: install extension dependencies
         working-directory: extension
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -149,7 +149,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
