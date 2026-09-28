@@ -17,15 +17,35 @@ def full_hashes(count: int) -> list[str]:
     return [hashlib.sha256(f"reviewer-{i}".encode()).hexdigest() for i in range(count)]
 
 
+def distinct_prefixes(count: int = BUCKET_COUNT) -> list[str]:
+    return [format(i, "04x") for i in range(count)]
+
+
 def test_rejects_a_request_that_is_not_exactly_32_prefixes():
     client = make_client(InMemoryFlaggedHashStore())
-    response = client.post("/v1/reputation/lookup", json={"prefixes": ["ab12"] * 31})
+    response = client.post("/v1/reputation/lookup", json={"prefixes": distinct_prefixes(31)})
     assert response.status_code == 422
+    assert "exactly 32" in response.text
 
 
 def test_rejects_a_prefix_that_is_not_four_lowercase_hex_characters():
     client = make_client(InMemoryFlaggedHashStore())
-    prefixes = ["ab12"] * (BUCKET_COUNT - 1) + ["ABCD"]
+    prefixes = distinct_prefixes(BUCKET_COUNT - 1) + ["ABCD"]
+    response = client.post("/v1/reputation/lookup", json={"prefixes": prefixes})
+    assert response.status_code == 422
+    assert "lowercase hex" in response.text
+
+
+def test_rejects_one_real_prefix_repeated_in_place_of_decoys():
+    client = make_client(InMemoryFlaggedHashStore())
+    response = client.post("/v1/reputation/lookup", json={"prefixes": ["3b1f"] * BUCKET_COUNT})
+    assert response.status_code == 422
+    assert "distinct" in response.text
+
+
+def test_rejects_a_single_repeated_decoy():
+    client = make_client(InMemoryFlaggedHashStore())
+    prefixes = distinct_prefixes(BUCKET_COUNT - 1) + ["0000"]
     response = client.post("/v1/reputation/lookup", json={"prefixes": prefixes})
     assert response.status_code == 422
 

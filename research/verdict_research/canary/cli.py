@@ -31,7 +31,7 @@ from verdict_research.canary.status_document import (
     build_status_document,
     write_status_document_file,
 )
-from verdict_research.canary.targets import read_targets
+from verdict_research.canary.targets import TargetsError, read_targets
 from verdict_research.canary.webhook_alert import resolve_sender
 from verdict_research.shipped_extractor import NodeExtractor
 
@@ -105,7 +105,11 @@ def main(
     )
     args = parser.parse_args(argv)
 
-    targets = read_targets(args.targets)
+    try:
+        targets = read_targets(args.targets)
+    except TargetsError as error:
+        print(f"{args.targets}: {error}", file=sys.stderr)
+        return 2
     if not targets:
         print(f"{args.targets} lists no targets", file=sys.stderr)
         return 1

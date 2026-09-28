@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { DatePrecision } from "../src/extract/normalise";
-import { applyModel, quantileValue, type CombinerModel } from "../src/score/combine";
+import {
+  applyModel,
+  quantileValue,
+  selectModel,
+  type CombinerModel,
+  type ModelSet,
+} from "../src/score/combine";
 import { buildFeatureVector } from "../src/score/featureVector";
 import type { FeatureVector } from "../src/score/featureVector";
 import { fromLexicon, hashedTerms } from "../src/score/embeddingBackend";
@@ -225,6 +231,15 @@ function run(vector: Vector): unknown {
         impute?: number;
       };
       return applyModel(featureVector, model, { impute });
+    }
+    case "selectModel": {
+      const { featureVector, models } = vector.input as {
+        featureVector: FeatureVector;
+        models: ModelSet;
+      };
+      const model = selectModel(models, featureVector);
+      const selected = model === models.reviewerGraph ? "reviewerGraph" : "local";
+      return { selected, ...applyModel(featureVector, model) };
     }
     case "quantileValue": {
       const { quantiles, fraction } = vector.input as { quantiles: number[]; fraction: number };

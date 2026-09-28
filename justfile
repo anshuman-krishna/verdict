@@ -192,11 +192,18 @@ prose:
     set -euo pipefail
     node extension/scripts/prose-gate.mjs
 
+# SITE.md build notes: nothing third party, the home page budget, bridge pages without javascript
+site-budget:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    (cd site && npm run build)
+    node extension/scripts/site-budget.mjs
+
 parity:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd extension && npx vitest run tests/parity.test.ts
-    cd ../research && uv run pytest tests/test_parity.py
+    cd extension && npx vitest run tests/parity.test.ts tests/productUrlParity.spec.ts
+    cd ../research && uv run pytest tests/test_parity.py tests/test_product_url_parity.py
 
 # refuses a build over 8 mb
 # build the zips and write the release manifest

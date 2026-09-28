@@ -5,7 +5,7 @@ import { CheckTabs } from "../bridge/checkTabs";
 import { handleBridgeMessage } from "../bridge/handler";
 import { isTrustedSiteOrigin, senderOrigin } from "../bridge/origins";
 import { BridgeRateLimiter } from "../bridge/rateLimit";
-import { isRelayedBridgeMessage } from "../bridge/relay";
+import { routeRuntimeMessage } from "../bridge/runtimeRouter";
 import { BUNDLED_RULES } from "../extract/bundledRules";
 import {
   loadRulesForEverySite,
@@ -13,7 +13,6 @@ import {
   trustedRulesForSite,
 } from "../extract/rulesLoader";
 import { siteIdsMatchedBy } from "../extract/sites";
-import { isAnalysisResultMessage } from "../contentScript/internalMessages";
 import { DEFAULT_GRAPH_CONTRIBUTION_ENDPOINT } from "../graph/endpoint";
 import { flushDueContributions } from "../graph/submit";
 import { pruneExpiredReviewsCache } from "../storage/reviewsCache";
@@ -27,24 +26,23 @@ type ResultListener = (tabId: number, outcome: ReportOutcome | null) => void;
 const resultListeners = new Set<ResultListener>();
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (isAnalysisResultMessage(message) && sender.tab?.id !== undefined) {
-    const tabId = sender.tab.id;
-    for (const listener of resultListeners) {
-      listener(tabId, message.outcome);
-    }
+  const answer = routeRuntimeMessage(message, sender, {
+    onAnalysisResult: (tabId, outcome) => {
+      for (const listener of resultListeners) {
+        listener(tabId, outcome);
+      }
+    },
+    answerBridge,
+    serveStorage: (request, from) =>
+      serveStorageRequest(request, from, {
+        rules: (siteId) => trustedRulesForSite(siteId),
+        isCheckTab: (tabId) => checkTabs.has(tabId),
+      }),
+  });
+  if (answer === undefined) {
     return undefined;
   }
-  if (isRelayedBridgeMessage(message)) {
-    // origin of the site tab itself
-    const origin = sender.tab === undefined ? undefined : senderOrigin(sender);
-    answerBridge(message.message, origin).then(sendResponse);
-    return true;
-  }
-  // the storefront page shares its storage with our content script, so the writing happens here
-  serveStorageRequest(message, sender, {
-    rules: (siteId) => trustedRulesForSite(siteId),
-    isCheckTab: (tabId) => checkTabs.has(tabId),
-  }).then(sendResponse);
+  answer.then(sendResponse);
   return true;
 });
 

@@ -43,17 +43,24 @@ export function explainExtraction(
   rules: RulesDocument,
 ): Explanation {
   const extraction = extractFull(document, url, rules);
+  const placed = {
+    url,
+    site: extraction.site,
+    locale: extraction.locale,
+    rulesVersion: extraction.rulesVersion,
+    reviewCount: extraction.reviews.length,
+  };
+  if (extraction.site === null) {
+    // a chain traced here would show matches the extractor never used
+    return { ...placed, fields: [], firstReview: null, priorsKey: null };
+  }
   const index = newPageIndex();
   const fields = Object.entries(rules.fields).map(([field, rule]) => {
     const steps = resolveFieldTraced(document, rule, index).trace;
     return { field, value: valueOf(field, extraction), steps, reading: readingFor(field, rule, steps) };
   });
   return {
-    url,
-    site: extraction.site,
-    locale: extraction.locale,
-    rulesVersion: extraction.rulesVersion,
-    reviewCount: extraction.reviews.length,
+    ...placed,
     fields,
     firstReview: extraction.reviews[0] ?? null,
     priorsKey: resolvePriors(extraction.product?.category ?? null).key,
@@ -107,9 +114,12 @@ function reviewLine(review: Review): string {
 }
 
 export function formatExplanation(explanation: Explanation): string {
+  if (explanation.site === null) {
+    return `${explanation.url}\nnot a product page on a supported storefront, so nothing was read`;
+  }
   const lines = [
     explanation.url,
-    `${explanation.site ?? "no supported site"} ${explanation.locale ?? ""}`.trim() +
+    `${explanation.site} ${explanation.locale ?? ""}`.trim() +
       `, rules version ${explanation.rulesVersion}`,
     "",
   ];
@@ -126,7 +136,7 @@ export function formatExplanation(explanation: Explanation): string {
   lines.push(
     "",
     `priors: ${explanation.priorsKey ?? "default, no category estimate matched"}`,
-    `${explanation.reviewCount} reviews read`,
+    explanation.reviewCount === 1 ? "1 review read" : `${explanation.reviewCount} reviews read`,
   );
   if (explanation.firstReview !== null) {
     lines.push(reviewLine(explanation.firstReview));

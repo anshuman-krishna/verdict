@@ -41,9 +41,15 @@ async function main(): Promise<number> {
   const root = window.document as unknown as ParentNode;
   const rules = rulesForUrl(url);
   // the canary reads the json, a person writing rules reads the chain that ran
-  const output = explaining
-    ? formatExplanation(explainExtraction(root, url, rules))
-    : JSON.stringify(withReviews ? extractFull(root, url, rules) : extractOnce(root, url, rules));
+  if (explaining) {
+    const explanation = explainExtraction(root, url, rules);
+    await window.happyDOM.close();
+    process.stdout.write(`${formatExplanation(explanation)}\n`);
+    return explanation.site === null ? 1 : 0;
+  }
+  const output = JSON.stringify(
+    withReviews ? extractFull(root, url, rules) : extractOnce(root, url, rules),
+  );
   await window.happyDOM.close();
   process.stdout.write(`${output}\n`);
   return 0;

@@ -78,14 +78,23 @@ describe("explaining what read a page", () => {
     expect(text).toContain('title: "Stovetop Kettle"');
     expect(text).toContain("1 match");
     expect(text).toContain("json-records");
-    expect(text).toContain("1 reviews read");
+    expect(text).toContain("1 review read");
     expect(text).toContain("5 stars, 2024-03-02, verification unknown");
   });
 
   it("names a page it could not place rather than pretending it read one", () => {
     const explanation = explainExtraction(PAGE, "https://example.com/thing", startingRules("amazon"));
     expect(explanation.site).toBeNull();
-    expect(formatExplanation(explanation)).toContain("no supported site");
+    expect(explanation.fields).toEqual([]);
+    const text = formatExplanation(explanation);
+    expect(text).toContain("not a product page on a supported storefront");
+    expect(text).not.toContain("match");
+    expect(text).not.toContain("priors");
+  });
+
+  it("does not take a storefront's search page for a product", () => {
+    const explanation = explainExtraction(PAGE, "https://www.amazon.com/s?k=kettle", startingRules("amazon"));
+    expect(formatExplanation(explanation)).toContain("not a product page");
   });
 });
 

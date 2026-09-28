@@ -52,10 +52,11 @@ import Layout from "../../layouts/Layout.astro";
     <p>For people who would rather read the code and build it.</p>
     <ol>
       <li>
-        Download the latest <code>verdict-chrome.zip</code> from the releases page, or build it
-        with <code>just ext build</code>.
+        Download the latest <code>verdict-&lt;version&gt;-chrome.zip</code> from the releases
+        page and unzip it somewhere you will not delete by accident. Or build it with
+        <code>just ext build</code>, which leaves the folder at
+        <code>extension/.output/chrome-mv3</code>.
       </li>
-      <li>Unzip it somewhere you will not delete by accident.</li>
       <li>Open <code>chrome://extensions</code> and turn on Developer mode, top right.</li>
       <li>Choose Load unpacked and select the unzipped folder.</li>
       <li>Chrome will warn you about developer mode extensions on every startup. That is normal.</li>

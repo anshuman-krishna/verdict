@@ -165,3 +165,11 @@ class TestLatestBackup:
     def test_raises_when_the_directory_does_not_exist(self, tmp_path):
         with pytest.raises(RestoreError, match="no backups"):
             latest_backup(tmp_path / "backups")
+
+
+def test_restore_refuses_a_backup_that_reads_but_fails_its_integrity_check(
+    tmp_path, backup_out_of_step_with_its_index
+):
+    with pytest.raises(RestoreError, match="failed its integrity check"):
+        restore_database(backup_out_of_step_with_its_index, tmp_path / "verdict.db")
+    assert not (tmp_path / "verdict.db").exists()

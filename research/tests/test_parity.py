@@ -25,6 +25,7 @@ from verdict_research.features.rating_deconvolution import (
     rating_deconvolution,
 )
 from verdict_research.features.reviewer_graph import (
+    ReviewerGraphResult,
     ReviewForReviewerGraph,
     reviewer_graph_share,
 )
@@ -54,8 +55,10 @@ from verdict_research.features.verification_concentration import (
 from verdict_research.model.combine import (
     CalibrationPoint,
     CombinerModel,
+    ModelSet,
     apply_model,
     quantile_value,
+    select_model,
 )
 from verdict_research.schema import Review
 
@@ -98,6 +101,80 @@ def _drift(result: ListingDriftResult) -> dict:
         if result.change_point is None
         else {"day": result.change_point.day, "afterCount": result.change_point.after_count},
     }
+
+
+def _feature_vector(fv: dict) -> FeatureVector:
+    rating = fv["ratingDeconvolution"]
+    burst = fv["temporalBurst"]
+    verification = fv["verificationConcentration"]
+    duplication = fv["textNearDuplication"]
+    drift = fv["listingDrift"]
+    graph = fv.get("reviewerGraph")
+    return FeatureVector(
+        meets_minimum_data=fv["meetsMinimumData"],
+        rating_deconvolution=RatingDeconvolutionResult(
+            injected_share=rating["injectedShare"], residual_error=rating["residualError"]
+        )
+        if rating is not None
+        else None,
+        temporal_burst=TemporalBurstResult(
+            bursts=[Burst(b["startDay"], b["endDay"], b["reviewCount"]) for b in burst["bursts"]],
+            burst_fraction=burst["burstFraction"],
+            burst_count=burst["burstCount"],
+            largest_burst_share=burst["largestBurstShare"],
+        )
+        if burst is not None
+        else None,
+        verification_concentration=VerificationConcentrationResult(
+            lift=verification["lift"], base_count=verification["baseCount"]
+        )
+        if verification is not None
+        else None,
+        text_near_duplication=TextNearDuplicationResult(
+            duplicate_review_share=duplication["duplicateReviewShare"],
+            cluster_count=duplication["clusterCount"],
+            largest_cluster_share=duplication["largestClusterShare"],
+        ),
+        listing_drift=ListingDriftResult(
+            off_topic_share=drift["offTopicShare"],
+            off_topic_count=drift["offTopicCount"],
+            mean_distance=drift["meanDistance"],
+            change_point=None,
+            drift_statistic=drift["driftStatistic"],
+            embedded_count=drift["embeddedCount"],
+        ),
+        reviewer_graph=None
+        if graph is None
+        else ReviewerGraphResult(
+            flagged_review_share=graph["flaggedReviewShare"],
+            flagged_review_count=graph["flaggedReviewCount"],
+            flagged_reviewer_count=graph["flaggedReviewerCount"],
+            known_reviewer_count=graph["knownReviewerCount"],
+            identified_review_count=graph["identifiedReviewCount"],
+        ),
+    )
+
+
+def _model(data: dict) -> CombinerModel:
+    return CombinerModel(
+        intercept=data["intercept"],
+        coefficients=data["coefficients"],
+        calibration=[CalibrationPoint(p["x"], p["y"]) for p in data["calibration"]],
+        feature_quantiles=data.get("featureQuantiles", {}),
+    )
+
+
+def _combined(result) -> dict:
+    if result.status == "ok":
+        return {
+            "status": result.status,
+            "rawProbability": result.raw_probability,
+            "probability": result.probability,
+            "imputed": result.imputed,
+        }
+    if result.status == "missing-features":
+        return {"status": result.status, "missing": result.missing}
+    return {"status": result.status}
 
 
 def run(vector: dict):
@@ -270,66 +347,21 @@ def run(vector: dict):
         }
 
     if signal == "combine":
-        fv = data["featureVector"]
-        rating = fv["ratingDeconvolution"]
-        burst = fv["temporalBurst"]
-        verification = fv["verificationConcentration"]
-        duplication = fv["textNearDuplication"]
-        drift = fv["listingDrift"]
-        feature_vector = FeatureVector(
-            meets_minimum_data=fv["meetsMinimumData"],
-            rating_deconvolution=RatingDeconvolutionResult(
-                injected_share=rating["injectedShare"], residual_error=rating["residualError"]
-            )
-            if rating is not None
-            else None,
-            temporal_burst=TemporalBurstResult(
-                bursts=[
-                    Burst(b["startDay"], b["endDay"], b["reviewCount"]) for b in burst["bursts"]
-                ],
-                burst_fraction=burst["burstFraction"],
-                burst_count=burst["burstCount"],
-                largest_burst_share=burst["largestBurstShare"],
-            )
-            if burst is not None
-            else None,
-            verification_concentration=VerificationConcentrationResult(
-                lift=verification["lift"], base_count=verification["baseCount"]
-            )
-            if verification is not None
-            else None,
-            text_near_duplication=TextNearDuplicationResult(
-                duplicate_review_share=duplication["duplicateReviewShare"],
-                cluster_count=duplication["clusterCount"],
-                largest_cluster_share=duplication["largestClusterShare"],
-            ),
-            listing_drift=ListingDriftResult(
-                off_topic_share=drift["offTopicShare"],
-                off_topic_count=drift["offTopicCount"],
-                mean_distance=drift["meanDistance"],
-                change_point=None,
-                drift_statistic=drift["driftStatistic"],
-                embedded_count=drift["embeddedCount"],
-            ),
-            reviewer_graph=None,
+        result = apply_model(
+            _feature_vector(data["featureVector"]), _model(data["model"]), impute=data.get("impute")
         )
-        model = CombinerModel(
-            intercept=data["model"]["intercept"],
-            coefficients=data["model"]["coefficients"],
-            calibration=[CalibrationPoint(p["x"], p["y"]) for p in data["model"]["calibration"]],
-            feature_quantiles=data["model"].get("featureQuantiles", {}),
+        return _combined(result)
+
+    if signal == "selectModel":
+        feature_vector = _feature_vector(data["featureVector"])
+        graph_model = data["models"]["reviewerGraph"]
+        models = ModelSet(
+            local=_model(data["models"]["local"]),
+            reviewer_graph=None if graph_model is None else _model(graph_model),
         )
-        result = apply_model(feature_vector, model, impute=data.get("impute"))
-        if result.status == "ok":
-            return {
-                "status": result.status,
-                "rawProbability": result.raw_probability,
-                "probability": result.probability,
-                "imputed": result.imputed,
-            }
-        if result.status == "missing-features":
-            return {"status": result.status, "missing": result.missing}
-        return {"status": result.status}
+        model = select_model(models, feature_vector)
+        selected = "reviewerGraph" if model is models.reviewer_graph else "local"
+        return {"selected": selected, **_combined(apply_model(feature_vector, model))}
 
     if signal == "quantileValue":
         return {"value": quantile_value(data["quantiles"], data["fraction"])}

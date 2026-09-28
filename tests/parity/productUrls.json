@@ -1,0 +1,18 @@
+[
+  {"url": "https://www.amazon.com/dp/B0ABCDEF12", "page": {"site": "amazon", "locale": "com", "productId": "B0ABCDEF12"}},
+  {"url": "https://www.amazon.de/dp/b0abcdef12?th=1", "page": {"site": "amazon", "locale": "de", "productId": "B0ABCDEF12"}},
+  {"url": "https://www.amazon.co.uk/gp/product/B0ABCDEF12/ref=ppx", "page": {"site": "amazon", "locale": "co.uk", "productId": "B0ABCDEF12"}},
+  {"url": "https://www.amazon.co.jp/Kettle/dp/B0ABCDEF12/", "page": {"site": "amazon", "locale": "co.jp", "productId": "B0ABCDEF12"}},
+  {"url": "https://www.amazon.com.br/dp/B0ABCDEF12", "page": {"site": "amazon", "locale": "com.br", "productId": "B0ABCDEF12"}},
+  {"url": "https://www.google.com/maps/place/Cafe/data=!4m2!1s0x47e66e:0x40b82c3688c9460", "page": {"site": "google-maps", "locale": "com", "productId": "0x47e66e:0x40b82c3688c9460"}},
+  {"url": "https://www.google.fr/maps/place/Cafe/@48.8,2.3,17z/data=!3m1!1s0xabc:0xdef", "page": {"site": "google-maps", "locale": "fr", "productId": "0xabc:0xdef"}},
+  {"url": "https://www.amazon.com/", "page": null},
+  {"url": "https://www.amazon.com/s?k=kettle", "page": null},
+  {"url": "https://www.amazon.com/dp/REPLACEMEXX", "page": null},
+  {"url": "https://www.amazon.com/dp/B0ABCDEF1234", "page": null},
+  {"url": "https://amazon.com/dp/B0ABCDEF12", "page": null},
+  {"url": "https://www.amazon.example/dp/B0ABCDEF12", "page": null},
+  {"url": "https://www.google.com/search?q=kettle", "page": null},
+  {"url": "https://example.com/dp/B0ABCDEF12", "page": null},
+  {"url": "not a url", "page": null}
+]

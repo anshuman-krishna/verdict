@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from verdict_research.canary.check import CanaryTarget
+from verdict_research.sites import product_page
 
 
 class TargetsError(ValueError):
@@ -36,6 +37,14 @@ def _target(index: int, entry: Any) -> CanaryTarget:
     url = _string(where, entry, "url")
     if not url.startswith("https://"):
         raise TargetsError(f"{where}: url must be https")
+    # a placeholder would be fetched, read as broken, and published to /status
+    page = product_page(url)
+    if page is None:
+        raise TargetsError(f"{where}: {url} is not a product page on any supported storefront")
+    if (page.site, page.locale) != (site, locale):
+        raise TargetsError(
+            f"{where}: {url} is {page.site} {page.locale}, not the {site} {locale} it is listed as"
+        )
     minimum = entry.get("minimumExpectedReviews")
     if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
         raise TargetsError(

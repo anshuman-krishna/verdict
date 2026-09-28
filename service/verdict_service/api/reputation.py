@@ -22,6 +22,9 @@ class ReputationLookupRequest(BaseModel):
                 raise ValueError(
                     f"prefix must be {PREFIX_LENGTH} lowercase hex characters: {prefix!r}"
                 )
+        # spec section 8: a repeated prefix is a missing decoy, and 32 of one names the real bucket
+        if len(set(value)) != BUCKET_COUNT:
+            raise ValueError(f"prefixes must be {BUCKET_COUNT} distinct entries")
         return value
 
 

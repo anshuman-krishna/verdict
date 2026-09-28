@@ -46,3 +46,13 @@ def test_corrupted_pages_fail_the_integrity_check(tmp_path):
     path.write_bytes(bytes(data))
 
     assert database_problems(path) != []
+
+
+def test_a_database_that_reads_but_fails_integrity_check_is_named_as_such(
+    backup_out_of_step_with_its_index,
+):
+    problems = database_problems(backup_out_of_step_with_its_index)
+
+    assert len(problems) == 1
+    assert "failed its integrity check" in problems[0]
+    assert "missing from index by_hash" in problems[0]

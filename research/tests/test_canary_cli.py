@@ -160,6 +160,22 @@ class TestMain:
         assert code == 1
         assert "no targets" in capsys.readouterr().err
 
+    def test_refuses_the_unedited_example_before_fetching_anything(self, tmp_path, capsys):
+        from pathlib import Path
+
+        example = Path(__file__).resolve().parents[1] / "canary-targets.example.json"
+        fetched = []
+        code = main(
+            [str(example), "--history", str(tmp_path / "h.json"), "--write"],
+            fetch_html=lambda url: fetched.append(url) or "<html></html>",
+            extract=healthy_extract,
+            now=clock(),
+        )
+        assert code == 2
+        assert fetched == []
+        assert "REPLACEMEXX" in capsys.readouterr().err
+        assert not (tmp_path / "h.json").exists()
+
     def test_alerts_go_to_the_injected_sender_over_stdout(self, tmp_path, capsys):
         sent = []
         main(
