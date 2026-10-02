@@ -9,12 +9,12 @@ dependencies = [
     # the asgi server that actually runs the app; fastapi is only the
     # framework. needed for main.py to be runnable at all, not just
     # importable.
-    "uvicorn==0.38.0",
+    "uvicorn==0.53.0",
 ]
 
 [dependency-groups]
 # httpx is fastapi's TestClient, dev only, never imported by the service itself
-dev = ["pytest==9.1.1", "ruff==0.16.6", "httpx==0.28.1"]
+dev = ["pytest==9.1.1", "ruff==0.16.8", "httpx==0.28.1"]
 
 [tool.ruff]
 line-length = 100

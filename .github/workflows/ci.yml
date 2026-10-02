@@ -12,20 +12,20 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: extractions/setup-just@v3
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v7
       - name: check python formatting and lint rules
         run: just py lint
 
   prose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: check the shipped prose against CLAUDE.md
         run: just prose
       # just check runs this, so ci has to, or a broken placeholder merges green
@@ -35,12 +35,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
-      - uses: astral-sh/setup-uv@v5
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v7
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -56,11 +56,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -79,11 +79,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -101,12 +101,12 @@ jobs:
   parity:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
-      - uses: astral-sh/setup-uv@v5
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v7
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -116,11 +116,11 @@ jobs:
   fixtures:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -145,11 +145,11 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - name: install extension dependencies
         working-directory: extension
         run: npm install
@@ -163,7 +163,7 @@ jobs:
       run:
         working-directory: service/deploy
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: validate docker-compose.yml against the compose spec
         run: docker compose config --quiet
       - name: caddy itself accepts the published Caddyfile
@@ -193,8 +193,8 @@ jobs:
   no-network:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: install extension dependencies
@@ -207,11 +207,11 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - name: audit extension javascript dependencies
         working-directory: extension
         run: npm audit --omit=dev --audit-level=high
