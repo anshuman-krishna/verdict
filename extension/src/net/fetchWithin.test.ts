@@ -85,7 +85,7 @@ describe("fetchWithin", () => {
       await fetchWithin(
         fetchImpl,
         "https://x",
-        { credentials: "include", referrerPolicy: "unsafe-url", cache: "force-cache" },
+        { credentials: "include", referrerPolicy: "unsafe-url", cache: "force-cache", redirect: "follow" },
         1000,
       );
 
@@ -93,6 +93,15 @@ describe("fetchWithin", () => {
       expect(init.credentials).toBe("omit");
       expect(init.referrerPolicy).toBe("no-referrer");
       expect(init.cache).toBe("no-store");
+      expect(init.redirect).toBe("error");
+    });
+
+    it("refuses a redirect, since a 307 would resend the body to whatever host it named", async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new TypeError("redirect mode is set to error"));
+      await expect(
+        fetchWithin(fetchImpl, "https://x", { method: "POST", body: "{}" }, 1000),
+      ).rejects.toThrow(TypeError);
+      expect((fetchImpl.mock.calls[0]?.[1] as RequestInit).redirect).toBe("error");
     });
 
     it("names every field the guarantee rests on, so removing one fails here", () => {
@@ -102,6 +111,7 @@ describe("fetchWithin", () => {
         referrerPolicy: "no-referrer",
         cache: "no-store",
         mode: "cors",
+        redirect: "error",
       });
     });
   });

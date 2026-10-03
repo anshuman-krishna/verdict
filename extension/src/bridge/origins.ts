@@ -27,9 +27,14 @@ export function isTrustedSiteOrigin(origin: string | undefined, development: boo
 export interface MessageSenderShape {
   origin?: string;
   url?: string;
+  frameId?: number;
 }
 
 export function senderOrigin(sender: MessageSenderShape): string | undefined {
+  // a framed page can be clickjacked, and chrome lets subframes message us directly
+  if (sender.frameId !== undefined && sender.frameId !== 0) {
+    return undefined;
+  }
   if (sender.origin !== undefined && sender.origin !== "") {
     return sender.origin;
   }

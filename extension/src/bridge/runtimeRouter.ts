@@ -6,6 +6,7 @@ import { isRelayedBridgeMessage } from "./relay";
 export interface RuntimeSender {
   origin?: string;
   url?: string;
+  frameId?: number;
   tab?: { id?: number };
 }
 

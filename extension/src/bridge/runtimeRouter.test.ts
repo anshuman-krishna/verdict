@@ -47,6 +47,16 @@ describe("which handler a runtime message reaches", () => {
     expect(handlers.serveStorage).not.toHaveBeenCalled();
   });
 
+  it("gives a relay from the website framed in another page no origin", async () => {
+    const handlers = deps();
+    await routeRuntimeMessage(
+      { type: RELAYED_MESSAGE_TYPE, message: HISTORY_LIST },
+      { ...SITE_TAB, frameId: 2 },
+      handlers,
+    );
+    expect(handlers.answerBridge).toHaveBeenCalledWith(HISTORY_LIST, undefined);
+  });
+
   it("never lets the website reach storage by wrapping a storage request", async () => {
     const handlers = deps();
     await routeRuntimeMessage(

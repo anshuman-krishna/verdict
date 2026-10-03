@@ -7,6 +7,8 @@ export const ANONYMOUS_REQUEST_INIT: RequestInit = {
   referrerPolicy: "no-referrer",
   cache: "no-store",
   mode: "cors",
+  // none of our endpoints redirect, and a 307 would carry the body elsewhere
+  redirect: "error",
 };
 
 function deadline(timeoutMs: number): { expired: Promise<null>; cancel: () => void } {
