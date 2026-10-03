@@ -214,3 +214,35 @@ describe("an analysis still running when the reader moves on", () => {
     expect(drawn.settle).toHaveBeenCalledOnce();
   });
 });
+
+describe("bringing a closed panel back", () => {
+  it("has nothing to bring back before anything was read", () => {
+    const { session } = harness(async () => OK);
+    expect(session.hasReading()).toBe(false);
+    expect(session.reopen()).toBe(false);
+  });
+
+  it("redraws the last reading on a fresh mount, without reading the page again", async () => {
+    const analyse = vi.fn(async () => OK);
+    const { session, teardown, mounts } = harness(analyse);
+    await session.visit(A);
+    teardown.mockClear();
+
+    expect(session.hasReading()).toBe(true);
+    expect(session.reopen()).toBe(true);
+
+    expect(analyse).toHaveBeenCalledOnce();
+    expect(teardown).toHaveBeenCalledOnce();
+    const fresh = mounts[mounts.length - 1] as ProgressiveMount;
+    expect(fresh.show).toHaveBeenCalledWith(OK, []);
+  });
+
+  it("forgets the reading of a listing it navigated away from", async () => {
+    let answer: AnalysisResult | null = OK;
+    const { session } = harness(async () => answer);
+    await session.visit(A);
+    answer = null;
+    await session.visit(NOT_A_PRODUCT);
+    expect(session.hasReading()).toBe(false);
+  });
+});

@@ -85,7 +85,7 @@ export function renderOptions(
   const now = state.now ?? Date.now();
   container.innerHTML = `
     <header>
-      <span class="wordmark">verdict</span>
+      <h1 class="wordmark">verdict</h1>
     </header>
     ${policyNoticeMarkup(state.pendingPolicyChanges ?? [], now)}
     <section class="setting">

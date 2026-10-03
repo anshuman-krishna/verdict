@@ -3,7 +3,7 @@ import { escapeHtml } from "./escape";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
 
-const shadowRoots = new WeakMap<VerdictNoticeElement, ShadowRoot>();
+const shadowRoots = new WeakMap<HTMLElement, ShadowRoot>();
 
 export function getNoticeShadowRootForTesting(notice: VerdictNoticeElement): ShadowRoot {
   const root = shadowRoots.get(notice);
@@ -39,15 +39,27 @@ export function safeNoticeHref(href: string): string | null {
   return href.startsWith(ALLOWED_LINK_PREFIX) ? href : null;
 }
 
-export class VerdictNoticeElement extends HTMLElement {
-  constructor() {
-    super();
-    const root = this.attachShadow({ mode: "closed" });
-    shadowRoots.set(this, root);
+export const NOTICE_TAG = "verdict-notice";
+
+export type VerdictNoticeElement = HTMLElement & Pick<NoticeController, "render" | "updateProgress">;
+
+// a content script has no custom element registry, so the host is a plain element
+export function createNoticeElement(document: Document): VerdictNoticeElement {
+  const host = document.createElement(NOTICE_TAG);
+  const controller = new NoticeController(host);
+  return Object.assign(host, {
+    render: controller.render.bind(controller),
+    updateProgress: controller.updateProgress.bind(controller),
+  });
+}
+
+class NoticeController {
+  constructor(private readonly host: HTMLElement) {
+    shadowRoots.set(host, host.attachShadow({ mode: "closed" }));
   }
 
   render(state: NoticeState, t: Translator = ENGLISH_TRANSLATOR): void {
-    const root = shadowRoots.get(this);
+    const root = shadowRoots.get(this.host);
     if (root === undefined) {
       return;
     }
@@ -64,7 +76,7 @@ export class VerdictNoticeElement extends HTMLElement {
 
     root.innerHTML = `
       <style>${DESIGN_TOKENS_CSS}${NOTICE_CSS}</style>
-      <div class="notice" role="status">
+      <div class="notice" role="status" lang="${escapeHtml(t.language)}">
         <span class="wordmark">verdict</span>
         <p class="message">${escapeHtml(state.message)}</p>
         ${state.progress === undefined ? "" : `<p class="progress">${escapeHtml(state.progress)}</p>`}
@@ -82,23 +94,18 @@ export class VerdictNoticeElement extends HTMLElement {
       root.querySelector(".action")?.addEventListener("click", action.onClick);
     }
     root.querySelector(".close")?.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+      this.host.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
     });
   }
 
   updateProgress(progress: string): void {
-    const node = shadowRoots.get(this)?.querySelector(".progress");
+    const node = shadowRoots.get(this.host)?.querySelector(".progress");
     if (node !== null && node !== undefined) {
       node.textContent = progress;
     }
   }
 }
 
-
-
-if (typeof customElements !== "undefined" && customElements.get("verdict-notice") === undefined) {
-  customElements.define("verdict-notice", VerdictNoticeElement);
-}
 
 const NOTICE_CSS = `
 * { box-sizing: border-box; }

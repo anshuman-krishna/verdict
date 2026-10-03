@@ -156,6 +156,25 @@ jobs:
       - name: check the built bundle against what gets extensions removed
         run: just preflight
 
+  # happy-dom has no isolated worlds, so a content script that only breaks in
+  # a real browser passes every unit test. This loads the build in chromium.
+  browser-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: extractions/setup-just@v4
+      - name: install extension dependencies
+        working-directory: extension
+        run: npm install
+      - name: install chromium
+        working-directory: extension
+        run: npx playwright install --with-deps chromium
+      - name: load the build in a real browser
+        run: just browser-smoke
+
   # only a docker daemon proves the image boots
   deploy-config:
     runs-on: ubuntu-latest

@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import { analyzePage, type OrchestratorDeps } from "../contentScript/orchestrator";
-import { createProgressiveMount, removeMountedElements } from "../contentScript/mount";
+import { createProgressiveMount, MOUNTED_SELECTOR, removeMountedElements } from "../contentScript/mount";
+import { answerPanelRequest, isPanelRequest } from "../contentScript/panelMessages";
 import { callIfSlower, FIRST_PAINT_BUDGET_MS } from "../contentScript/deadline";
 import { browserUrlWatcher } from "../contentScript/navigation";
 import { createSession } from "../contentScript/session";
@@ -25,8 +26,6 @@ import {
   unwatchListingVia,
   watchListingVia,
 } from "../storage/viaBackground";
-import "../ui/panel";
-import "../ui/notice";
 
 const CONTENT_SCRIPT_MATCHES = contentScriptMatches();
 
@@ -107,6 +106,19 @@ export default defineContentScript({
         browser.runtime.sendMessage(message).catch(() => {
         });
       },
+    });
+
+    // the popup asks whether a closed panel can come back, and brings it back
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (sender.id !== browser.runtime.id || !isPanelRequest(message)) {
+        return undefined;
+      }
+      sendResponse(answerPanelRequest(message, {
+        hasReading: session.hasReading,
+        isShowing: () => document.querySelector(MOUNTED_SELECTOR) !== null,
+        reopen: session.reopen,
+      }));
+      return undefined;
     });
 
     // the first read needs no settling, document_idle already waited

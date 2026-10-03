@@ -170,6 +170,13 @@ preflight: (ext "build")
     node scripts/store-preflight.mjs --target chrome-mv3
     node scripts/store-preflight.mjs --target firefox-mv3
 
+# needs `npx playwright install chromium` once, inside extension
+# load the built extension in a real chromium, which happy-dom cannot stand in for
+browser-smoke: (ext "build")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd extension && node scripts/browser-smoke.mjs
+
 #   just sign-rules --key path/to/private-key.jwk.json
 # the key never lives here
 # sign the extraction rules for publishing

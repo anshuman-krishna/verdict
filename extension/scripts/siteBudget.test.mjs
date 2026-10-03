@@ -7,6 +7,7 @@ const sizes = (table) => (url) => table[url] ?? null;
 function site(overrides = {}) {
   const pages = {
     "index.html": "<html><body>home</body></html>",
+    "404.html": "<html><body>not here</body></html>",
     "check/index.html": `<html>${NOSCRIPT}<script>1</script></html>`,
     "history/index.html": `<html>${NOSCRIPT}<script>1</script></html>`,
     ...overrides,
@@ -72,6 +73,12 @@ describe("the SITE.md build notes", () => {
     const problems = siteProblems(site({ "check/index.html": "<script>1</script>" }), sizes({}));
     expect(problems).toEqual([
       "check/index.html talks to the extension and says nothing when javascript is off",
+    ]);
+  });
+
+  it("wants a not found page, or a mistyped address gets the host's own", () => {
+    expect(siteProblems(site({ "404.html": null }), sizes({}))).toEqual([
+      "no 404.html, so a mistyped address gets whatever error page the host has",
     ]);
   });
 

@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newTranslator } from "../i18n/translator";
 import type { Report } from "../score/report";
 import {
+  createPanelElement,
   getPanelShadowRootForTesting,
   previouslyLine,
-  VerdictPanelElement,
+  type VerdictPanelElement,
   watchLines,
   type WatchDetail,
 } from "./panel";
@@ -56,14 +57,33 @@ beforeEach(() => {
 });
 
 function render(report: Report, pending: string[] = []): ShadowRoot {
-  const panel = new VerdictPanelElement();
+  const panel = createPanelElement(document);
   panel.render(report, rosetteInput, Date.now(), { pending });
   return getPanelShadowRootForTesting(panel);
 }
 
-describe("VerdictPanelElement", () => {
+// chrome gives a content script's isolated world no custom element registry at all
+describe("the panel inside a content script", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("loads and draws with customElements set to null", async () => {
+    vi.stubGlobal("customElements", null);
+    vi.resetModules();
+    const fresh = await import("./panel");
+    const panel = fresh.createPanelElement(document);
+    document.body.append(panel);
+    panel.render(sampleReport(), rosetteInput);
+    expect(fresh.getPanelShadowRootForTesting(panel).querySelector(".panel")).not.toBeNull();
+    panel.remove();
+  });
+});
+
+describe("the panel element", () => {
   it("renders the band, figures, counts, and summary sentence from the report", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
 
@@ -75,7 +95,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("gives the rosette a text alternative naming the band and the share", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
 
@@ -85,7 +105,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("renders the kept and excluded counts on the specimen strip", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
 
@@ -94,7 +114,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("expands an evidence row on click and reveals its detail sentence", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
 
@@ -112,7 +132,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("dispatches verdict:close when the close button is clicked", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
@@ -128,7 +148,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("dispatches verdict:full-report when the full report button is clicked", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
@@ -144,7 +164,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("dispatches verdict:close on escape", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(sampleReport(), rosetteInput);
 
@@ -160,7 +180,7 @@ describe("VerdictPanelElement", () => {
 
   it("marks the rosette path as no-motion when prefers-reduced-motion is set", () => {
     stubMatchMedia(true);
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput);
     const root = getPanelShadowRootForTesting(panel);
 
@@ -168,7 +188,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("shows 'checked just now' immediately after generation", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     const generatedAt = 1_700_000_000_000;
     panel.render(sampleReport({ generatedAt }), rosetteInput, generatedAt + 5_000);
     const root = getPanelShadowRootForTesting(panel);
@@ -177,7 +197,7 @@ describe("VerdictPanelElement", () => {
   });
 
   it("shows a minutes-ago phrasing once enough time has passed", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     const generatedAt = 1_700_000_000_000;
     panel.render(sampleReport({ generatedAt }), rosetteInput, generatedAt + 5 * 60_000);
     const root = getPanelShadowRootForTesting(panel);
@@ -278,7 +298,7 @@ describe("the provisional state while a signal is still arriving", () => {
   });
 
   it("drops the pending line when the panel is re-rendered with the final report", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput, Date.now(), { pending: ["reviewer network"] });
     panel.render(sampleReport(), rosetteInput, Date.now(), { pending: [] });
     expect(getPanelShadowRootForTesting(panel).querySelector(".pending")).toBeNull();
@@ -287,7 +307,7 @@ describe("the provisional state while a signal is still arriving", () => {
 
 describe("a reader in the middle of the panel when the final report lands", () => {
   function mounted(): { panel: VerdictPanelElement; root: ShadowRoot } {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.append(panel);
     panel.render(sampleReport(), rosetteInput, Date.now(), { pending: ["reviewer network"] });
     return { panel, root: getPanelShadowRootForTesting(panel) };
@@ -367,7 +387,7 @@ describe("focus is visible on every control (DESIGN.md section 11)", () => {
 
 describe("the full report button", () => {
   it("names the report it was showing, so the popup can open that one", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     const report = sampleReport();
     panel.render(report, rosetteInput);
     let sent: { serial: string } | null = null;
@@ -381,7 +401,7 @@ describe("the full report button", () => {
   });
 
   it("still asks for the popup when the report carries no serial", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport({ serial: "" }), rosetteInput);
     let fired = false;
     panel.addEventListener("verdict:full-report", () => {
@@ -403,7 +423,7 @@ describe("what the panel says about a listing checked before", () => {
 
   it("says nothing at all the first time a listing is seen", () => {
     expect(previouslyLine(sampleReport(), undefined, NOW)).toBeNull();
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput, NOW, { previousChecks: [] });
     expect(getPanelShadowRootForTesting(panel).querySelector(".previously")).toBeNull();
   });
@@ -438,7 +458,7 @@ describe("what the panel says about a listing checked before", () => {
   });
 
   it("renders the line under the interval, and uses only the newest check", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     panel.render(sampleReport(), rosetteInput, NOW, {
       previousChecks: [check(2, "clean"), check(40, "doubtful")],
     });
@@ -453,7 +473,7 @@ describe("the panel in another locale", () => {
   const german = newTranslator("de-DE", { "panel.claimed": "angegeben" }, "de");
 
   function renderIn(report: Report): ShadowRoot {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(report, rosetteInput, Date.now(), { translator: german });
     return getPanelShadowRootForTesting(panel);
@@ -461,6 +481,13 @@ describe("the panel in another locale", () => {
 
   it("writes the rating with the reader's own decimal mark", () => {
     expect(renderIn(sampleReport()).querySelector(".claimed")?.textContent).toBe("4,6");
+  });
+
+  it("says which language its words are in, not the storefront's", () => {
+    expect(renderIn(sampleReport()).querySelector(".panel")?.getAttribute("lang")).toBe("de");
+    const english = createPanelElement(document);
+    english.render(sampleReport(), rosetteInput);
+    expect(getPanelShadowRootForTesting(english).querySelector(".panel")?.getAttribute("lang")).toBe("en");
   });
 
   it("groups review counts the way the reader's locale groups them", () => {
@@ -498,7 +525,7 @@ describe("the panel in another locale", () => {
       { "evidence.duplicateText.clusters": { one: "ein Block", other: "{count} Blocke, {percent} Prozent" } },
       "de",
     );
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(report, rosetteInput, Date.now(), { translator: translated });
     expect(getPanelShadowRootForTesting(panel).querySelector(".detail")?.textContent).toBe(
@@ -507,7 +534,7 @@ describe("the panel in another locale", () => {
   });
 
   it("falls back to the stored english for a row saved before messages existed", () => {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(sampleReport(), rosetteInput, Date.now(), { translator: german });
     expect(getPanelShadowRootForTesting(panel).querySelector(".detail")?.textContent).toBe(
@@ -555,7 +582,7 @@ describe("the watchlist on the panel", () => {
   }
 
   function mounted(watch?: WatchStatus): VerdictPanelElement {
-    const panel = new VerdictPanelElement();
+    const panel = createPanelElement(document);
     document.body.appendChild(panel);
     panel.render(sampleReport(), rosetteInput, NOW, { watch });
     return panel;

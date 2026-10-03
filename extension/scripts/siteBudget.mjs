@@ -56,6 +56,9 @@ export function siteProblems(pages, sizeOf) {
       problems.push(`the home page weighs ${weight} bytes, over the ${HOME_BUDGET_BYTES} SITE.md allows`);
     }
   }
+  if (!pages.some((page) => page.path === "404.html")) {
+    problems.push("no 404.html, so a mistyped address gets whatever error page the host has");
+  }
   for (const bridge of BRIDGE_PAGES) {
     const page = pages.find((candidate) => candidate.path === bridge);
     if (page === undefined) {

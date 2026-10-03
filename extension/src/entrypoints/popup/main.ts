@@ -1,4 +1,9 @@
 import { browser } from "wxt/browser";
+import {
+  isPanelHiddenOnActiveTab,
+  showPanelOnActiveTab,
+  type TabsPort,
+} from "../../contentScript/activeTabPanel";
 import { translatorForBrowser } from "../../i18n/locale";
 import { rescore } from "../../score/rescore";
 import { BUNDLED_MODEL } from "../../score/model";
@@ -52,6 +57,13 @@ export function entryForSerial(
 
 const translator = translatorForBrowser();
 
+const activeTab: TabsPort = {
+  query: (filter) => browser.tabs.query(filter),
+  sendMessage: (tabId, message) => browser.tabs.sendMessage(tabId, message),
+};
+// the words may fall back to english while the browser asks for another language
+document.documentElement.lang = translator.language;
+
 async function refresh(openId: number | null = null): Promise<void> {
   const app = document.getElementById("app");
   if (app === null) {
@@ -90,6 +102,7 @@ async function refresh(openId: number | null = null): Promise<void> {
   const policyChanges = pendingPolicyChanges(await getAcknowledgedPolicyVersion());
   const watchlist = await listWatchlist();
   const analysisEnabled = await getAnalysisEnabled();
+  const panelHidden = await isPanelHiddenOnActiveTab(activeTab);
   renderPopup(
     app,
     entries.map((entry) => ({ ...entry, rescored: rescore(entry, BUNDLED_MODEL) })),
@@ -116,9 +129,15 @@ async function refresh(openId: number | null = null): Promise<void> {
         await setAnalysisEnabled(true);
         await refresh();
       },
+      onShowPanel: async () => {
+        // the panel is on the page now, which is where the reader wants to look
+        if (await showPanelOnActiveTab(activeTab)) {
+          window.close();
+        }
+      },
     },
     "",
-    { pendingPolicyChanges: policyChanges, translator, watchlist, analysisEnabled },
+    { pendingPolicyChanges: policyChanges, translator, watchlist, analysisEnabled, panelHidden },
   );
 }
 

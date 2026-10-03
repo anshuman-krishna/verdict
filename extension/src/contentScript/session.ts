@@ -25,6 +25,9 @@ export interface VisitOptions {
 
 export interface Session {
   visit: (href: string, options?: VisitOptions) => Promise<void>;
+  // what the reader closed, ready to draw again from the popup without reading the page twice
+  hasReading: () => boolean;
+  reopen: () => boolean;
 }
 
 function realDelay(ms: number): Promise<void> {
@@ -64,6 +67,7 @@ export function createSession(deps: SessionDeps): Session {
 
   let identity: string | null | undefined;
   let generation = 0;
+  let lastReading: AnalysisResult | null = null;
 
   const visit = async (href: string, options: VisitOptions = {}): Promise<void> => {
     const next = listingIdentity(href);
@@ -72,6 +76,7 @@ export function createSession(deps: SessionDeps): Session {
       return;
     }
     identity = next;
+    lastReading = null;
 
     generation += 1;
     const mine = generation;
@@ -105,10 +110,20 @@ export function createSession(deps: SessionDeps): Session {
         continue;
       }
       mount.settle();
+      lastReading = result;
       deps.report(result?.outcome ?? null);
       return;
     }
   };
 
-  return { visit };
+  const reopen = (): boolean => {
+    if (lastReading === null) {
+      return false;
+    }
+    deps.teardown();
+    deps.createMount().show(lastReading, []);
+    return true;
+  };
+
+  return { visit, hasReading: () => lastReading !== null, reopen };
 }

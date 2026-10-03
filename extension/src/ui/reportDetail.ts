@@ -88,7 +88,7 @@ export function renderReportDetail(
   container.innerHTML = `
     <header>
       <button type="button" class="back" aria-label="${t.text("detail.back")}">&#8592;</button>
-      <span class="wordmark">verdict</span>
+      <h1 class="wordmark">verdict</h1>
     </header>
     <div class="detail">
       <div class="detail-head">

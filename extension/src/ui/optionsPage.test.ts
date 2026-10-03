@@ -42,6 +42,12 @@ function state(overrides: Partial<Parameters<typeof renderOptions>[1]> = {}) {
 }
 
 describe("renderOptions", () => {
+  it("names the page with one top level heading", () => {
+    const container = document.createElement("div");
+    renderOptions(container, state({}), callbacks());
+    expect([...container.querySelectorAll("h1")].map((heading) => heading.textContent)).toEqual(["verdict"]);
+  });
+
   it("reflects the current history toggle state", () => {
     const container = document.createElement("div");
     renderOptions(container, state({ historyEnabled: true }), callbacks());

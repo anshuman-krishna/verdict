@@ -14,7 +14,7 @@ import { escapeHtml } from "./escape";
 import { rosetteParams, rosettePath, type RosetteInput } from "./rosette";
 import { DESIGN_TOKENS_CSS } from "./tokens";
 
-const shadowRoots = new WeakMap<VerdictPanelElement, ShadowRoot>();
+const shadowRoots = new WeakMap<HTMLElement, ShadowRoot>();
 
 export function getPanelShadowRootForTesting(panel: VerdictPanelElement): ShadowRoot {
   const root = shadowRoots.get(panel);
@@ -189,23 +189,25 @@ function restoreInteraction(root: ShadowRoot, interaction: PanelInteraction): vo
   target?.focus();
 }
 
-export class VerdictPanelElement extends HTMLElement {
+export const PANEL_TAG = "verdict-panel";
+
+export type VerdictPanelElement = HTMLElement & Pick<PanelController, "render">;
+
+// a content script has no custom element registry, so the host is a plain element
+export function createPanelElement(document: Document): VerdictPanelElement {
+  const host = document.createElement(PANEL_TAG);
+  const controller = new PanelController(host);
+  return Object.assign(host, { render: controller.render.bind(controller) });
+}
+
+class PanelController {
   private report: Report | null = null;
   private focusableSelector =
     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-  constructor() {
-    super();
-    const root = this.attachShadow({ mode: "closed" });
-    shadowRoots.set(this, root);
-  }
-
-  connectedCallback(): void {
-    this.addEventListener("keydown", this.handleKeydown);
-  }
-
-  disconnectedCallback(): void {
-    this.removeEventListener("keydown", this.handleKeydown);
+  constructor(private readonly host: HTMLElement) {
+    shadowRoots.set(host, host.attachShadow({ mode: "closed" }));
+    host.addEventListener("keydown", this.handleKeydown);
   }
 
   render(
@@ -215,7 +217,7 @@ export class VerdictPanelElement extends HTMLElement {
     options: PanelRenderOptions = {},
   ): void {
     this.report = report;
-    const root = shadowRoots.get(this);
+    const root = shadowRoots.get(this.host);
     if (root === undefined) {
       return;
     }
@@ -235,7 +237,7 @@ export class VerdictPanelElement extends HTMLElement {
 
     root.innerHTML = `
       <style>${DESIGN_TOKENS_CSS}${PANEL_CSS}</style>
-      <div class="panel" role="region" aria-label="${t.text("panel.regionLabel")}">
+      <div class="panel" role="region" lang="${escapeHtml(t.language)}" aria-label="${t.text("panel.regionLabel")}">
         <header>
           <span class="wordmark">verdict</span>
           <button type="button" class="close" aria-label="${t.text("panel.close")}">&times;</button>
@@ -387,7 +389,7 @@ export class VerdictPanelElement extends HTMLElement {
   private wireClose(root: ShadowRoot): void {
     const closeButton = root.querySelector(".close");
     closeButton?.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+      this.host.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
     });
   }
 
@@ -395,7 +397,7 @@ export class VerdictPanelElement extends HTMLElement {
     const fullReportButton = root.querySelector(".full-report");
     fullReportButton?.addEventListener("click", () => {
       // the serial names which stored report to open, so the button lands on this one
-      this.dispatchEvent(
+      this.host.dispatchEvent(
         new CustomEvent<FullReportDetail>("verdict:full-report", {
           bubbles: true,
           composed: true,
@@ -407,7 +409,7 @@ export class VerdictPanelElement extends HTMLElement {
 
   private wireWatchToggle(root: ShadowRoot, watching: boolean): void {
     root.querySelector(".watch-toggle")?.addEventListener("click", () => {
-      this.dispatchEvent(
+      this.host.dispatchEvent(
         new CustomEvent<WatchDetail>("verdict:watch", {
           bubbles: true,
           composed: true,
@@ -433,7 +435,7 @@ export class VerdictPanelElement extends HTMLElement {
 
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Escape") {
-      this.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+      this.host.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
       return;
     }
     if (event.key === "Tab") {
@@ -442,7 +444,7 @@ export class VerdictPanelElement extends HTMLElement {
   };
 
   private trapFocus(event: KeyboardEvent): void {
-    const root = shadowRoots.get(this);
+    const root = shadowRoots.get(this.host);
     if (root === undefined) {
       return;
     }
@@ -466,9 +468,6 @@ export class VerdictPanelElement extends HTMLElement {
   }
 }
 
-if (typeof customElements !== "undefined" && customElements.get("verdict-panel") === undefined) {
-  customElements.define("verdict-panel", VerdictPanelElement);
-}
 
 const PANEL_CSS = `
 * { box-sizing: border-box; }

@@ -2,6 +2,7 @@ import { browser } from "wxt/browser";
 import type { ReportOutcome } from "../score/buildReport";
 import { analyzeViaHiddenTab } from "../bridge/analyzeViaTab";
 import { CheckTabs } from "../bridge/checkTabs";
+import { answerCommand } from "../contentScript/activeTabPanel";
 import { handleBridgeMessage } from "../bridge/handler";
 import { isTrustedSiteOrigin, senderOrigin } from "../bridge/origins";
 import { BridgeRateLimiter } from "../bridge/rateLimit";
@@ -129,6 +130,13 @@ export default defineBackground(() => {
     if (details.reason === "install") {
       setAcknowledgedPolicyVersion(PRIVACY_POLICY_VERSION).catch(() => {});
     }
+  });
+
+  browser.commands.onCommand.addListener((command) => {
+    answerCommand(command, {
+      query: (filter) => browser.tabs.query(filter),
+      sendMessage: (tabId, message) => browser.tabs.sendMessage(tabId, message),
+    }).catch(() => {});
   });
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {

@@ -7,8 +7,13 @@ import { signalLabel } from "../score/reportText";
 import type { Report } from "../score/report";
 import { STATUS_URL } from "../siteLinks";
 import { rosetteInputFromReport } from "../ui/rosetteInputFromReport";
-import type { NoticeState, VerdictNoticeElement } from "../ui/notice";
-import type { FullReportDetail, VerdictPanelElement, WatchDetail } from "../ui/panel";
+import { createNoticeElement, type NoticeState, type VerdictNoticeElement } from "../ui/notice";
+import {
+  createPanelElement,
+  type FullReportDetail,
+  type VerdictPanelElement,
+  type WatchDetail,
+} from "../ui/panel";
 import type { WatchStatus } from "../storage/watchlist";
 import { readingFromReport } from "../watchlist/reading";
 import {
@@ -35,7 +40,7 @@ function createPanel(
   onClose: () => void,
   onWatch: (watching: boolean) => void = () => {},
 ): VerdictPanelElement {
-  const panel = document.createElement("verdict-panel") as VerdictPanelElement;
+  const panel = createPanelElement(document);
   pinToCorner(panel);
   document.body.appendChild(panel);
   panel.addEventListener("verdict:close", () => {
@@ -85,7 +90,7 @@ function mountPanel(
   openTab: (url: string) => void,
   translator: Translator,
   deps?: OrchestratorDeps,
-): void {
+): VerdictPanelElement {
   let status = result.watch;
   const draw = (): void => {
     panel.render(report, rosetteInputFromReport(report), Date.now(), {
@@ -104,10 +109,11 @@ function mountPanel(
     }),
   );
   draw();
+  return panel;
 }
 
 function createNotice(document: Document): VerdictNoticeElement {
-  const notice = document.createElement("verdict-notice") as VerdictNoticeElement;
+  const notice = createNoticeElement(document);
   pinToCorner(notice);
   document.body.appendChild(notice);
   notice.addEventListener("verdict:close", () => notice.remove());
@@ -194,8 +200,10 @@ export function nextReadDepth(
   return read.maxPages >= cap ? null : cap;
 }
 
-function mountPlainNotice(document: Document, state: NoticeState, t: Translator): void {
-  createNotice(document).render(state, t);
+function mountPlainNotice(document: Document, state: NoticeState, t: Translator): VerdictNoticeElement {
+  const notice = createNotice(document);
+  notice.render(state, t);
+  return notice;
 }
 
 function mountNotEnoughDataNotice(
@@ -206,14 +214,13 @@ function mountNotEnoughDataNotice(
   checkOptions: CheckMoreDeeplyOptions,
   openTab: (url: string) => void,
   t: Translator,
-): void {
+): VerdictNoticeElement {
   const maxPages = nextReadDepth(result, checkOptions);
   if (maxPages === null) {
     const message = canFetchReviewPages(result.page.site)
       ? everyPageReadMessage(result, t)
       : pageOnlyMessage(result, t);
-    mountPlainNotice(document, { message }, t);
-    return;
+    return mountPlainNotice(document, { message }, t);
   }
 
   const notice = createNotice(document);
@@ -254,6 +261,7 @@ function mountNotEnoughDataNotice(
   };
 
   renderIdle();
+  return notice;
 }
 
 export function startingProgressLine(
@@ -281,32 +289,31 @@ export function mountResult(
   checkOptions: CheckMoreDeeplyOptions = { cache: NO_REVIEWS_CACHE },
   openTab: (url: string) => void = defaultOpenTab,
   t: Translator = ENGLISH_TRANSLATOR,
-): void {
+): HTMLElement | null {
   const outcome = result.outcome;
   if (outcome.status === "ok") {
-    mountPanel(document, result, outcome.report, openTab, t, deps);
-    return;
+    return mountPanel(document, result, outcome.report, openTab, t, deps);
   }
   if (outcome.status === "unreadable") {
-    mountPlainNotice(document, unreadableState(t), t);
-    return;
+    return mountPlainNotice(document, unreadableState(t), t);
   }
   if (outcome.status === "missing-features") {
-    mountPlainNotice(document, missingSignalsState(outcome.missing, t), t);
-    return;
+    return mountPlainNotice(document, missingSignalsState(outcome.missing, t), t);
   }
   if (outcome.status === "no-model") {
-    mountPlainNotice(document, noModelState(t), t);
-    return;
+    return mountPlainNotice(document, noModelState(t), t);
   }
   if (result.product !== null) {
-    mountNotEnoughDataNotice(document, result, result.product, deps, checkOptions, openTab, t);
+    return mountNotEnoughDataNotice(document, result, result.product, deps, checkOptions, openTab, t);
   }
+  return null;
 }
 
 // our own tag names, so this cannot miss one and cannot touch anything of the page's
+export const MOUNTED_SELECTOR = "verdict-panel, verdict-notice";
+
 export function removeMountedElements(document: Document): void {
-  for (const element of document.querySelectorAll("verdict-panel, verdict-notice")) {
+  for (const element of document.querySelectorAll(MOUNTED_SELECTOR)) {
     element.remove();
   }
 }
@@ -327,6 +334,8 @@ export function createProgressiveMount(
   let panel: VerdictPanelElement | null = null;
   let watching: WatchStatus | undefined;
   let waitingNotice: VerdictNoticeElement | null = null;
+  // settling replays the last stage, so a result notice is replaced, never stacked
+  let resultNotice: HTMLElement | null = null;
   let dismissed = false;
   let shown: AnalysisResult | null = null;
 
@@ -340,7 +349,7 @@ export function createProgressiveMount(
       if (dismissed || panel !== null || waitingNotice !== null) {
         return;
       }
-      const notice = document.createElement("verdict-notice") as VerdictNoticeElement;
+      const notice = createNoticeElement(document);
       pinToCorner(notice);
       document.body.appendChild(notice);
       notice.addEventListener("verdict:close", () => {
@@ -359,13 +368,15 @@ export function createProgressiveMount(
     },
 
     show: (result, pending) => {
-      // a closed panel stays closed
-      if (dismissed) {
+      // a closed panel stays closed, and so does a notice the reader closed or a deeper read replaced
+      if (dismissed || (resultNotice !== null && !resultNotice.isConnected)) {
         return;
       }
       shown = result;
       if (result.outcome.status === "ok") {
         clearWaiting();
+        resultNotice?.remove();
+        resultNotice = null;
         const report = result.outcome.report;
         const draw = (): void => {
           panel?.render(report, rosetteInputFromReport(report), Date.now(), {
@@ -395,7 +406,8 @@ export function createProgressiveMount(
         return;
       }
       clearWaiting();
-      mountResult(document, result, deps, checkOptions, openTab, t);
+      resultNotice?.remove();
+      resultNotice = mountResult(document, result, deps, checkOptions, openTab, t);
     },
   };
   return mounted;

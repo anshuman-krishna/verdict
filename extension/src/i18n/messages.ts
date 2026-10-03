@@ -149,6 +149,7 @@ export const ENGLISH = {
   "popup.confirmDelete": "confirm delete",
   "popup.paused": "Verdict is not reading the pages you open.",
   "popup.resume": "Start reading again",
+  "popup.showPanel": "Show the panel on this page",
 
   "watch.add": "Keep an eye on this",
   "watch.remove": "Stop watching",

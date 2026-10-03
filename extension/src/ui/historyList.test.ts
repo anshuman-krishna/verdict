@@ -205,6 +205,35 @@ describe("searching the history", () => {
     expect(container.querySelector(".empty")?.textContent).toBe("No checks match that.");
   });
 
+  it("keeps an empty history out of the list role, which a screen reader expects items in", () => {
+    const empty = document.createElement("div");
+    renderPopup(empty, [], callbacks());
+    expect(empty.querySelector('[role="list"]')).toBeNull();
+
+    const unmatched = document.createElement("div");
+    renderPopup(unmatched, [entry({ title: "wireless mouse" })], callbacks());
+    const search = unmatched.querySelector<HTMLInputElement>(".search-input") as HTMLInputElement;
+    search.value = "nothing like it";
+    search.dispatchEvent(new Event("input"));
+    expect(unmatched.querySelector('[role="list"]')).toBeNull();
+  });
+
+  it("gives every child of the list the listitem role", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [entry({ id: 1, title: "a" }), entry({ id: 2, title: "b", timestamp: 1 })], callbacks());
+    const list = container.querySelector('[role="list"]');
+    expect(list?.children.length).toBeGreaterThan(0);
+    for (const child of list?.children ?? []) {
+      expect(child.getAttribute("role")).toBe("listitem");
+    }
+  });
+
+  it("names the popup with one top level heading", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks());
+    expect([...container.querySelectorAll("h1")].map((heading) => heading.textContent)).toEqual(["verdict"]);
+  });
+
   it("keeps what was typed in the box after rerendering", () => {
     const container = document.createElement("div");
     renderPopup(container, [entry({ title: "wireless mouse" })], callbacks());
@@ -360,5 +389,23 @@ describe("the popup when verdict has been told to read nothing", () => {
     const container = document.createElement("div");
     renderPopup(container, [], callbacks());
     expect(container.querySelector(".paused")).toBeNull();
+  });
+});
+
+describe("bringing a closed panel back from the popup", () => {
+  it("offers it when the tab says a reading is hidden", () => {
+    const onShowPanel = vi.fn();
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks({ onShowPanel }), "", { panelHidden: true });
+    const button = container.querySelector<HTMLButtonElement>(".show-panel");
+    expect(button?.textContent).toBe("Show the panel on this page");
+    button?.click();
+    expect(onShowPanel).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing about it otherwise", () => {
+    const container = document.createElement("div");
+    renderPopup(container, [], callbacks(), "", {});
+    expect(container.querySelector(".show-panel")).toBeNull();
   });
 });

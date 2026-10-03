@@ -5,8 +5,8 @@ import { DEFAULT_MAX_PAGES } from "../extract/fetchReviewPages";
 import type { RulesDocument } from "../extract/rules";
 import { reviewPageCap } from "../extract/sites";
 import { localModelSet, type CombinerModel } from "../score/combine";
-import { getPanelShadowRootForTesting, VerdictPanelElement } from "../ui/panel";
-import "../ui/notice";
+import type { VerdictNoticeElement } from "../ui/notice";
+import { getPanelShadowRootForTesting, type VerdictPanelElement } from "../ui/panel";
 import {
   createProgressiveMount,
   everyPageReadMessage,
@@ -122,9 +122,7 @@ describe("mountResult", () => {
     const openTab = vi.fn();
     mountResult(document, result, deps(), { cache: directReviewsCache }, openTab);
 
-    const panel = document.body.querySelector("verdict-panel") as InstanceType<
-      typeof VerdictPanelElement
-    >;
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
     const root = getPanelShadowRootForTesting(panel);
     root.querySelector<HTMLButtonElement>(".full-report")?.click();
 
@@ -163,9 +161,9 @@ describe("mountResult", () => {
       deps(),
     );
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     expect(root.querySelector(".message")?.textContent).toBe("Verdict could not read this page.");
     expect(root.querySelector<HTMLAnchorElement>(".link")?.href).toBe(
       "https://verdict.tools/status",
@@ -184,9 +182,9 @@ describe("mountResult", () => {
       deps(),
     );
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     expect(root.querySelector(".message")?.textContent).toContain("rating shape, arrival timing");
   });
 
@@ -224,9 +222,9 @@ describe("mountResult", () => {
     };
     mountResult(document, result, deps(), { maxPages: 2, delay: () => Promise.resolve(), cache: directReviewsCache });
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     root.querySelector<HTMLButtonElement>(".action")?.click();
 
     expect(root.querySelector(".progress")?.textContent).toBe(
@@ -250,9 +248,9 @@ describe("mountResult", () => {
     };
     mountResult(document, result, deps(), { delay: () => Promise.resolve(), cache: directReviewsCache });
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     root.querySelector<HTMLButtonElement>(".action")?.click();
 
     expect(root.querySelector(".progress")?.textContent).toBe(
@@ -291,10 +289,10 @@ describe("mountResult", () => {
     };
     mountResult(document, result, deps(), { maxPages: 1, delay: () => Promise.resolve(), cache: directReviewsCache });
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    expect(notice).toBeInstanceOf(VerdictNoticeElement);
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    expect(notice?.tagName.toLowerCase()).toBe("verdict-notice");
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     root.querySelector<HTMLButtonElement>(".action")?.click();
 
     await vi.waitFor(() => {
@@ -330,8 +328,8 @@ describe("mountResult", () => {
     };
     mountResult(document, result, deps(), { maxPages: 5, delay: () => Promise.resolve(), cache: directReviewsCache });
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
-    const notice = document.body.querySelector("verdict-notice") as InstanceType<typeof VerdictNoticeElement>;
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
+    const notice = document.body.querySelector("verdict-notice") as VerdictNoticeElement;
     getNoticeShadowRootForTesting(notice).querySelector<HTMLButtonElement>(".action")?.click();
     await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledOnce());
 
@@ -437,6 +435,41 @@ describe("createProgressiveMount, SPEC.md section 13 first paint", () => {
     expect(document.body.querySelector("verdict-notice")).toBeNull();
   });
 
+  it("shows one notice when settling replays the result that already landed", () => {
+    const mount = createProgressiveMount(document, deps());
+    const unscored: AnalysisResult = { ...okResult(), outcome: { status: "no-model" } };
+    mount.show(unscored, []);
+    mount.settle();
+    expect(document.body.querySelectorAll("verdict-notice")).toHaveLength(1);
+  });
+
+  it("replaces one notice with the next rather than stacking them", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show({ ...okResult(), outcome: { status: "unreadable" } }, []);
+    mount.show({ ...okResult(), outcome: { status: "no-model" } }, []);
+    expect(document.body.querySelectorAll("verdict-notice")).toHaveLength(1);
+  });
+
+  it("lets a later score replace a notice rather than sit beside it", () => {
+    const mount = createProgressiveMount(document, deps());
+    mount.show({ ...okResult(), outcome: { status: "unreadable" } }, []);
+    mount.show(okResult(), []);
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+    expect(document.body.querySelectorAll("verdict-panel")).toHaveLength(1);
+  });
+
+  it("never reopens a result notice the reader closed", () => {
+    const mount = createProgressiveMount(document, deps());
+    const unscored: AnalysisResult = { ...okResult(), outcome: { status: "no-model" } };
+    mount.show(unscored, []);
+    const notice = document.body.querySelector("verdict-notice") as HTMLElement;
+    notice.dispatchEvent(new CustomEvent("verdict:close", { bubbles: true, composed: true }));
+
+    mount.settle();
+
+    expect(document.body.querySelector("verdict-notice")).toBeNull();
+  });
+
   it("holds back the not-enough-data notice until nothing is pending", () => {
     const mount = createProgressiveMount(document, deps());
     const thin: AnalysisResult = { ...okResult(), outcome: { status: "not-enough-data" } };
@@ -492,9 +525,7 @@ describe("where the full report button goes", () => {
     };
     mountResult(document, result, deps(), { cache: directReviewsCache }, openTab);
 
-    const panel = document.body.querySelector("verdict-panel") as InstanceType<
-      typeof VerdictPanelElement
-    >;
+    const panel = document.body.querySelector("verdict-panel") as VerdictPanelElement;
     getPanelShadowRootForTesting(panel).querySelector<HTMLButtonElement>(".full-report")?.click();
 
     expect(openTab).toHaveBeenCalledWith(expect.stringContaining(`#${REPORT.serial}`));
@@ -588,9 +619,9 @@ describe("what a second check more deeply is allowed to do, SPEC.md section 9", 
   it("renders a notice with no action rather than a button that reads nothing", async () => {
     mountResult(document, thin({ pagesFetched: 3, maxPages: 5, stoppedBecause: "exhausted" }), deps());
 
-    const { getNoticeShadowRootForTesting, VerdictNoticeElement } = await import("../ui/notice");
+    const { getNoticeShadowRootForTesting } = await import("../ui/notice");
     const notice = document.body.querySelector("verdict-notice");
-    const root = getNoticeShadowRootForTesting(notice as InstanceType<typeof VerdictNoticeElement>);
+    const root = getNoticeShadowRootForTesting(notice as VerdictNoticeElement);
     expect(root.querySelector(".action")).toBeNull();
     expect(root.querySelector(".message")?.textContent).toContain("every page this listing has");
   });

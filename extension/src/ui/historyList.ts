@@ -19,6 +19,7 @@ export interface PopupCallbacks {
   onAcknowledgePolicy?: () => void;
   onUnwatch?: (productKey: string) => void;
   onResumeAnalysis?: () => void;
+  onShowPanel?: () => void;
 }
 
 export interface HistoryRow extends HistoryEntry {
@@ -60,6 +61,8 @@ export interface PopupOptions {
   translator?: Translator;
   watchlist?: readonly WatchEntry[];
   analysisEnabled?: boolean;
+  // the tab behind the popup has a reading the reader closed
+  panelHidden?: boolean;
 }
 
 // somebody who turned verdict off sees nothing anywhere, so the one window that is still
@@ -86,13 +89,20 @@ export function renderPopup(
   const shown = groupByProduct(entries).filter((entry) => matchesQuery(entry, query));
   container.innerHTML = `
     <header>
-      <span class="wordmark">verdict</span>
+      <h1 class="wordmark">verdict</h1>
       <button type="button" class="open-settings" aria-label="${
         t.text("popup.settings")
       }">&#9881;</button>
     </header>
     ${policyNoticeMarkup(options.pendingPolicyChanges ?? [], options.now ?? Date.now())}
     ${pausedMarkup(options.analysisEnabled ?? true, t)}
+    ${
+      options.panelHidden === true
+        ? `<section class="hidden-panel"><button type="button" class="show-panel">${
+          t.text("popup.showPanel")
+        }</button></section>`
+        : ""
+    }
     ${watchlistMarkup(options.watchlist ?? [], t)}
     ${
       entries.length === 0
@@ -102,15 +112,13 @@ export function renderPopup(
         placeholder="${t.text("popup.searchPlaceholder")}" value="${escapeHtml(query)}" />
     </div>`
     }
-    <div class="register" role="list">
-      ${
-        entries.length === 0
-          ? `<p class="empty">${t.text("popup.empty")}</p>`
-          : shown.length === 0
-            ? `<p class="empty">${t.text("popup.noMatches")}</p>`
-            : shown.map((entry) => renderRow(entry, t)).join("")
-      }
-    </div>
+    ${
+      entries.length === 0
+        ? `<p class="empty">${t.text("popup.empty")}</p>`
+        : shown.length === 0
+          ? `<p class="empty">${t.text("popup.noMatches")}</p>`
+          : `<div class="register" role="list">${shown.map((entry) => renderRow(entry, t)).join("")}</div>`
+    }
     <footer>
       <button type="button" class="export-json">${t.text("popup.exportJson")}</button>
       <button type="button" class="export-csv">${t.text("popup.exportCsv")}</button>
@@ -127,6 +135,10 @@ export function renderPopup(
   const resume = callbacks.onResumeAnalysis;
   if (resume !== undefined) {
     container.querySelector(".resume-analysis")?.addEventListener("click", resume);
+  }
+  const showPanel = callbacks.onShowPanel;
+  if (showPanel !== undefined) {
+    container.querySelector(".show-panel")?.addEventListener("click", showPanel);
   }
   container.querySelector(".export-json")?.addEventListener("click", callbacks.onExportJson);
   container.querySelector(".export-csv")?.addEventListener("click", callbacks.onExportCsv);
