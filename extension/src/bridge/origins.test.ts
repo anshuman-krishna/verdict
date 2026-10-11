@@ -60,6 +60,15 @@ describe("senderOrigin", () => {
     expect(senderOrigin({ origin: "", url: "not a url" })).toBeUndefined();
     expect(senderOrigin({})).toBeUndefined();
   });
+
+  it("gives a page framed inside another site no origin, so it cannot be clicked into anything", () => {
+    expect(senderOrigin({ origin: "https://verdict.tools", frameId: 3 })).toBeUndefined();
+    expect(senderOrigin({ url: "https://verdict.tools/history", frameId: 1 })).toBeUndefined();
+  });
+
+  it("keeps the origin of a top level page", () => {
+    expect(senderOrigin({ origin: "https://verdict.tools", frameId: 0 })).toBe("https://verdict.tools");
+  });
 });
 
 describe("withoutDevelopmentOrigins", () => {
